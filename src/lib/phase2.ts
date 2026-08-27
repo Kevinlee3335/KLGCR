@@ -12,5 +12,5 @@ export type ComplaintRow = {
 };
 export type JobRow = {
   id:string;job_no:string;room_no:string;category:string;description:string;priority:string;status:string;assigned_at:string;updated_at:string;
-  started_at:string|null;completed_at:string|null;block:{id:number;code:string}|null;assignee:{id:string;full_name:string}|null;complaint:{complaint_no:string}|null;
+  started_at:string|null;completed_at:string|null;action_taken:string|null;monitoring_note:string|null;monitoring_started_at:string|null;monitoring_review_at:string|null;pending_material_note:string|null;block:{id:number;code:string}|null;assignee:{id:string;full_name:string}|null;complaint:{complaint_no:string}|null;
 };

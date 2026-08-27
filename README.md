@@ -48,3 +48,7 @@ Phase 1 authentication, roles, user management, and responsive shells remain in 
 ## Phase 2 migration
 
 After the Phase 1 migration, run `supabase/migrations/202608260001_phase2_complaints_jobs.sql` once in the Supabase SQL Editor. It adds the complaint intake and assignment workflow without changing the Phase 1 tables or policies. Apply this migration before opening the Phase 2 routes.
+
+## Phase 3 migration
+
+After Phase 2, run `supabase/migrations/202608270001_phase3_staff_job_workflow.sql` once in the Supabase SQL Editor. It adds staff completion, monitoring, pending-material and resume transitions plus immutable status history. No existing migration should be rerun or edited.
