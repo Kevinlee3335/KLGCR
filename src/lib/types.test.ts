@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import {roleHome,roleLabel} from "./types";
+describe("role routing",()=>{it("routes admins and staff to isolated dashboards",()=>{expect(roleHome("admin")).toBe("/admin");expect(roleHome("maintenance_staff")).toBe("/staff")});it("keeps future view-only role in admin read surface",()=>{expect(roleHome("management_viewer")).toBe("/admin");expect(roleLabel.management_viewer).toBe("Management Viewer")})});
