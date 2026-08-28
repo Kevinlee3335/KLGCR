@@ -16,7 +16,7 @@ export default async function StaffJob({ params, searchParams }: { params: Promi
   const { id } = await params;
   const query = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no)").eq("id", id).single();
+  const { data } = await supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,block:blocks!block_id(id,code),complaint:complaints!complaint_id(complaint_no)").eq("id", id).single();
   if (!data) notFound();
   const job = data as unknown as JobRow;
   const success = query.success ? successMessages[query.success] : null;

@@ -13,11 +13,8 @@ async function runJobRpc(id: string, rpc: string, parameters: Record<string, unk
   const supabase = await createClient();
   const { error } = await supabase.rpc(rpc, { p_job_id: id, ...parameters });
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
-  revalidatePath("/admin");
-  revalidatePath("/admin/jobs");
-  revalidatePath("/staff");
-  revalidatePath("/staff/tasks");
-  revalidatePath("/staff/monitoring");
+  // Authenticated dashboard pages are dynamic and read Supabase on navigation.
+  // Refresh only the page receiving the redirect instead of invalidating six routes.
   revalidatePath(`/staff/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=${success}`);
 }
