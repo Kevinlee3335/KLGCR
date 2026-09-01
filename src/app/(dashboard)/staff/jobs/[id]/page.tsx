@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { JobWorkflowActions } from "@/components/job-workflow-actions";
@@ -16,7 +17,10 @@ export default async function StaffJob({ params, searchParams }: { params: Promi
   const { id } = await params;
   const query = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,block:blocks!block_id(id,code),complaint:complaints!complaint_id(complaint_no)").eq("id", id).single();
+  const [{ data }, { data: materialRequests }] = await Promise.all([
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,block:blocks!block_id(id,code),complaint:complaints!complaint_id(complaint_no)").eq("id", id).single(),
+    supabase.from("material_requests").select("id,request_no,status,created_at,items:material_request_items(requested_qty,issued_qty,item:inventory_items(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: false }),
+  ]);
   if (!data) notFound();
   const job = data as unknown as JobRow;
   const success = query.success ? successMessages[query.success] : null;
@@ -30,6 +34,8 @@ export default async function StaffJob({ params, searchParams }: { params: Promi
       {job.monitoring_note && <article className="panel"><h3>Monitoring Note</h3><p>{job.monitoring_note}</p>{job.monitoring_review_at && <small className="subtle">Review {formatDate(job.monitoring_review_at)}</small>}</article>}
       {job.pending_material_note && <article className="panel"><h3>Material Needed</h3><p>{job.pending_material_note}</p></article>}
     </section>}
+    {(job.status === "in_progress" || job.status === "pending_material") && <p><Link className="button" href={`/staff/material-request?job=${id}`}>Request Material</Link></p>}
+    {(materialRequests || []).length > 0 && <section className="panel list-panel"><h3>Material Requests</h3>{(materialRequests || []).map((request: any) => <div className="list-row" key={request.id}><div><div className="actions"><strong>{request.request_no}</strong><span className="badge">{request.status}</span></div>{(request.items || []).map((row: any, index: number) => <p key={`${request.id}-${index}`}>{row.item?.item_code} · {row.item?.description} — Requested {row.requested_qty} {row.item?.unit || ""}{row.issued_qty ? ` · Issued ${row.issued_qty}` : ""}</p>)}</div></div>)}</section>}
     <JobWorkflowActions jobId={id} status={job.status} monitoringNote={job.monitoring_note}/>
   </AppShell>;
 }
