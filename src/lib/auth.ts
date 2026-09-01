@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole, Profile } from "@/lib/types";
 
-export async function getSessionProfile(): Promise<Profile | null> {
+export const getSessionProfile = cache(async function getSessionProfile(): Promise<Profile | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -10,7 +11,8 @@ export async function getSessionProfile(): Promise<Profile | null> {
   if (!data || !data.is_active) return null;
   const rows = data.profile_blocks as unknown as {blocks:{code:string;name:string}|null}[];
   return {...data, blocks: rows?.flatMap((row) => row.blocks ? [row.blocks] : [])} as Profile;
-}
+});
+
 export async function requireRole(allowed: AppRole[]): Promise<Profile> {
   const profile = await getSessionProfile();
   if (!profile) redirect("/login");
