@@ -7,21 +7,25 @@ import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 50;
 
+function malaysiaToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
 export default async function JobsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const filters = await searchParams;
   const supabase = await createClient();
   const page = Math.max(1, Number(filters.page) || 1);
-  const today = new Date().toISOString().slice(0, 10);
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no)").order("updated_at", { ascending: false });
-  if (filters.scope === "today-active") query = query.gte("assigned_at", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
-  if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", today);
+  const today = malaysiaToday();
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no)").order("updated_at", { ascending: false });
+  if (filters.scope === "today-active") query = query.eq("scheduled_for", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
+  if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", `${today}T00:00:00+08:00`).lt("completed_at", `${today}T23:59:59.999+08:00`);
   if (filters.scope === "outstanding") query = query.in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
   if (filters.block) query = query.eq("block_id", filters.block);
   if (filters.staff) query = query.eq("assigned_to", filters.staff);
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.priority) query = query.eq("priority", filters.priority);
-  if (filters.date) query = query.gte("assigned_at", `${filters.date}T00:00:00`).lt("assigned_at", `${filters.date}T23:59:59.999`);
+  if (filters.date) query = query.eq("scheduled_for", filters.date);
   if (filters.search) query = query.or(`job_no.ilike.%${filters.search}%,room_no.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
   query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
