@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
 
-const adminNav = [["Dashboard", "/admin"], ["New Complaints", "/admin/complaints"], ["Google Import", "/admin/import"], ["Maintenance Jobs", "/admin/jobs"], ["Daily Tasks", "/admin/daily-tasks"], ["Material Requests", "/admin/material-requests"], ["Inventory", "/admin/inventory"], ["Reports", "/admin/reports"], ["Notifications", "#"], ["Users", "/admin/users"], ["Settings", "#"]];
+const adminNav = [["Dashboard", "/admin"], ["New Complaints", "/admin/complaints"], ["Google Import", "/admin/import"], ["Maintenance Jobs", "/admin/jobs"], ["Daily Tasks", "/admin/daily-tasks"], ["Material Requests", "/admin/material-requests"], ["Inventory", "/admin/inventory"], ["Reports", "/admin/reports"], ["Notifications", "/admin/notifications"], ["Users", "/admin/users"], ["Settings", "#"]];
 const staffNav = [["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"], ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"], ["Appointments", "#"], ["Completed Jobs", "/staff/tasks?status=completed"]];
 
 function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "users" | "more" }) {
