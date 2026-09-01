@@ -51,7 +51,7 @@ export async function buildReport(supabase: SupabaseClient, kind: ReportKind, gr
     return { reportDate: today, payload: { total: items.length, out_of_stock: out, near_reorder: near, items }, whatsappText: text };
   }
 
-  let query = supabase.from("maintenance_jobs").select("job_no,room_no,status,category,scheduled_for,completed_at,blocks(code),profiles!maintenance_jobs_assigned_to_fkey(full_name)").in("block_id", blockIds).order("assigned_at", { ascending: true });
+  const query = supabase.from("maintenance_jobs").select("job_no,room_no,status,category,scheduled_for,completed_at,blocks(code),profiles!maintenance_jobs_assigned_to_fkey(full_name)").in("block_id", blockIds).order("assigned_at", { ascending: true });
   const { data, error } = await query;
   if (error) throw error;
   const jobs = (data ?? []) as unknown as JobRow[];
