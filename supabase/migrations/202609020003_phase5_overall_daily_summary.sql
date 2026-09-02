@@ -51,8 +51,11 @@ end $$;
 
 revoke all on function public.generate_overall_daily_summary() from public;
 
-select cron.unschedule(jobid)
-from cron.job
-where jobname='klgcr-phase5-overall-daily-summary';
+do $$
+declare v_jobid bigint;
+begin
+  select jobid into v_jobid from cron.job where jobname='klgcr-phase5-overall-daily-summary' limit 1;
+  if v_jobid is not null then perform cron.unschedule(v_jobid); end if;
+end $$;
 
 select cron.schedule('klgcr-phase5-overall-daily-summary','50 8 * * *',$$select public.generate_overall_daily_summary();$$);
