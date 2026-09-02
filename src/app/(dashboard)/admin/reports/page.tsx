@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AppShell } from "@/components/app-shell";
 import { CopyWhatsAppButton } from "@/components/copy-whatsapp-button";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const labels: Record<string,string> = { morning_tasks:"9:00 AM Morning Daily Task", midday_update:"12:00 PM Midday Update", daily_summary:"4:50 PM Daily Summary", progress_snapshot:"3-Hour Progress Snapshot", inventory_report:"Inventory Report" };
-
 type Props = { searchParams?: Promise<Record<string,string | string[] | undefined>> };
 
 export default async function ReportsPage({ searchParams }: Props) {
@@ -15,34 +15,27 @@ export default async function ReportsPage({ searchParams }: Props) {
   const block = typeof params.block === "string" ? params.block : "";
   const staff = typeof params.staff === "string" ? params.staff : "";
   const reportType = typeof params.reportType === "string" ? params.reportType : "";
-
   let reportsQuery = supabase.from("report_snapshots").select("id,report_type,report_date,block_group,whatsapp_text,source,created_at").order("created_at", { ascending:false }).limit(100);
   if (date) reportsQuery = reportsQuery.eq("report_date", date);
   if (block) reportsQuery = reportsQuery.eq("block_group", block);
   if (reportType) reportsQuery = reportsQuery.eq("report_type", reportType);
   const { data: reports } = await reportsQuery;
   const { data: staffRows } = await supabase.from("profiles").select("id,full_name").eq("role","maintenance_staff").eq("is_active",true).order("full_name");
-
   let issueQuery = supabase.from("inventory_issue_history").select("id,qty,issued_at,job_id,staff_id,inventory_items(item_code,description,unit),maintenance_jobs(job_no,room_no,blocks(code)),profiles!inventory_issue_history_staff_id_fkey(full_name)").order("issued_at",{ascending:false}).limit(200);
   if (staff) issueQuery = issueQuery.eq("staff_id",staff);
   if (date) issueQuery = issueQuery.gte("issued_at",`${date}T00:00:00+08:00`).lt("issued_at",`${date}T23:59:59+08:00`);
   const { data: issues } = await issueQuery;
   const filteredIssues = (issues ?? []).filter((row:any) => !block || block === "ALL" || block.includes(row.maintenance_jobs?.blocks?.code ?? ""));
-
   const { data: adjustments } = await supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,inventory_items(item_code,description,unit)").order("adjusted_at",{ascending:false}).limit(200);
   const consumption = new Map<string,{code:string;description:string;qty:number;unit:string}>();
-  for (const row of filteredIssues as any[]) {
-    const item = row.inventory_items;
-    const key = item?.item_code ?? "Unknown";
-    const current = consumption.get(key) ?? {code:key,description:item?.description ?? "",qty:0,unit:item?.unit ?? ""};
-    current.qty += Number(row.qty ?? 0);
-    consumption.set(key,current);
-  }
+  for (const row of filteredIssues as any[]) { const item=row.inventory_items; const key=item?.item_code??"Unknown"; const current=consumption.get(key)??{code:key,description:item?.description??"",qty:0,unit:item?.unit??""}; current.qty+=Number(row.qty??0); consumption.set(key,current); }
   const isAdmin = profile.role === "admin";
   const exportParams = new URLSearchParams();
-  if (date) exportParams.set("date",date); if (block) exportParams.set("block",block); if (staff) exportParams.set("staff",staff); if (reportType) exportParams.set("reportType",reportType);
+  if (date) exportParams.set("date",date);
+  if (block) exportParams.set("block",block);
+  if (staff) exportParams.set("staff",staff);
+  if (reportType) exportParams.set("reportType",reportType);
   const suffix = exportParams.toString() ? `&${exportParams.toString()}` : "";
-
   return <AppShell profile={profile} title="Reports">
     <div className="section-head"><div><h2>Reports & WhatsApp Summary</h2><p className="subtle">Daily reports, material usage, consumption analysis and inventory transactions.</p></div></div>
     <div className="panel"><h3>Filters</h3><form method="get" className="inline-form"><input type="date" name="date" defaultValue={date}/><select name="block" defaultValue={block}><option value="">All Blocks</option><option value="AB">A & B</option><option value="CD">C & D</option><option value="ALL">Overall</option></select><select name="staff" defaultValue={staff}><option value="">All Staff</option>{staffRows?.map(s=><option key={s.id} value={s.id}>{s.full_name}</option>)}</select><select name="reportType" defaultValue={reportType}><option value="">All Report Types</option>{Object.entries(labels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button className="button" type="submit">Apply</button><a className="button secondary button-link" href="/admin/reports">Reset</a></form></div>
