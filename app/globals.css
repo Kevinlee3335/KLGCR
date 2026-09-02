@@ -49,41 +49,44 @@
 
 :root {
   color-scheme: light;
-  /* KLG CAMPUS RESIDENCE — charcoal / white / gold */
-  --background: oklch(0.985 0.002 95);
-  --foreground: oklch(0.22 0.008 60);
+  /* KLG CAMPUS RESIDENCE — charcoal / white / Kean Leng corporate gold.
+     Neutrals carry a faint warm tint so white surfaces feel premium rather
+     than clinical; gold is reserved as a deliberate accent. */
+  --background: oklch(0.982 0.003 92);
+  --foreground: oklch(0.21 0.008 68);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.008 60);
+  --card-foreground: oklch(0.21 0.008 68);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.008 60);
-  /* Gold accent */
-  --primary: oklch(0.76 0.128 84);
-  --primary-foreground: oklch(0.24 0.02 70);
-  --secondary: oklch(0.96 0.004 90);
-  --secondary-foreground: oklch(0.28 0.01 60);
-  --muted: oklch(0.965 0.003 90);
-  --muted-foreground: oklch(0.53 0.01 70);
-  --accent: oklch(0.95 0.03 88);
-  --accent-foreground: oklch(0.3 0.03 70);
+  --popover-foreground: oklch(0.21 0.008 68);
+  /* Kean Leng corporate gold */
+  --primary: oklch(0.735 0.114 79);
+  --primary-foreground: oklch(0.23 0.02 70);
+  --secondary: oklch(0.955 0.004 90);
+  --secondary-foreground: oklch(0.28 0.01 65);
+  --muted: oklch(0.962 0.003 92);
+  --muted-foreground: oklch(0.52 0.012 72);
+  --accent: oklch(0.948 0.032 86);
+  --accent-foreground: oklch(0.3 0.035 72);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.006 85);
-  --input: oklch(0.9 0.006 85);
-  --ring: oklch(0.76 0.128 84);
-  --chart-1: oklch(0.76 0.128 84);
+  --border: oklch(0.905 0.005 88);
+  --input: oklch(0.905 0.005 88);
+  --ring: oklch(0.735 0.114 79);
+  /* Charts: gold lead, then a graded charcoal scale */
+  --chart-1: oklch(0.735 0.114 79);
   --chart-2: oklch(0.55 0.02 70);
   --chart-3: oklch(0.43 0.015 65);
-  --chart-4: oklch(0.35 0.01 60);
+  --chart-4: oklch(0.35 0.01 62);
   --chart-5: oklch(0.27 0.008 60);
-  --radius: 0.625rem;
+  --radius: 0.7rem;
   /* Dark charcoal sidebar with gold highlights */
-  --sidebar: oklch(0.22 0.008 65);
+  --sidebar: oklch(0.215 0.008 66);
   --sidebar-foreground: oklch(0.92 0.004 90);
-  --sidebar-primary: oklch(0.76 0.128 84);
-  --sidebar-primary-foreground: oklch(0.22 0.02 70);
-  --sidebar-accent: oklch(0.29 0.01 65);
+  --sidebar-primary: oklch(0.735 0.114 79);
+  --sidebar-primary-foreground: oklch(0.21 0.02 70);
+  --sidebar-accent: oklch(0.285 0.01 66);
   --sidebar-accent-foreground: oklch(0.97 0.003 90);
-  --sidebar-border: oklch(0.32 0.01 65);
-  --sidebar-ring: oklch(0.76 0.128 84);
+  --sidebar-border: oklch(0.31 0.01 66);
+  --sidebar-ring: oklch(0.735 0.114 79);
 }
 
 .dark {
@@ -113,8 +116,8 @@
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.735 0.114 79);
+  --sidebar-primary-foreground: oklch(0.21 0.02 70);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -164,5 +167,27 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Soft, layered elevation for premium cards/panels. */
+  .shadow-elevated {
+    box-shadow:
+      0 1px 2px -1px oklch(0.21 0.008 68 / 0.08),
+      0 4px 16px -4px oklch(0.21 0.008 68 / 0.1);
+  }
+  .shadow-elevated-lg {
+    box-shadow:
+      0 2px 4px -2px oklch(0.21 0.008 68 / 0.1),
+      0 12px 32px -8px oklch(0.21 0.008 68 / 0.14);
+  }
+  /* Hide scrollbars on horizontal chip rails / mobile carousels. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

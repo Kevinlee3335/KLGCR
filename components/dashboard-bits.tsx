@@ -7,14 +7,19 @@ export function PageHeader({
   title,
   description,
   action,
+  eyebrow,
 }: {
   title: string
   description?: string
   action?: ReactNode
+  eyebrow?: string
 }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
+      <div className="min-w-0">
+        {eyebrow && (
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{eyebrow}</p>
+        )}
         <h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground text-pretty">{description}</p>}
       </div>
@@ -23,6 +28,7 @@ export function PageHeader({
   )
 }
 
+/** Legacy compact stat card (kept for backward compatibility). */
 export function StatCard({
   label,
   value,
@@ -51,6 +57,74 @@ export function StatCard({
           <Icon className="size-5" />
         </div>
       </div>
+    </Card>
+  )
+}
+
+/** Premium KPI card for the operations command centre. */
+export function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  tone = "default",
+  hint,
+}: {
+  label: string
+  value: string | number
+  icon: LucideIcon
+  tone?: "default" | "gold" | "urgent"
+  hint?: string
+}) {
+  const chip =
+    tone === "urgent"
+      ? "bg-red-50 text-red-600"
+      : tone === "gold"
+        ? "bg-primary/15 text-primary"
+        : "bg-secondary text-muted-foreground"
+  return (
+    <Card className={cn("p-5 shadow-elevated transition-shadow hover:shadow-elevated-lg", tone === "urgent" && "ring-1 ring-red-200")}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", chip)} aria-hidden="true">
+          <Icon className="size-4.5" />
+        </div>
+      </div>
+      <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+      {hint && (
+        <p className={cn("mt-1 text-xs font-medium", tone === "urgent" ? "text-red-600" : "text-muted-foreground")}>
+          {hint}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+/** Card with a titled header and optional trailing action (e.g. "View all"). */
+export function SectionCard({
+  title,
+  icon: Icon,
+  action,
+  children,
+  className,
+  contentClassName,
+}: {
+  title: string
+  icon?: LucideIcon
+  action?: ReactNode
+  children: ReactNode
+  className?: string
+  contentClassName?: string
+}) {
+  return (
+    <Card className={cn("flex flex-col shadow-elevated", className)}>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          {Icon && <Icon className="size-4 text-primary" aria-hidden="true" />}
+          {title}
+        </h3>
+        {action}
+      </div>
+      <div className={cn("p-5", contentClassName)}>{children}</div>
     </Card>
   )
 }
@@ -87,11 +161,7 @@ export function PlaceholderPage({
   return (
     <div>
       <PageHeader title={title} />
-      <EmptyState
-        icon={Icon}
-        title="Coming in a later phase"
-        description={description}
-      />
+      <EmptyState icon={Icon} title="Coming in a later phase" description={description} />
     </div>
   )
 }

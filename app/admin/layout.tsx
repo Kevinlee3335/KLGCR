@@ -9,7 +9,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const { profile } = await requireRole(["admin", "management_viewer"])
 
   return (
-    <DashboardShell nav={adminNav} role={profile.role} fullName={profile.full_name ?? ""}>
+    <DashboardShell
+      nav={adminNav}
+      role={profile.role}
+      fullName={profile.full_name ?? ""}
+      notificationsHref="/admin/notifications"
+    >
       {children}
     </DashboardShell>
   )
