@@ -9,6 +9,30 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 }
 
+function toIsoDate(value: string) {
+  if (!value) return null;
+  const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+
+  const slash = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) return `${slash[3]}-${slash[1].padStart(2, "0")}-${slash[2].padStart(2, "0")}`;
+
+  return null;
+}
+
+function toIsoTimestamp(value: string) {
+  if (!value) return new Date().toISOString();
+
+  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (match) {
+    const [, month, day, year, hour, minute, second] = match;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.padStart(2, "0")}:${minute}:${second}+08:00`;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+}
+
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-klgcr-form-secret");
   if (!process.env.GOOGLE_FORM_WEBHOOK_SECRET || secret !== process.env.GOOGLE_FORM_WEBHOOK_SECRET) {
@@ -16,7 +40,9 @@ export async function POST(request: NextRequest) {
   }
 
   let body: FormPayload;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -40,10 +66,17 @@ export async function POST(request: NextRequest) {
     .select("id")
     .eq("code", normalizedBlock)
     .maybeSingle();
-  if (blockError || !blockRow) return NextResponse.json({ error: "Unknown block" }, { status: 400 });
 
+  if (blockError || !blockRow) {
+    return NextResponse.json({ error: "Unknown block" }, { status: 400 });
+  }
+
+  const reporterName = text(body["NAME"]);
+  const reporterPhone = text(body["PHONE NUMBER (WHATSAPP)"]);
+  const reporterEmail = text(body["EMAIL ADDRESS"]) || text(body["Email Address"]);
   const timestamp = text(body["Timestamp"]);
-  const availabilityDate = text(body["ROOM AVAILABILITY (DATE)"]);
+  const availabilityDate = toIsoDate(text(body["ROOM AVAILABILITY (DATE)"]));
+
   const payload = {
     block_id: blockRow.id,
     room_no: room,
@@ -53,20 +86,23 @@ export async function POST(request: NextRequest) {
     status: "new",
     source: "google_form",
     source_reference: sourceReference,
-    reporter_name: text(body["NAME"]) || null,
-    reporter_phone: text(body["PHONE NUMBER (WHATSAPP)"]) || null,
-    reporter_email: text(body["EMAIL ADDRESS"]) || text(body["Email Address"]) || null,
-    availability_date: availabilityDate || null,
+    complainant_name: reporterName || null,
+    complainant_contact: reporterPhone || reporterEmail || null,
+    reporter_name: reporterName || null,
+    reporter_phone: reporterPhone || null,
+    reporter_email: reporterEmail || null,
+    availability_date: availabilityDate,
     availability_time: text(body["ROOM AVAILABILITY (TIME)"]) || null,
     room_access_permission: text(body["REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY"]) || null,
-    submitted_at: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+    submitted_at: toIsoTimestamp(timestamp),
   };
 
   const { data, error } = await supabase.from("complaints").insert(payload).select("id").single();
   if (error) {
     if (error.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
     console.error("Google Form webhook insert failed", error);
-    return NextResponse.json({ error: "Insert failed" }, { status: 500 });
+    return NextResponse.json({ error: "Insert failed", code: error.code, message: error.message }, { status: 500 });
   }
+
   return NextResponse.json({ ok: true, complaint_id: data.id });
 }
