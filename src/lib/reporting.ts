@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ReportKind = "morning_tasks" | "midday_update" | "daily_summary" | "progress_snapshot" | "inventory_report";
@@ -51,8 +52,7 @@ export async function buildReport(supabase: SupabaseClient, kind: ReportKind, gr
     return { reportDate: today, payload: { total: items.length, out_of_stock: out, near_reorder: near, items }, whatsappText: text };
   }
 
-  const query = supabase.from("maintenance_jobs").select("job_no,room_no,status,category,scheduled_for,completed_at,blocks(code),profiles!maintenance_jobs_assigned_to_fkey(full_name)").in("block_id", blockIds).order("assigned_at", { ascending: true });
-  const { data, error } = await query;
+  const { data, error } = await supabase.from("maintenance_jobs").select("job_no,room_no,status,category,scheduled_for,completed_at,blocks(code),profiles!maintenance_jobs_assigned_to_fkey(full_name)").in("block_id", blockIds).order("assigned_at", { ascending: true });
   if (error) throw error;
   const jobs = (data ?? []) as unknown as JobRow[];
   const active = jobs.filter((j) => !["completed", "cancelled"].includes(j.status));
@@ -63,20 +63,32 @@ export async function buildReport(supabase: SupabaseClient, kind: ReportKind, gr
   const inProgress = active.filter((j) => j.status === "in_progress");
   const assigned = active.filter((j) => j.status === "assigned");
 
+  const { data: issuedRows } = await supabase
+    .from("inventory_issue_history")
+    .select("id,qty,issued_at,inventory_items(item_code,description,unit),maintenance_jobs(job_no,room_no,blocks(code)),profiles!inventory_issue_history_staff_id_fkey(full_name)")
+    .gte("issued_at", `${today}T00:00:00+08:00`)
+    .lt("issued_at", `${today}T23:59:59.999+08:00`)
+    .order("issued_at", { ascending: true });
+  const materialsIssued = ((issuedRows ?? []) as any[]).filter((row) => codes.includes(row.maintenance_jobs?.blocks?.code));
+
   const lines = [`KLGCR | ${titleFor(kind)} | ${group}`, `Date: ${today}`, `Scheduled Today: ${scheduledToday.length}`, `Completed Today: ${completedToday.length}`, `In Progress: ${inProgress.length}`, `Pending Material: ${pendingMaterial.length}`, `Under Monitoring: ${monitoring.length}`, `Assigned: ${assigned.length}`];
   const list = kind === "morning_tasks" ? scheduledToday : kind === "daily_summary" ? completedToday : active;
   if (list.length) {
     lines.push("", kind === "morning_tasks" ? "Today's Tasks:" : kind === "daily_summary" ? "Completed Today:" : "Current Jobs:");
     list.slice(0, 30).forEach((j) => lines.push(`- ${j.job_no} | Block ${j.blocks?.code ?? "-"} ${j.room_no} | ${j.category} | ${j.status.replaceAll("_", " ")} | ${j.profiles?.full_name ?? "Unassigned"}`));
   }
-  if (kind === "daily_summary" && (pendingMaterial.length || monitoring.length)) {
+  if (kind !== "morning_tasks" && materialsIssued.length) {
+    lines.push("", "Material Issued Today:");
+    materialsIssued.slice(0, 20).forEach((row:any) => lines.push(`- ${row.inventory_items?.item_code ?? "-"} ${row.inventory_items?.description ?? ""} | ${row.qty} ${row.inventory_items?.unit ?? ""} | ${row.maintenance_jobs?.job_no ?? "-"} | Block ${row.maintenance_jobs?.blocks?.code ?? "-"} ${row.maintenance_jobs?.room_no ?? ""} | ${row.profiles?.full_name ?? "-"}`));
+  }
+  if (kind === "daily_summary" && (pendingMaterial.length || monitoring.length || assigned.length || inProgress.length)) {
     lines.push("", "Carry Forward:");
-    [...pendingMaterial, ...monitoring].slice(0, 20).forEach((j) => lines.push(`- ${j.job_no} | Block ${j.blocks?.code ?? "-"} ${j.room_no} | ${j.status.replaceAll("_", " ")}`));
+    [...pendingMaterial, ...monitoring, ...inProgress, ...assigned].slice(0, 25).forEach((j) => lines.push(`- ${j.job_no} | Block ${j.blocks?.code ?? "-"} ${j.room_no} | ${j.status.replaceAll("_", " ")}`));
   }
 
   return {
     reportDate: today,
-    payload: { scheduled_today: scheduledToday, completed_today: completedToday, active, counts: { scheduled_today: scheduledToday.length, completed_today: completedToday.length, in_progress: inProgress.length, pending_material: pendingMaterial.length, under_monitoring: monitoring.length, assigned: assigned.length } },
+    payload: { scheduled_today: scheduledToday, completed_today: completedToday, active, materials_issued: materialsIssued, counts: { scheduled_today: scheduledToday.length, completed_today: completedToday.length, in_progress: inProgress.length, pending_material: pendingMaterial.length, under_monitoring: monitoring.length, assigned: assigned.length } },
     whatsappText: lines.join("\n"),
   };
 }
