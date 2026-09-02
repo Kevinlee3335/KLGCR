@@ -38,7 +38,7 @@ export function MobileNav({ items }: { items: NavItem[] }) {
           />
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-sidebar p-4">
             <div className="mb-6 flex items-center justify-between">
-              <KlgLogo tone="light" showTagline={false} />
+              <KlgLogo tone="light" size="sm" showSystemName={false} />
               <button
                 type="button"
                 onClick={() => setOpen(false)}
