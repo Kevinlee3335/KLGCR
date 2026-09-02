@@ -34,8 +34,12 @@ export async function POST(request: NextRequest) {
     { auth: { persistSession: false } },
   );
 
+  const normalizedBlock = block.replace(/^block\s+/i, "").trim().toUpperCase();
   const { data: blockRow, error: blockError } = await supabase
-    .from("blocks").select("id").ilike("name", block).maybeSingle();
+    .from("blocks")
+    .select("id")
+    .eq("code", normalizedBlock)
+    .maybeSingle();
   if (blockError || !blockRow) return NextResponse.json({ error: "Unknown block" }, { status: 400 });
 
   const timestamp = text(body["Timestamp"]);
