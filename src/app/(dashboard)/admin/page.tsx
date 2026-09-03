@@ -1,3 +1,4 @@
+import "./admin-dashboard.css";
 import { requireRole } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { Dashboard, type AdminDashboardData } from "@/components/dashboard";
