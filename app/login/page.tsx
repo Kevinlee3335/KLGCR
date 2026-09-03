@@ -53,9 +53,10 @@ export default function LoginPage() {
           aria-hidden="true"
         />
         <div className="absolute inset-0 flex flex-col justify-between p-10 xl:p-12">
-          {/* Primary brand — top-left, prominent */}
+          {/* Brand block — medium logo + system subtitle, upper-left */}
           <KlgLogo tone="light" size="hero" />
 
+          {/* Main hero message — the strongest element on the left */}
           <div className="max-w-md">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Campus Operations</p>
             <h1 className="mt-4 text-4xl font-semibold leading-[1.1] text-balance text-sidebar-foreground">
@@ -67,7 +68,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Spacer keeps the hero heading vertically centred between logo and base. */}
+          {/* Spacer keeps the hero message vertically weighted toward the centre. */}
           <div aria-hidden="true" />
         </div>
       </section>

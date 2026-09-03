@@ -24,8 +24,8 @@ const KLG_SIZE: Record<NonNullable<KlgLogoProps["size"]>, string> = {
   sm: "h-8 w-auto",
   md: "h-12 w-auto",
   lg: "h-16 w-auto",
-  hero: "h-auto w-[300px] xl:w-[340px]",
-  panel: "h-auto w-[240px] sm:w-[260px]",
+  hero: "h-auto w-[230px] xl:w-[250px]",
+  panel: "h-auto w-[280px] sm:w-[300px]",
 }
 
 export function KlgLogo({ className, tone = "dark", size = "md", showSystemName = true }: KlgLogoProps) {
@@ -59,7 +59,7 @@ export function KlgLogo({ className, tone = "dark", size = "md", showSystemName 
 const KEAN_LENG_SIZE: Record<"sm" | "md" | "footer", string> = {
   sm: "h-7 w-auto",
   md: "h-9 w-auto",
-  footer: "h-auto w-[150px]",
+  footer: "h-auto w-[140px]",
 }
 
 export function KeanLengMark({
