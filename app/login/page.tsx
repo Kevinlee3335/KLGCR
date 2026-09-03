@@ -41,12 +41,11 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2.5">
             <KeanLengMark tone="light" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-xs text-sidebar-foreground/60">Operated by K HOTEL SDN BHD</span>
-              <span className="text-xs text-sidebar-foreground/60">A member of Kean Leng Group</span>
-            </div>
+            <span className="text-xs text-sidebar-foreground/60">
+              Operated by K HOTEL SDN BHD — a member of Kean Leng Group
+            </span>
           </div>
         </div>
       </section>
@@ -68,12 +67,11 @@ export default function LoginPage() {
           <LoginForm />
 
           <div className="mt-8 border-t border-border pt-6">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2.5">
               <KeanLengMark tone="dark" />
-              <div className="flex flex-col leading-tight">
-                <span className="text-xs font-medium text-foreground">Operated by K HOTEL SDN BHD</span>
-                <span className="text-xs text-muted-foreground">A member of Kean Leng Group</span>
-              </div>
+              <span className="text-xs text-muted-foreground">
+                Operated by K HOTEL SDN BHD — a member of Kean Leng Group
+              </span>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
               Access is provisioned by your administrator. Contact them if you cannot sign in.
