@@ -1,2 +1,22 @@
 import Image from "next/image";
-export function Brand(){return <div className="brand"><Image src="/klg-mark.svg" width={42} height={42} alt="KLG Campus Residence" priority/><div><strong>KLG CAMPUS RESIDENCE</strong><span>Maintenance & Inventory System</span></div></div>}
+
+export function Brand({ variant = "compact" }: { variant?: "compact" | "logo" }) {
+  if (variant === "logo") {
+    return (
+      <div className="brand brand-logo">
+        <Image
+          src="/klg-campus-residence-logo.png"
+          width={1086}
+          height={380}
+          alt="KLG Campus Residence"
+          priority
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="brand">
+      <Image src="/klg-campus-residence-logo.png" width={1086} height={380} alt="KLG Campus Residence" priority style={{ width: "auto", height: 40 }} />
+    </div>
+  );
+}
