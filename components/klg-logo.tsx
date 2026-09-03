@@ -11,15 +11,16 @@ type KlgLogoProps = {
 }
 
 /**
- * KLG Campus Residence brand lockup — official logo asset, rendered exactly as
- * provided (no crop, stretch, or redraw). The source has a charcoal
- * background, so it blends into dark surfaces and reads as an intentional dark
- * plaque on light surfaces. Only the display height changes per size.
+ * KLG Campus Residence brand lockup — official transparent PNG, rendered
+ * exactly as provided (no crop, stretch, redraw, or background). The wordmark
+ * is horizontal and its "CAMPUS RESIDENCE" text is outlined, so it reads on
+ * both dark and light surfaces. Only the display height changes per size;
+ * width is automatic to preserve the original aspect ratio.
  */
 const KLG_HEIGHT: Record<NonNullable<KlgLogoProps["size"]>, string> = {
-  sm: "h-10",
-  md: "h-14",
-  lg: "h-20",
+  sm: "h-8",
+  md: "h-12",
+  lg: "h-16",
 }
 
 export function KlgLogo({ className, tone = "dark", size = "md", showSystemName = true }: KlgLogoProps) {
@@ -28,15 +29,15 @@ export function KlgLogo({ className, tone = "dark", size = "md", showSystemName 
   return (
     <div className={cn("flex flex-col", className)}>
       <Image
-        src="/images/klg-campus-residence-logo.jpg"
+        src="/images/klg-campus-residence-logo.png"
         alt="KLG Campus Residence"
-        width={512}
-        height={512}
+        width={1086}
+        height={380}
         priority
-        className={cn("w-auto rounded-md object-contain", KLG_HEIGHT[size])}
+        className={cn("w-auto object-contain", KLG_HEIGHT[size])}
       />
       {showSystemName && (
-        <span className={cn("mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em]", system)}>
+        <span className={cn("mt-2 text-[10px] font-semibold uppercase tracking-[0.18em]", system)}>
           Operations Management System
         </span>
       )}
@@ -45,26 +46,27 @@ export function KlgLogo({ className, tone = "dark", size = "md", showSystemName 
 }
 
 /**
- * Kean Leng Group corporate lockup — official logo asset, rendered exactly as
- * provided (no crop, stretch, or redraw). The asset has a white background, so
- * on dark surfaces we seat it on a white plaque.
+ * Kean Leng Group corporate lockup — official transparent PNG, rendered exactly
+ * as provided (no crop, stretch, redraw, or background). Displayed directly on
+ * any surface; height controls size and width is automatic to preserve the
+ * original aspect ratio. `tone` is accepted for call-site compatibility.
  */
-export function KeanLengMark({ className, tone = "dark" }: { className?: string; tone?: "light" | "dark" }) {
+export function KeanLengMark({
+  className,
+  tone: _tone = "dark",
+  size = "md",
+}: {
+  className?: string
+  tone?: "light" | "dark"
+  size?: "sm" | "md"
+}) {
   return (
-    <div
-      className={cn(
-        "inline-flex w-fit items-center justify-center self-start overflow-hidden rounded-md",
-        tone === "light" ? "bg-white/95 px-2.5 py-1.5 shadow-sm" : "",
-        className,
-      )}
-    >
-      <Image
-        src="/images/kean-leng-group-logo.jpg"
-        alt="Kean Leng Group"
-        width={588}
-        height={200}
-        className="h-8 w-auto object-contain"
-      />
-    </div>
+    <Image
+      src="/images/kean-leng-group-logo.png"
+      alt="Kean Leng Group"
+      width={1024}
+      height={390}
+      className={cn("w-auto object-contain", size === "sm" ? "h-7" : "h-9", className)}
+    />
   )
 }

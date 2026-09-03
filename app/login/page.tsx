@@ -9,6 +9,26 @@ import { LoginForm } from "@/components/login-form"
  */
 const LOGIN_BACKGROUND_IMAGE = "/images/login-building.png"
 
+function CorporateAttribution({ tone }: { tone: "light" | "dark" }) {
+  const label = tone === "light" ? "text-sidebar-foreground/70" : "text-muted-foreground"
+  const strong = tone === "light" ? "text-sidebar-foreground" : "text-foreground"
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className={cnLabel(label)}>
+        Operated by
+        <span className={`block text-sm font-semibold ${strong}`}>K HOTEL SDN BHD</span>
+      </p>
+      <p className={`mt-1 ${cnLabel(label)}`}>A member of</p>
+      <KeanLengMark size="sm" className="mt-0.5" />
+    </div>
+  )
+}
+
+function cnLabel(color: string) {
+  return `text-xs leading-relaxed ${color}`
+}
+
 export default function LoginPage() {
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
@@ -28,7 +48,7 @@ export default function LoginPage() {
           aria-hidden="true"
         />
         <div className="absolute inset-0 flex flex-col justify-between p-10 xl:p-12">
-          <KlgLogo tone="light" size="md" />
+          <KlgLogo tone="light" size="lg" />
 
           <div className="max-w-md">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Campus Operations</p>
@@ -41,38 +61,25 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            <KeanLengMark tone="light" />
-            <span className="text-xs text-sidebar-foreground/60">
-              Operated by K HOTEL SDN BHD — a member of Kean Leng Group
-            </span>
-          </div>
+          <CorporateAttribution tone="light" />
         </div>
       </section>
 
       {/* Sign-in panel */}
       <section className="flex items-center justify-center bg-background px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm">
-          {/* Mobile brand */}
-          <div className="mb-8 lg:hidden">
-            <KlgLogo tone="dark" size="md" />
-          </div>
+          {/* Primary brand identity */}
+          <KlgLogo tone="dark" size="md" showSystemName={false} className="mb-8" />
 
           <div className="mb-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">KLG Campus Residence</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-balance">Operations Management System</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-balance">Operations Management System</h2>
             <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to your workspace.</p>
           </div>
 
           <LoginForm />
 
           <div className="mt-8 border-t border-border pt-6">
-            <div className="flex flex-col gap-2.5">
-              <KeanLengMark tone="dark" />
-              <span className="text-xs text-muted-foreground">
-                Operated by K HOTEL SDN BHD — a member of Kean Leng Group
-              </span>
-            </div>
+            <CorporateAttribution tone="dark" />
             <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
               Access is provisioned by your administrator. Contact them if you cannot sign in.
             </p>
