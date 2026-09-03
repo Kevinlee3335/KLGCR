@@ -9,24 +9,29 @@ import { LoginForm } from "@/components/login-form"
  */
 const LOGIN_BACKGROUND_IMAGE = "/images/login-building.png"
 
-function CorporateAttribution({ tone }: { tone: "light" | "dark" }) {
-  const label = tone === "light" ? "text-sidebar-foreground/70" : "text-muted-foreground"
-  const strong = tone === "light" ? "text-sidebar-foreground" : "text-foreground"
-
+/**
+ * Single corporate ownership block, shown only at the bottom of the right
+ * login panel. KLG Campus Residence is the primary brand; Kean Leng Group is
+ * secondary. Horizontal on desktop, stacked on narrow screens.
+ */
+function CorporateFooter() {
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className={cnLabel(label)}>
-        Operated by
-        <span className={`block text-sm font-semibold ${strong}`}>K HOTEL SDN BHD</span>
+    <div className="mt-8 border-t border-border pt-6">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs leading-relaxed text-muted-foreground">Operated by</p>
+          <p className="text-sm font-semibold text-foreground">K HOTEL SDN BHD</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">A member of</p>
+          <KeanLengMark size="footer" />
+        </div>
+      </div>
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+        Access is provisioned by your administrator. Contact them if you cannot sign in.
       </p>
-      <p className={`mt-1 ${cnLabel(label)}`}>A member of</p>
-      <KeanLengMark size="sm" className="mt-0.5" />
     </div>
   )
-}
-
-function cnLabel(color: string) {
-  return `text-xs leading-relaxed ${color}`
 }
 
 export default function LoginPage() {
@@ -48,7 +53,8 @@ export default function LoginPage() {
           aria-hidden="true"
         />
         <div className="absolute inset-0 flex flex-col justify-between p-10 xl:p-12">
-          <KlgLogo tone="light" size="lg" />
+          {/* Primary brand — top-left, prominent */}
+          <KlgLogo tone="light" size="hero" />
 
           <div className="max-w-md">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Campus Operations</p>
@@ -61,15 +67,16 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <CorporateAttribution tone="light" />
+          {/* Spacer keeps the hero heading vertically centred between logo and base. */}
+          <div aria-hidden="true" />
         </div>
       </section>
 
       {/* Sign-in panel */}
       <section className="flex items-center justify-center bg-background px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm">
-          {/* Primary brand identity */}
-          <KlgLogo tone="dark" size="md" showSystemName={false} className="mb-8" />
+          {/* Primary brand identity — left-aligned with the form */}
+          <KlgLogo tone="dark" size="panel" showSystemName={false} className="mb-6" />
 
           <div className="mb-7">
             <h2 className="text-2xl font-semibold tracking-tight text-balance">Operations Management System</h2>
@@ -78,12 +85,7 @@ export default function LoginPage() {
 
           <LoginForm />
 
-          <div className="mt-8 border-t border-border pt-6">
-            <CorporateAttribution tone="dark" />
-            <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-              Access is provisioned by your administrator. Contact them if you cannot sign in.
-            </p>
-          </div>
+          <CorporateFooter />
         </div>
       </section>
     </main>
