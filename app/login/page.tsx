@@ -17,14 +17,21 @@ const LOGIN_BACKGROUND_IMAGE = "/images/login-building.png"
 function CorporateFooter() {
   return (
     <div className="mt-8 border-t border-border pt-6">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-stretch sm:gap-6">
+        {/* Left column: operator */}
+        <div className="flex flex-col justify-start">
           <p className="text-xs leading-relaxed text-muted-foreground">Operated by</p>
-          <p className="text-sm font-semibold text-foreground">K HOTEL SDN BHD</p>
+          <p className="mt-1 text-sm font-semibold text-foreground">K HOTEL SDN BHD</p>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Vertical divider (desktop) */}
+        <div className="hidden w-px self-stretch bg-border sm:block" aria-hidden="true" />
+
+        {/* Right column: parent group. "A member of" is nudged lower so it sits
+            close to the logo and stays balanced against the left column. */}
+        <div className="flex flex-col sm:pt-1.5">
           <p className="text-xs leading-relaxed text-muted-foreground">A member of</p>
-          <KeanLengMark size="footer" />
+          <KeanLengMark size="footer" className="mt-2" />
         </div>
       </div>
       <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
