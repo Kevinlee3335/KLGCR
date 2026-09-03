@@ -11,17 +11,15 @@ type KlgLogoProps = {
 }
 
 /**
- * KLG Campus Residence brand lockup — official logo asset.
- *
- * The source asset is a square social crop with generous charcoal padding, so
- * we crop it to a horizontal wordmark band with object-cover. Its charcoal
- * background blends into dark surfaces (sidebar / hero) and reads as an
- * intentional dark plaque on light surfaces.
+ * KLG Campus Residence brand lockup — official logo asset, rendered exactly as
+ * provided (no crop, stretch, or redraw). The source has a charcoal
+ * background, so it blends into dark surfaces and reads as an intentional dark
+ * plaque on light surfaces. Only the display height changes per size.
  */
-const KLG_BOX: Record<NonNullable<KlgLogoProps["size"]>, string> = {
-  sm: "h-9 w-28",
-  md: "h-11 w-36",
-  lg: "h-16 w-52",
+const KLG_HEIGHT: Record<NonNullable<KlgLogoProps["size"]>, string> = {
+  sm: "h-10",
+  md: "h-14",
+  lg: "h-20",
 }
 
 export function KlgLogo({ className, tone = "dark", size = "md", showSystemName = true }: KlgLogoProps) {
@@ -29,16 +27,14 @@ export function KlgLogo({ className, tone = "dark", size = "md", showSystemName 
 
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className={cn("relative overflow-hidden rounded-md", KLG_BOX[size])}>
-        <Image
-          src="/images/klg-campus-residence-logo.jpg"
-          alt="KLG Campus Residence"
-          fill
-          sizes="208px"
-          priority
-          className="object-cover object-center"
-        />
-      </div>
+      <Image
+        src="/images/klg-campus-residence-logo.jpg"
+        alt="KLG Campus Residence"
+        width={512}
+        height={512}
+        priority
+        className={cn("w-auto rounded-md object-contain", KLG_HEIGHT[size])}
+      />
       {showSystemName && (
         <span className={cn("mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em]", system)}>
           Operations Management System
@@ -49,9 +45,9 @@ export function KlgLogo({ className, tone = "dark", size = "md", showSystemName 
 }
 
 /**
- * Kean Leng Group corporate lockup — official logo asset.
- * K HOTEL SDN BHD and KEAN LENG GROUP share this corporate logo. The asset has
- * a white background, so on dark surfaces we seat it on a white plaque.
+ * Kean Leng Group corporate lockup — official logo asset, rendered exactly as
+ * provided (no crop, stretch, or redraw). The asset has a white background, so
+ * on dark surfaces we seat it on a white plaque.
  */
 export function KeanLengMark({ className, tone = "dark" }: { className?: string; tone?: "light" | "dark" }) {
   return (
@@ -65,9 +61,9 @@ export function KeanLengMark({ className, tone = "dark" }: { className?: string;
       <Image
         src="/images/kean-leng-group-logo.jpg"
         alt="Kean Leng Group"
-        width={132}
-        height={45}
-        className="h-7 w-auto object-contain"
+        width={588}
+        height={200}
+        className="h-8 w-auto object-contain"
       />
     </div>
   )
