@@ -4,9 +4,16 @@ import { Dashboard } from "./dashboard";
 
 describe("role dashboards", () => {
   it("shows live admin overview with navigable cards", () => {
-    render(<Dashboard kind="admin" name="KLG Admin" values={[2, 3, 1, 4]} hrefs={["/admin/complaints", "/admin/jobs?a", "/admin/jobs?b", "/admin/jobs?c"]}/>);
-    expect(screen.getByRole("link", { name: /New complaints/i })).toHaveAttribute("href", "/admin/complaints");
-    expect(screen.getByText("4")).toBeInTheDocument();
+    render(<Dashboard kind="admin" name="KLG Admin" data={{
+      kpis: { newComplaints: 2, todayJobs: 3, inProgress: 4, pendingMaterial: 1, underMonitoring: 2, completedToday: 5 },
+      jobs: { assigned: 3, in_progress: 4, pending_material: 1, under_monitoring: 2, completed: 5 },
+      complaints: [], tasks: [], inventory: { outOfStock: 1, nearReorder: 2 },
+    }}/>)
+    expect(screen.getByRole("link", { name: /New complaints/i })).toHaveAttribute("href", "/admin/complaints?status=new");
+    expect(screen.getByText("Operations Command Centre")).toBeInTheDocument();
+    expect(screen.getByText("15")).toBeInTheDocument();
+    expect(screen.queryByText("Needs triage")).not.toBeInTheDocument();
+    expect(screen.getByText("Need To Order")).toBeInTheDocument();
   });
 
   it("shows assigned blocks on staff mobile dashboard", () => {

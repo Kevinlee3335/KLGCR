@@ -10,7 +10,8 @@ function numberField(value: FormDataEntryValue | null, allowNull = false) {
 
 export async function POST(request: Request) {
   const form = await request.formData();
-  const url = new URL("/admin/inventory", request.url);
+  const returnTo = String(form.get("returnTo") || "");
+  const url = new URL(returnTo.startsWith("/admin/inventory") ? returnTo : "/admin/inventory", request.url);
   const action = String(form.get("action") || "");
   const supabase = await createClient();
   let error: { message: string } | null = null;
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
       reorder_level: reorder,
       unit: String(form.get("unit") || "").trim() || null,
       cost,
+      brand: String(form.get("brand") || "").trim() || null,
+      supplier: String(form.get("supplier") || "").trim() || null,
+      storage_location: String(form.get("location") || "").trim() || null,
+      barcode: String(form.get("barcode") || "").trim() || null,
     }));
   } else if (action === "edit") {
     const itemId = String(form.get("itemId") || "");
@@ -49,6 +54,16 @@ export async function POST(request: Request) {
       unit: String(form.get("unit") || "").trim() || null,
       cost,
       is_active: form.get("isActive") === "on",
+      brand: String(form.get("brand") || "").trim() || null,
+      supplier: String(form.get("supplier") || "").trim() || null,
+      storage_location: String(form.get("location") || "").trim() || null,
+      barcode: String(form.get("barcode") || "").trim() || null,
+      minimum_stock: numberField(form.get("minimum"), true),
+      maximum_stock: numberField(form.get("maximum"), true),
+      supplier_contact_person: String(form.get("contact") || "").trim() || null,
+      supplier_phone: String(form.get("phone") || "").trim() || null,
+      supplier_email: String(form.get("email") || "").trim() || null,
+      supplier_lead_time_days: numberField(form.get("leadTime"), true),
     }).eq("id", itemId));
   } else if (action === "adjust") {
     const itemId = String(form.get("itemId") || "");

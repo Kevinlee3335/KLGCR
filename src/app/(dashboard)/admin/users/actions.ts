@@ -141,3 +141,29 @@ export async function sendReset(data: FormData) {
   if (resetError) throw new Error(resetError.message);
   await recordAccessAudit(admin, actor.id, target.id, "password_reset_requested");
 }
+
+const updateSchema = z.object({
+  id: z.string().uuid(),
+  fullName: z.string().trim().min(2),
+  username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/),
+  email: z.string().email().toLowerCase(),
+  role: z.enum(["admin", "maintenance_staff", "management_viewer"]),
+});
+
+export async function updateUser(data: FormData) {
+  const actor = await requireRole(["admin"]);
+  const parsed = updateSchema.safeParse({ id:data.get("id"), fullName:data.get("fullName"), username:data.get("username"), email:data.get("email"), role:data.get("role") });
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check the user details.");
+  const admin=adminClient();const blocks=data.getAll("blocks").map(String);
+  const {data:before,error:beforeError}=await admin.from("profiles").select("full_name,username,email,role").eq("id",parsed.data.id).single();
+  if(beforeError)throw new Error(beforeError.message);
+  const{error:authError}=await admin.auth.admin.updateUserById(parsed.data.id,{email:parsed.data.email,user_metadata:{full_name:parsed.data.fullName,username:parsed.data.username}});
+  if(authError)throw new Error(authError.message);
+  const{error:profileError}=await admin.from("profiles").update({full_name:parsed.data.fullName,username:parsed.data.username,email:parsed.data.email,role:parsed.data.role}).eq("id",parsed.data.id);
+  if(profileError)throw new Error(profileError.message);
+  const blockResult=blocks.length?await admin.from("blocks").select("id,code").in("code",blocks):{data:[],error:null};
+  const{data:blockRows,error:blockError}=blockResult;if(blockError)throw new Error(blockError.message);
+  const{error:deleteError}=await admin.from("profile_blocks").delete().eq("profile_id",parsed.data.id);if(deleteError)throw new Error(deleteError.message);
+  if(blockRows?.length){const{error:insertError}=await admin.from("profile_blocks").insert(blockRows.map(block=>({profile_id:parsed.data.id,block_id:block.id})));if(insertError)throw new Error(insertError.message)}
+  await recordAccessAudit(admin,actor.id,parsed.data.id,"user_updated",{before,after:{...parsed.data,blocks}});revalidatePath("/admin/users");
+}

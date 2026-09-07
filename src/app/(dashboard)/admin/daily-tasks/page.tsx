@@ -9,7 +9,7 @@ const workStates=[['standard','Normal'],['partially_completed','Partially Comple
 export default async function DailyTasksPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
   const profile=await requireRole(["admin","management_viewer"]);const filters=await searchParams;const date=filters.date||myDate();const supabase=await createClient();const db:any=supabase;
   const[{data:jobs,error},{data:adminTasks}]=await Promise.all([
-    db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status","in",'("completed","cancelled")').order("scheduled_for",{ascending:true,nullsFirst:false}).order("assigned_at",{ascending:true}),
+    db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status","in",'("completed","verified","closed","cancelled")').order("scheduled_for",{ascending:true,nullsFirst:false}).order("assigned_at",{ascending:true}),
     db.from("admin_daily_tasks").select("id,task_date,title,notes,status,created_at").eq("task_date",date).order("created_at",{ascending:true})
   ]);
   const isAdmin=profile.role==="admin";
