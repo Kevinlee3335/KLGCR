@@ -3,8 +3,15 @@ import { LogoutForm } from "./logout-form";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
+import { Bell, Boxes, ClipboardCheck, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
 
-const adminNav = [["Dashboard", "/admin"], ["New Complaints", "/admin/complaints"], ["Google Import", "/admin/import"], ["Maintenance Jobs", "/admin/jobs"], ["Daily Tasks", "/admin/daily-tasks"], ["Material Requests", "/admin/material-requests"], ["Inventory", "/admin/inventory"], ["Reports", "/admin/reports"], ["Notifications", "/admin/notifications"], ["Users", "/admin/users"], ["Settings", "#"]];
+const adminNav = [
+  ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
+  ["Maintenance Jobs", "/admin/jobs", Wrench], ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
+  ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
+  ["Reports", "/admin/reports", FileBarChart], ["Notifications", "/admin/notifications", Bell],
+  ["Users", "/admin/users", Users], ["Settings", "#", Settings],
+] as const;
 const staffNav = [["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"], ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"], ["Appointments", "#"], ["Completed Jobs", "/staff/tasks?status=completed"]];
 
 function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "users" | "more" }) {
@@ -14,6 +21,6 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "users" | "more" }) {
 
 export function AppShell({ profile, children, title }: { profile: Profile; children: React.ReactNode; title: string }) {
   const isStaff = profile.role === "maintenance_staff";
-  const nav = isStaff ? staffNav : adminNav;
-  return <div className="shell"><aside className="sidebar"><Brand/><nav className="nav" aria-label="Main navigation">{nav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav><div className="sidebar-footer"><strong>{profile.full_name}</strong><br/><small>{roleLabel[profile.role]}</small><LogoutForm/></div></aside><main className="main"><header className="topbar"><h1>{title}</h1><span className="badge">{profile.blocks?.map((block) => `Block ${block.code}`).join(" · ") || "All blocks"}</span></header><div className="content">{children}</div></main><nav className="mobile-nav" aria-label="Mobile navigation"><Link href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></Link><Link href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></Link>{!isStaff ? <Link href="/admin/reports"><NavIcon kind="users"/><span>Reports</span></Link> : <Link href="/staff/material-request"><NavIcon kind="more"/><span>Materials</span></Link>}<Link href={isStaff ? "/staff/monitoring" : "/admin/daily-tasks"}><NavIcon kind="more"/><span>{isStaff ? "Monitoring" : "Daily"}</span></Link></nav></div>;
+  const date = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
+  return <div className={`shell ${isStaff ? "staff-shell" : "admin-shell"}`}><aside className="sidebar"><Brand/>{isStaff ? <nav className="nav" aria-label="Main navigation">{staffNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <nav className="nav admin-nav" aria-label="Main navigation">{adminNav.map(([item, href, Icon]) => <Link key={item} href={href} aria-current={title === item || (item === "New Complaints" && title === "Complaint Detail") ? "page" : undefined}><Icon size={18}/><span>{item}</span></Link>)}</nav>}<div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{roleLabel[profile.role]}</small></div><LogoutForm/></div></aside><main className="main"><header className="topbar"><div><span className="topbar-label">KLG Campus Residence</span><h1>{title}</h1></div><div className="topbar-actions"><span className="topbar-date">{date}</span>{!isStaff && <Link href="/admin/notifications" className="notification-link" aria-label="Notifications"><Bell size={19}/><span>Notifications</span></Link>}<span className="badge">{profile.blocks?.map((block) => `Block ${block.code}`).join(" · ") || "All blocks"}</span></div></header><div className="content">{children}</div></main><nav className="mobile-nav" aria-label="Mobile navigation"><Link href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></Link><Link href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></Link>{!isStaff ? <Link href="/admin/reports"><NavIcon kind="users"/><span>Reports</span></Link> : <Link href="/staff/material-request"><NavIcon kind="more"/><span>Materials</span></Link>}<Link href={isStaff ? "/staff/monitoring" : "/admin/daily-tasks"}><NavIcon kind="more"/><span>{isStaff ? "Monitoring" : "Daily"}</span></Link></nav></div>;
 }
