@@ -11,7 +11,7 @@ type InventorySummary = { outOfStock: number; nearReorder: number };
 type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number>;
 
 export type AdminDashboardData = {
-  kpis: { newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number };
+  kpis: { newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number;needAppointments?:number };
   jobs: JobCounts;
   complaints: Complaint[];
   tasks: Task[];
@@ -35,6 +35,9 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
     { title: "Pending Material", value: data.kpis.pendingMaterial, subtitle: "Awaiting material", href: "/admin/jobs?status=pending_material", icon: PackageOpen, tone: "amber" },
     { title: "Under Monitoring", value: data.kpis.underMonitoring, subtitle: "Follow-up required", href: "/admin/jobs?status=under_monitoring", icon: Clock3, tone: "purple" },
     { title: "Completed Today", value: data.kpis.completedToday, subtitle: "Completed today", href: "/admin/jobs?scope=completed-today", icon: CheckCircle2, tone: "green" },
+    { title: "Today's Appointments", value: data.kpis.todayAppointments, subtitle: "Scheduled visits", href: "/admin/daily-tasks", icon: Clock3, tone: "gold" },
+    { title: "Pending Confirmation", value: data.kpis.pendingAppointments, subtitle: "Awaiting confirmation", href: "/admin/reports?appointmentStatus=pending_confirmation", icon: ClipboardCheck, tone: "amber" },
+    { title: "Need Appointment", value: data.kpis.needAppointments, subtitle: "Resident requested", href: "/admin/complaints?needAppointment=1", icon: ShieldAlert, tone: "violet" },
   ];
   const quickActions = [
     ["Review Complaints", "/admin/complaints", ShieldAlert], ["Schedule Tasks", "/admin/daily-tasks", ClipboardCheck],
