@@ -9,6 +9,20 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 }
 
+function formValue(body: FormPayload, ...labels: string[]) {
+  for (const label of labels) {
+    const direct = text(body[label]);
+    if (direct) return direct;
+    const key = Object.keys(body).find((candidate) => candidate.trim().toLowerCase() === label.trim().toLowerCase());
+    if (key) return text(body[key]);
+  }
+  return "";
+}
+
+function isYes(value: string) {
+  return /^(yes|true|1)$/i.test(value.trim());
+}
+
 function toIsoDate(value: string) {
   if (!value) return null;
   const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -75,7 +89,9 @@ export async function POST(request: NextRequest) {
   const reporterPhone = text(body["PHONE NUMBER (WHATSAPP)"]);
   const reporterEmail = text(body["EMAIL ADDRESS"]) || text(body["Email Address"]);
   const timestamp = text(body["Timestamp"]);
-  const availabilityDate = toIsoDate(text(body["ROOM AVAILABILITY (DATE)"]));
+  const availabilityDate = toIsoDate(formValue(body, "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
+  const availabilityTime = formValue(body, "Room Availability Time", "ROOM AVAILABILITY (TIME)");
+  const accessRequest = formValue(body, "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
 
   const payload = {
     block_id: blockRow.id,
@@ -92,8 +108,10 @@ export async function POST(request: NextRequest) {
     reporter_phone: reporterPhone || null,
     reporter_email: reporterEmail || null,
     availability_date: availabilityDate,
-    availability_time: text(body["ROOM AVAILABILITY (TIME)"]) || null,
-    room_access_permission: text(body["REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY"]) || null,
+    availability_time: availabilityTime || null,
+    preferred_date: availabilityDate,
+    preferred_time: availabilityTime || null,
+    need_appointment: isYes(accessRequest),
     submitted_at: toIsoTimestamp(timestamp),
   };
 

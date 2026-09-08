@@ -12,3 +12,32 @@ export async function createComplaint(data:FormData){await requireRole(["admin"]
 export async function reviewComplaint(id:string,data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").update({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority,status:"under_review"}).eq("id",id);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${id}`);redirect(`/admin/complaints/${id}?saved=1`)}
 export async function assignComplaint(id:string,data:FormData){await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);const s=await createClient();const {error}=await s.rpc("assign_complaint",{p_complaint_id:id,p_assigned_to:staffId});if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath("/admin/jobs");revalidatePath("/staff");redirect("/admin/jobs?assigned=1")}
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
+
+const appointmentSchema=z.object({
+  appointmentDate:z.string().date(),appointmentTime:z.string().regex(/^\d{2}:\d{2}$/),staffId:z.string().uuid(),
+  remarks:z.string().trim().max(1000).optional(),status:z.enum(["pending_confirmation","confirmed","completed","cancelled","rescheduled","no_show"]),
+  roomAccess:z.enum(["resident_present","enter_with_permission","call_before_entering","key_at_office","need_appointment","no_access"]),
+});
+
+export async function createAppointment(complaintId:string,data:FormData){
+  const actor=await requireRole(["admin"]);
+  const parsed=appointmentSchema.safeParse({appointmentDate:data.get("appointmentDate"),appointmentTime:data.get("appointmentTime"),staffId:data.get("staffId"),remarks:data.get("remarks"),status:data.get("status"),roomAccess:data.get("roomAccess")});
+  if(!parsed.success)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid appointment")}`);
+  const s=await createClient();
+  const {data:job}=await s.from("maintenance_jobs").select("id").eq("complaint_id",complaintId).maybeSingle();
+  if(!job)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Assign staff before creating an appointment.")}`);
+  const {error:complaintError}=await s.from("complaints").update({room_access_permission:parsed.data.roomAccess}).eq("id",complaintId);
+  if(complaintError)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(complaintError.message)}`);
+  const {error}=await s.from("appointments").insert({complaint_id:complaintId,job_id:job.id,appointment_date:parsed.data.appointmentDate,appointment_time:parsed.data.appointmentTime,assigned_staff:parsed.data.staffId,remarks:parsed.data.remarks||null,status:parsed.data.status,created_by:actor.id});
+  if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");revalidatePath("/admin/daily-tasks");revalidatePath("/admin/reports");revalidatePath("/staff");revalidatePath("/staff/tasks");revalidatePath(`/admin/complaints/${complaintId}`);
+  redirect(`/admin/complaints/${complaintId}?appointment=1`);
+}
+
+export async function updateAppointment(complaintId:string,appointmentId:string,data:FormData){
+  await requireRole(["admin"]);const status=z.enum(["pending_confirmation","confirmed","completed","cancelled","rescheduled","no_show"]).safeParse(data.get("status"));
+  if(!status.success)redirect(`/admin/complaints/${complaintId}?error=Invalid%20appointment%20status`);
+  const s=await createClient();const {error}=await s.from("appointments").update({status:status.data}).eq("id",appointmentId).eq("complaint_id",complaintId);
+  if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath(`/admin/complaints/${complaintId}`);redirect(`/admin/complaints/${complaintId}?appointment=1`);
+}
