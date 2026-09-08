@@ -26,6 +26,14 @@ export async function GET(request: Request) {
   const dataset=params.get("dataset")??"reports";
   const format=params.get("format")==="xls"?"xls":"csv";
 
+  if(dataset==="appointments"){
+    let query=db.from("appointments").select("appointment_date,appointment_time,status,assigned_staff,complaints!appointment_complaint_id_fkey(complaint_no,room_no,room_access_permission,blocks(code)),profiles!appointments_assigned_staff_fkey(full_name)").order("appointment_date",{ascending:false});
+    if(date)query=query.eq("appointment_date",date);if(staff)query=query.eq("assigned_staff",staff);
+    const {data,error}=await query;if(error)return new Response(error.message,{status:500});
+    const rows:unknown[][]=(data??[]).filter((r:any)=>!block||block==="ALL"||block.includes(r.complaints?.blocks?.code??"")).map((r:any)=>[r.appointment_date,r.appointment_time,r.complaints?.complaint_no,r.complaints?.blocks?.code,r.complaints?.room_no,r.profiles?.full_name,String(r.complaints?.room_access_permission??"").replaceAll("_"," "),String(r.status).replaceAll("_"," ")]);
+    return download(rows,["Appointment Date","Appointment Time","Complaint","Block","Room","Assigned Staff","Room Access Permission","Appointment Status"],format,"KLGCR-Appointments");
+  }
+
   if(dataset==="material_usage"||dataset==="consumption"){
     let query=db.from("inventory_issue_history").select("id,qty,issued_at,staff_id,inventory_items(item_code,description,unit),maintenance_jobs(job_no,room_no,blocks(code)),profiles!inventory_issue_history_staff_id_fkey(full_name)").order("issued_at",{ascending:false}).limit(1000);
     if(staff)query=query.eq("staff_id",staff);
