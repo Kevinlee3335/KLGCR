@@ -1,4 +1,4 @@
--- Appointment Workflow V2: access permission, not preferred availability,
+-- Appointment Workflow V3: access permission, not preferred availability,
 -- determines whether a separate appointment is required.
 alter table public.complaints
   add column if not exists appointment_required boolean not null default true;
@@ -7,7 +7,8 @@ alter table public.complaints drop constraint if exists complaints_room_access_p
 
 update public.complaints
 set room_access_permission = case
-      when room_access_permission in ('enter_with_permission', 'key_at_office') then 'yes'
+      when lower(trim(room_access_permission)) in ('yes', 'enter_with_permission', 'key_at_office') then 'yes'
+      when lower(trim(room_access_permission)) in ('no', 'resident_present', 'call_before_entering', 'need_appointment', 'no_access') then 'no'
       when room_access_permission is not null then 'no'
       -- The Google Form access request was historically stored in this field.
       when need_appointment then 'yes'
@@ -34,8 +35,8 @@ where j.complaint_id = c.id
 alter table public.complaints add constraint complaints_room_access_permission_check
   check (room_access_permission is null or room_access_permission in ('yes', 'no'));
 
--- Preserve the existing webhook contract while translating its access answer
--- into the V2 workflow at the database boundary.
+-- V3 accepts the explicit Google Form mapping while retaining compatibility
+-- with rows sent by the old webhook contract.
 create or replace function public.apply_appointment_workflow_v2()
 returns trigger language plpgsql set search_path = '' as $$
 declare access_granted boolean;
@@ -46,6 +47,7 @@ begin
     new.appointment_required := not access_granted;
     new.need_appointment := not access_granted;
   elsif new.room_access_permission is not null then
+    new.room_access_permission := lower(trim(new.room_access_permission));
     new.appointment_required := new.room_access_permission = 'no';
     new.need_appointment := new.appointment_required;
   end if;
