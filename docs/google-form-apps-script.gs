@@ -7,11 +7,9 @@ function onFormSubmit(e) {
   const secret = props.getProperty('KLGCR_WEBHOOK_SECRET');
   if (!url || !secret) throw new Error('Missing KLGCR webhook configuration');
 
-  const payload = {};
-  Object.keys(e.namedValues || {}).forEach(function (key) {
-    const value = e.namedValues[key];
-    payload[key] = Array.isArray(value) ? value.join(', ') : value;
-  });
+  // Keep the native namedValues arrays. The webhook deliberately supports this
+  // Apps Script event shape so values are not lost or changed while flattening.
+  const payload = { namedValues: e.namedValues || {} };
 
   const sheet = e.range.getSheet();
   payload.source_reference = [SpreadsheetApp.getActive().getId(), sheet.getSheetId(), e.range.getRow()].join(':');
