@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { appointmentRequired } from "@/lib/appointments";
 
 const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning","flex","other"]),blockId:z.coerce.number().int().positive(),room:z.string().trim().min(1,"Room is required."),name:z.string().trim().optional(),contact:z.string().trim().optional(),category:z.string().trim().min(1,"Category is required."),description:z.string().trim().min(1,"Description is required."),priority:z.enum(["low","normal","high","urgent"])});
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
@@ -23,8 +24,9 @@ export async function createAppointment(complaintId:string,data:FormData){
   const parsed=appointmentSchema.safeParse({appointmentDate:data.get("appointmentDate"),appointmentTime:data.get("appointmentTime"),staffId:data.get("staffId"),remarks:data.get("remarks"),status:data.get("status")});
   if(!parsed.success)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid appointment")}`);
   const s=await createClient();
-  const {data:complaint}=await s.from("complaints").select("appointment_required,room_access_permission").eq("id",complaintId).maybeSingle();
-  if(!complaint?.appointment_required||complaint.room_access_permission!=="no")redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Appointment is not allowed when room access is granted.")}`);
+  const {data:complaint}=await s.from("complaints").select("room_access_permission,status").eq("id",complaintId).maybeSingle();
+  if(!complaint||!appointmentRequired(complaint.room_access_permission))redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Appointment is not allowed when room access is granted.")}`);
+  if(complaint.status!=="assigned")redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Assign the complaint before creating an appointment.")}`);
   const {data:job}=await s.from("maintenance_jobs").select("id").eq("complaint_id",complaintId).maybeSingle();
   if(!job)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Assign staff before creating an appointment.")}`);
   const {error}=await s.from("appointments").insert({complaint_id:complaintId,job_id:job.id,appointment_date:parsed.data.appointmentDate,appointment_time:parsed.data.appointmentTime,assigned_staff:parsed.data.staffId,remarks:parsed.data.remarks||null,status:parsed.data.status,created_by:actor.id});

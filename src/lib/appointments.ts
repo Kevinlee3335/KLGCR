@@ -12,7 +12,7 @@ export type RoomAccessPermission = "yes" | "no";
 export const titleCase = (value: string) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-/** V2 has one workflow decision: an appointment is required only without access. */
+/** V3 has one workflow decision: only an explicit YES grants access without an appointment. */
 export function appointmentRequired(roomAccess: string | null | undefined) {
-  return roomAccess?.toLowerCase() !== "yes";
+  return roomAccess?.trim().toLowerCase() !== "yes";
 }
