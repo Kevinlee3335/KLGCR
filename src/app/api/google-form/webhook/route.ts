@@ -65,9 +65,9 @@ export async function POST(request: NextRequest) {
   const reporterPhone = formValue(body, "PHONE NUMBER (WHATSAPP)");
   const reporterEmail = formValue(body, "EMAIL ADDRESS", "Email Address");
   const timestamp = formValue(body, "Timestamp");
-  const availabilityDate = toIsoDate(formValue(body, "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
-  const availabilityTime = toDatabaseTime(formValue(body, "Room Availability Time", "ROOM AVAILABILITY (TIME)"));
-  const accessRequest = formValue(body, "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
+  const availabilityDate = toIsoDate(formValue(body, "Preferred Date", "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
+  const availabilityTime = toDatabaseTime(formValue(body, "Preferred Time", "Room Availability Time", "ROOM AVAILABILITY (TIME)"));
+  const accessRequest = formValue(body, "Room Access Permission", "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
   const accessPermission = roomAccessPermission(accessRequest);
   if (!availabilityDate || !availabilityTime || !accessPermission) {
     return NextResponse.json({ error: "Missing or invalid room availability/access fields" }, { status: 400 });

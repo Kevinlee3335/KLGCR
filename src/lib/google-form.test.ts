@@ -15,9 +15,9 @@ describe("Google Form payload normalization", () => {
   });
 
   it("keeps flattened payload support and recognizes an explicit NO", () => {
-    const payload = { "ROOM AVAILABILITY (DATE)": "2026-09-19", "ROOM AVAILABILITY (TIME)": ["09:15"] };
-    expect(toIsoDate(formValue(payload, "ROOM AVAILABILITY (DATE)"))).toBe("2026-09-19");
-    expect(toDatabaseTime(formValue(payload, "ROOM AVAILABILITY (TIME)"))).toBe("09:15:00");
+    const payload = { " preferred---DATE ": "2026-09-19", "Preferred_Time!!!": ["09:15"] };
+    expect(toIsoDate(formValue(payload, "Preferred Date"))).toBe("2026-09-19");
+    expect(toDatabaseTime(formValue(payload, "Preferred Time"))).toBe("09:15:00");
     expect(roomAccessPermission("NO - tenant will be present")).toBe("no");
   });
 

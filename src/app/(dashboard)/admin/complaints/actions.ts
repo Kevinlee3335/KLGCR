@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { appointmentTimeValues } from "@/lib/appointments";
 
 const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning","flex","other"]),blockId:z.coerce.number().int().positive(),room:z.string().trim().min(1,"Room is required."),name:z.string().trim().optional(),contact:z.string().trim().optional(),category:z.string().trim().min(1,"Category is required."),description:z.string().trim().min(1,"Description is required."),priority:z.enum(["low","normal","high","urgent"])});
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
@@ -14,20 +15,20 @@ export async function assignComplaint(id:string,data:FormData){await requireRole
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
 
 const appointmentSchema=z.object({
-  appointmentDate:z.string().date(),appointmentTime:z.string().regex(/^\d{2}:\d{2}$/),staffId:z.string().uuid(),
-  remarks:z.string().trim().max(1000).optional(),status:z.enum(["pending_confirmation","confirmed","completed","cancelled","rescheduled","no_show"]),
+  appointmentDate:z.string().date(),appointmentTime:z.enum(appointmentTimeValues),staffId:z.string().uuid(),
+  remarks:z.string().trim().max(1000).optional(),
 });
 
 export async function createAppointment(complaintId:string,data:FormData){
   const actor=await requireRole(["admin"]);
-  const parsed=appointmentSchema.safeParse({appointmentDate:data.get("appointmentDate"),appointmentTime:data.get("appointmentTime"),staffId:data.get("staffId"),remarks:data.get("remarks"),status:data.get("status")});
+  const parsed=appointmentSchema.safeParse({appointmentDate:data.get("appointmentDate"),appointmentTime:data.get("appointmentTime"),staffId:data.get("staffId"),remarks:data.get("remarks")});
   if(!parsed.success)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid appointment")}`);
   const s=await createClient();
   const {data:complaint}=await s.from("complaints").select("appointment_required,room_access_permission").eq("id",complaintId).maybeSingle();
-  if(!complaint?.appointment_required||complaint.room_access_permission!=="no")redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Appointment is not allowed when room access is granted.")}`);
+  if(complaint?.room_access_permission!=="no")redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Appointment is not allowed when room access is granted.")}`);
   const {data:job}=await s.from("maintenance_jobs").select("id").eq("complaint_id",complaintId).maybeSingle();
   if(!job)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Assign staff before creating an appointment.")}`);
-  const {error}=await s.from("appointments").insert({complaint_id:complaintId,job_id:job.id,appointment_date:parsed.data.appointmentDate,appointment_time:parsed.data.appointmentTime,assigned_staff:parsed.data.staffId,remarks:parsed.data.remarks||null,status:parsed.data.status,created_by:actor.id});
+  const {error}=await s.from("appointments").insert({complaint_id:complaintId,job_id:job.id,appointment_date:parsed.data.appointmentDate,appointment_time:parsed.data.appointmentTime,assigned_staff:parsed.data.staffId,remarks:parsed.data.remarks||null,status:"pending_confirmation",created_by:actor.id});
   if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");revalidatePath("/admin/daily-tasks");revalidatePath("/admin/reports");revalidatePath("/staff");revalidatePath("/staff/tasks");revalidatePath(`/admin/complaints/${complaintId}`);
   redirect(`/admin/complaints/${complaintId}?appointment=1`);
