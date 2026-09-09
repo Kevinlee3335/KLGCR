@@ -11,10 +11,11 @@ function text(value: unknown): string {
 function normalizedKey(value: string) {
   return value
     .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[’‘]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
 }
 
 /** Reads both flattened Apps Script payloads and the native e.namedValues shape. */
@@ -61,4 +62,3 @@ export function roomAccessPermission(value: string): "yes" | "no" | null {
   if (/^(no|false|0)\b/.test(answer)) return "no";
   return null;
 }
-
