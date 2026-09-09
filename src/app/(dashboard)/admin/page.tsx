@@ -15,11 +15,11 @@ export default async function AdminPage() {
     supabase.rpc("admin_dashboard_counts"),
     supabase.from("maintenance_jobs").select("status").in("status", ["assigned", "in_progress", "pending_material", "under_monitoring", "completed"]),
     supabase.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,block:blocks!block_id(code)").order("submitted_at", { ascending: false }).limit(5),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,description,status,scheduled_for,assigned_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").eq("scheduled_for", today).not("status", "in", '("completed","cancelled")').order("assigned_at", { ascending: true }).limit(5),
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,description,status,scheduled_for,assigned_at,complaint:complaints!inner(appointment_required),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").eq("scheduled_for", today).eq("complaints.appointment_required",false).not("status", "in", '("completed","cancelled")').order("assigned_at", { ascending: true }).limit(5),
     supabase.from("inventory_items").select("balance_qty,reorder_level").eq("is_active", true),
     supabase.from("appointments").select("*",{count:"exact",head:true}).eq("appointment_date",today).not("status","in",'("cancelled","no_show")'),
     supabase.from("appointments").select("*",{count:"exact",head:true}).eq("status","pending_confirmation"),
-    supabase.from("complaints").select("*",{count:"exact",head:true}).eq("need_appointment",true).not("status","in",'("rejected","closed")'),
+    supabase.from("complaints").select("*",{count:"exact",head:true}).eq("appointment_required",true).not("status","in",'("rejected","closed")'),
   ]);
   if (countError) console.error("admin_dashboard_counts failed", countError.message);
   const counts = countRows?.[0];
