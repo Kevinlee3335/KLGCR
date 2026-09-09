@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
   const availabilityDate = toIsoDate(formValue(body, "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
   const availabilityTime = formValue(body, "Room Availability Time", "ROOM AVAILABILITY (TIME)");
   const accessRequest = formValue(body, "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
+  const roomAccessGranted = isYes(accessRequest);
 
   const payload = {
     block_id: blockRow.id,
@@ -111,7 +112,11 @@ export async function POST(request: NextRequest) {
     availability_time: availabilityTime || null,
     preferred_date: availabilityDate,
     preferred_time: availabilityTime || null,
-    need_appointment: isYes(accessRequest),
+    // Store the Google Form answer explicitly. YES grants access and therefore
+    // needs no appointment; NO requires an admin-scheduled appointment.
+    room_access_permission: roomAccessGranted ? "yes" : "no",
+    appointment_required: !roomAccessGranted,
+    need_appointment: !roomAccessGranted,
     submitted_at: toIsoTimestamp(timestamp),
   };
 
