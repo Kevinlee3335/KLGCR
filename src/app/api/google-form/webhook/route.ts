@@ -30,11 +30,23 @@ export async function POST(request: NextRequest) {
   }
 
   let body: FormPayload;
+  const rawBody = await request.text();
+  console.info("Google Form webhook raw JSON body", rawBody);
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody) as FormPayload;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const availabilityDate = toIsoDate(formValue(body, "Preferred Date", "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
+  const availabilityTime = toDatabaseTime(formValue(body, "Preferred Time", "Room Availability Time", "ROOM AVAILABILITY (TIME)"));
+  const accessRequest = formValue(body, "Room Access Permission", "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
+  const accessPermission = roomAccessPermission(accessRequest);
+  console.info("Google Form webhook normalized audit fields", JSON.stringify({
+    "ROOM AVAILABILITY (DATE)": availabilityDate,
+    "ROOM AVAILABILITY (TIME)": availabilityTime,
+    "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY": accessPermission,
+  }));
 
   const block = formValue(body, "BLOCK");
   const room = formValue(body, "ROOM NUMBER / COMMON AREA");
@@ -65,10 +77,6 @@ export async function POST(request: NextRequest) {
   const reporterPhone = formValue(body, "PHONE NUMBER (WHATSAPP)");
   const reporterEmail = formValue(body, "EMAIL ADDRESS", "Email Address");
   const timestamp = formValue(body, "Timestamp");
-  const availabilityDate = toIsoDate(formValue(body, "Preferred Date", "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
-  const availabilityTime = toDatabaseTime(formValue(body, "Preferred Time", "Room Availability Time", "ROOM AVAILABILITY (TIME)"));
-  const accessRequest = formValue(body, "Room Access Permission", "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
-  const accessPermission = roomAccessPermission(accessRequest);
   if (!availabilityDate || !availabilityTime || !accessPermission) {
     return NextResponse.json({ error: "Missing or invalid room availability/access fields" }, { status: 400 });
   }
@@ -99,6 +107,7 @@ export async function POST(request: NextRequest) {
     submitted_at: toIsoTimestamp(timestamp),
   };
 
+  console.info("Google Form webhook complaints insert payload", JSON.stringify(payload));
   const { data, error } = await supabase.from("complaints").insert(payload).select("id").single();
   if (error) {
     if (error.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
