@@ -14,22 +14,25 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   const { id } = await params;
   const q = await searchParams;
   const s = await createClient();
-  // Load availability and access in the complaint query so a schema or database
-  // problem is surfaced instead of silently rendering missing values.
-  const { data, error: complaintError } = await s.from("complaints").select("id,complaint_no,source,source_reference,photo_url,room_no,complainant_name,complainant_contact,reporter_phone,category,description,priority,status,submitted_at,assigned_at,preferred_date,preferred_time,availability_date,availability_time,appointment_required,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)").eq("id",id).maybeSingle();
+  // Keep optional appointment/availability fields out of the primary lookup.
+  // A PostgREST error for one of those fields must not prevent an otherwise
+  // valid complaint from loading.
+  const { data, error: complaintError } = await s.from("complaints").select("id,complaint_no,source,source_reference,photo_url,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)").eq("id",id).maybeSingle();
   if (complaintError) throw new Error(`Unable to load complaint: ${complaintError.message}`);
   if (!data) notFound();
   const complaint = data as unknown as ComplaintRow;
   const source = data as unknown as { photo_url:string|null; source_reference:string|null };
-  const [{data:blocks},{data:eligible},{data:appointmentRows,error:appointmentError}] = await Promise.all([
+  const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError},{data:appointmentRows,error:appointmentError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
+    s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,appointment_required,room_access_permission").eq("id",id).maybeSingle(),
     // Appointment lookup is deliberately independent from the complaint lookup.
     // A missing row produces [], and an appointment/schema error is non-fatal.
     s.from("appointments").select("id,appointment_date,appointment_time,remarks,status,created_at,staff:profiles!assigned_staff(full_name)").eq("complaint_id",id).order("created_at",{ascending:false}),
   ]);
+  if (availabilityError) console.error("Optional complaint availability data could not be loaded", availabilityError.message);
   if (appointmentError) console.error("Optional appointment data could not be loaded", appointmentError.message);
-  const extra = data as unknown as { preferred_date:string|null; preferred_time:string|null; availability_date:string|null; availability_time:string|null; reporter_phone:string|null; appointment_required:boolean; room_access_permission:string|null };
+  const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,appointment_required:true,room_access_permission:null};
   const preferredDate = extra.preferred_date || extra.availability_date;
   const preferredTime = extra.preferred_time || extra.availability_time;
   const appointments = appointmentRows ?? [];
