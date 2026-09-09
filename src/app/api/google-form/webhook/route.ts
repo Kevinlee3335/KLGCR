@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { studentAvailability } from "@/lib/google-form";
 
 export const runtime = "nodejs";
 
@@ -7,31 +8,6 @@ type FormPayload = Record<string, unknown> & { source_reference?: string };
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
-}
-
-function formValue(body: FormPayload, ...labels: string[]) {
-  for (const label of labels) {
-    const direct = text(body[label]);
-    if (direct) return direct;
-    const key = Object.keys(body).find((candidate) => candidate.trim().toLowerCase() === label.trim().toLowerCase());
-    if (key) return text(body[key]);
-  }
-  return "";
-}
-
-function isYes(value: string) {
-  return /^(yes|true|1)$/i.test(value.trim());
-}
-
-function toIsoDate(value: string) {
-  if (!value) return null;
-  const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-
-  const slash = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slash) return `${slash[3]}-${slash[1].padStart(2, "0")}-${slash[2].padStart(2, "0")}`;
-
-  return null;
 }
 
 function toIsoTimestamp(value: string) {
@@ -89,9 +65,10 @@ export async function POST(request: NextRequest) {
   const reporterPhone = text(body["PHONE NUMBER (WHATSAPP)"]);
   const reporterEmail = text(body["EMAIL ADDRESS"]) || text(body["Email Address"]);
   const timestamp = text(body["Timestamp"]);
-  const availabilityDate = toIsoDate(formValue(body, "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
-  const availabilityTime = formValue(body, "Room Availability Time", "ROOM AVAILABILITY (TIME)");
-  const accessRequest = formValue(body, "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
+  const { preferredDate, preferredTime, permission } = studentAvailability(body);
+  if (!preferredDate || !preferredTime || !permission) {
+    return NextResponse.json({ error: "Missing or invalid student availability fields" }, { status: 400 });
+  }
 
   const payload = {
     block_id: blockRow.id,
@@ -107,11 +84,13 @@ export async function POST(request: NextRequest) {
     reporter_name: reporterName || null,
     reporter_phone: reporterPhone || null,
     reporter_email: reporterEmail || null,
-    availability_date: availabilityDate,
-    availability_time: availabilityTime || null,
-    preferred_date: availabilityDate,
-    preferred_time: availabilityTime || null,
-    need_appointment: isYes(accessRequest),
+    availability_date: preferredDate,
+    availability_time: preferredTime,
+    preferred_date: preferredDate,
+    preferred_time: preferredTime,
+    room_access_permission: permission,
+    appointment_required: permission === "no",
+    need_appointment: permission === "no",
     submitted_at: toIsoTimestamp(timestamp),
   };
 

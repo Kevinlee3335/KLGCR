@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { studentAvailability } from "@/lib/google-form";
 
 function parseDelimited(text: string) {
   const delimiter = text.split(/\r?\n/,1)[0]?.includes("\t") ? "\t" : ",";
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
     const fingerprint=createHash("sha256").update(`${block}|${room}|${category}|${description}|${timestamp}`).digest("hex").slice(0,32);
     const sourceReference=responseId?`google:${responseId}`:`sheet:${fingerprint}`;
     const priorityRaw=value(rec,["Priority"]).toLowerCase(); const priority=["low","normal","high","urgent"].includes(priorityRaw)?priorityRaw:"normal";
-    const {error}=await supabase.from("complaints").insert({source:"google_form",block_id:blockMap.get(block),room_no:room,complainant_name:value(rec,["Name","Complainant Name","Student Name"])||null,complainant_contact:value(rec,["Contact","Phone","Email"])||null,category,description,priority,status:"new",source_reference:sourceReference,photo_url:value(rec,["Photo URL","Photo","Google Drive Photo","Attachment"])||null});
+    const availability=studentAvailability(rec);
+    const appointmentRequired=availability.permission!=="yes";
+    const {error}=await supabase.from("complaints").insert({source:"google_form",block_id:blockMap.get(block),room_no:room,complainant_name:value(rec,["Name","Complainant Name","Student Name"])||null,complainant_contact:value(rec,["Contact","Phone","Email"])||null,category,description,priority,status:"new",source_reference:sourceReference,photo_url:value(rec,["Photo URL","Photo","Google Drive Photo","Attachment"])||null,preferred_date:availability.preferredDate,preferred_time:availability.preferredTime,availability_date:availability.preferredDate,availability_time:availability.preferredTime,room_access_permission:availability.permission,appointment_required:appointmentRequired,need_appointment:appointmentRequired});
     if(error){if(error.code==="23505") skipped++; else {errors++;errorNotes.push(`Row ${index+1}: ${error.message}`);}} else imported++;
   }
   await supabase.from("google_import_history").insert({imported_by:profile.id,file_name:fileName,total_rows:rows.length-1,imported_rows:imported,skipped_rows:skipped,error_rows:errors,notes:errorNotes.slice(0,5).join(" | ")||null});
