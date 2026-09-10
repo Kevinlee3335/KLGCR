@@ -17,7 +17,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const supabase = await createClient();
   const page = Math.max(1, Number(filters.page) || 1);
   const today = malaysiaToday();
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no,availability_date,availability_time,room_access_permission),appointments(appointment_date,appointment_time,status)").order("updated_at", { ascending: false });
+  // Appointments are linked to complaints, not necessarily to maintenance_jobs
+  // in PostgREST's schema cache. Keep them out of this select and load them
+  // separately below so jobs without appointments still render normally.
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission)").order("updated_at", { ascending: false });
   if (filters.scope === "today-active") query = query.eq("scheduled_for", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
   if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", `${today}T00:00:00+08:00`).lt("completed_at", `${today}T23:59:59.999+08:00`);
   if (filters.scope === "outstanding") query = query.in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
@@ -34,9 +37,28 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     supabase.from("blocks").select("id,code").order("code"),
     supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name"),
   ]);
-  const data = (jobRows || []).slice(0, PAGE_SIZE);
+  const data = (jobRows || []).slice(0, PAGE_SIZE) as unknown as JobRow[];
+  const complaintIds = [...new Set(data.map((job) => job.complaint?.id).filter((id): id is string => Boolean(id)))];
+  const appointmentsByComplaint = new Map<string, NonNullable<JobRow["appointments"]>>();
+  if (complaintIds.length) {
+    const { data: appointmentRows, error: appointmentError } = await supabase.from("appointments")
+      .select("complaint_id,appointment_date,appointment_time,status")
+      .in("complaint_id", complaintIds);
+    if (appointmentError) {
+      // Appointment information is supplementary; never break the jobs page
+      // when it is unavailable or when no appointment has been created.
+      console.error("Appointment data could not be loaded", appointmentError.message);
+    } else {
+      for (const appointment of appointmentRows || []) {
+        const existing = appointmentsByComplaint.get(appointment.complaint_id) || [];
+        existing.push(appointment);
+        appointmentsByComplaint.set(appointment.complaint_id, existing);
+      }
+    }
+  }
+  const rows = data.map((job) => ({ ...job, appointments: job.complaint?.id ? appointmentsByComplaint.get(job.complaint.id) || [] : [] }));
   const pageHref = (target: number) => { const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value && key !== "page") params.set(key, value); }); params.set("page", String(target)); return `/admin/jobs?${params}`; };
   const hasNext = (jobRows?.length || 0) > PAGE_SIZE;
 
-  return <AppShell profile={profile} title="Maintenance Jobs"><div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div><form className="panel filter-bar"><input name="search" defaultValue={filters.search} placeholder="Search job, room, description…"/><select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select><select name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{jobStatuses.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="priority" defaultValue={filters.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><input type="date" name="date" defaultValue={filters.date}/><button className="button">Filter</button></form><section className="panel list-panel">{error ? <p className="error">{error.message}</p> : <JobList rows={(data || []) as unknown as JobRow[]}/>}</section>{(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}</AppShell>;
+  return <AppShell profile={profile} title="Maintenance Jobs"><div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div><form className="panel filter-bar"><input name="search" defaultValue={filters.search} placeholder="Search job, room, description…"/><select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select><select name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{jobStatuses.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="priority" defaultValue={filters.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><input type="date" name="date" defaultValue={filters.date}/><button className="button">Filter</button></form><section className="panel list-panel">{error ? <p className="error">{error.message}</p> : <JobList rows={rows}/>}</section>{(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}</AppShell>;
 }

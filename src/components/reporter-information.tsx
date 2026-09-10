@@ -27,8 +27,8 @@ export function ReporterInformation({ name, phone, availabilityDate, availabilit
     <div className="field-wide"><h3>Reporter Information</h3></div>
     {name && <div><span>Reporter Name</span><strong>{name}</strong></div>}
     {phone && <div><span>Phone</span><strong>{phone}</strong></div>}
-    {availabilityDate && <div><span>Availability Date</span><strong>{formatAvailabilityDate(availabilityDate)}</strong></div>}
-    {availabilityTime && <div><span>Availability Time</span><strong>{formatAvailabilityTime(availabilityTime)}</strong></div>}
+    {availabilityDate && <div><span>Preferred Availability Date</span><strong>{formatAvailabilityDate(availabilityDate)}</strong></div>}
+    {availabilityTime && <div><span>Preferred Availability Time</span><strong>{formatAvailabilityTime(availabilityTime)}</strong></div>}
     {roomAccessPermission && <div><span>Room Access Permission</span><strong>{roomAccessPermission.toUpperCase()}</strong></div>}
   </section>;
 }
