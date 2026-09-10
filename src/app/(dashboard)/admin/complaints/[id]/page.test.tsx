@@ -9,7 +9,9 @@ vi.mock("@/components/app-shell", () => ({
 }));
 vi.mock("@/components/complaint-form", () => ({
   ComplaintForm: () => <div>Complaint form</div>,
-  AssignmentForm: () => <div>Assignment form</div>,
+  AssignmentForm: ({ requiresAppointment }: { requiresAppointment: boolean }) => (
+    <div>{requiresAppointment ? "Maintenance Date Maintenance Time" : "Assigned Staff only"}</div>
+  ),
 }));
 vi.mock("@/components/reject-complaint-form", () => ({ RejectComplaintForm: () => null }));
 vi.mock("@/components/phase2-ui", () => ({
@@ -36,6 +38,9 @@ const complaint = {
   status: "new",
   submitted_at: "2026-09-09T00:00:00Z",
   assigned_at: null,
+  availability_date: null,
+  availability_time: null,
+  room_access_permission: " YES ",
   block: { id: 1, code: "A" },
   assignee: null,
 };
@@ -93,5 +98,9 @@ describe("Complaint Review", () => {
 
     expect(renderToStaticMarkup(page)).toContain("CMP-2026-0001");
     expect(renderToStaticMarkup(page)).toContain("Complaint form");
+    expect(renderToStaticMarkup(page)).toContain("ROOM ACCESS GRANTED");
+    expect(renderToStaticMarkup(page)).toContain("Assigned Staff only");
+    expect(renderToStaticMarkup(page)).not.toContain("TENANT MUST BE PRESENT");
+    expect(renderToStaticMarkup(page)).not.toContain("Maintenance Date Maintenance Time");
   });
 });

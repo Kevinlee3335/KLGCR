@@ -25,10 +25,14 @@ export const appointmentTimeValues = appointmentTimeSlots.map(({ value }) => val
 
 export type RoomAccessPermission = "yes" | "no";
 
+export function normalizeRoomAccess(roomAccess: string | null | undefined) {
+  return roomAccess?.trim().toLowerCase() || null;
+}
+
 export const titleCase = (value: string) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 /** V2 has one workflow decision: an appointment is required only without access. */
 export function appointmentRequired(roomAccess: string | null | undefined) {
-  return roomAccess?.toLowerCase() !== "yes";
+  return normalizeRoomAccess(roomAccess) !== "yes";
 }
