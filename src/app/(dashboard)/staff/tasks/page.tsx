@@ -8,7 +8,7 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<{ 
   const profile = await requireRole(["maintenance_staff"]);
   const filters = await searchParams;
   const supabase = await createClient();
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,complaint:complaints!complaint_id(appointment_required),block:blocks!block_id(id,code)").order("assigned_at", { ascending: false });
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,complaint:complaints!complaint_id(appointment_required,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").order("assigned_at", { ascending: false });
   query = filters.status ? query.eq("status", filters.status) : query.in("status", ["assigned", "in_progress"]);
   const { data, error } = await query;
   const maintenanceJobs = (data || []).filter((row) => !(row.complaint as unknown as {appointment_required:boolean}|null)?.appointment_required);

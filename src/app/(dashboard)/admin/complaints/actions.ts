@@ -24,7 +24,7 @@ export async function createAppointment(complaintId:string,data:FormData){
   const parsed=appointmentSchema.safeParse({appointmentDate:data.get("appointmentDate"),appointmentTime:data.get("appointmentTime"),staffId:data.get("staffId"),remarks:data.get("remarks")});
   if(!parsed.success)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid appointment")}`);
   const s=await createClient();
-  const {data:complaint}=await s.from("complaints").select("appointment_required,room_access_permission").eq("id",complaintId).maybeSingle();
+  const {data:complaint}=await s.from("complaints").select("appointment_required,availability_date,availability_time,room_access_permission").eq("id",complaintId).maybeSingle();
   if(complaint?.room_access_permission!=="no")redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Appointment is not allowed when room access is granted.")}`);
   const {data:job}=await s.from("maintenance_jobs").select("id").eq("complaint_id",complaintId).maybeSingle();
   if(!job)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent("Assign staff before creating an appointment.")}`);
