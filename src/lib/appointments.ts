@@ -39,3 +39,30 @@ export const titleCase = (value: string) =>
 export function appointmentRequired(roomAccess: string | null | undefined) {
   return normalizeRoomAccessPermission(roomAccess) !== "yes";
 }
+
+export type AppointmentSelection =
+  | { success: true; appointment: null }
+  | { success: true; appointment: { appointmentDate: string; appointmentTime: (typeof appointmentTimeValues)[number] } }
+  | { success: false; error: string };
+
+/** Validate approval scheduling without consulting or changing preferred availability. */
+export function validateAppointmentSelection(
+  appointmentDate: FormDataEntryValue | null,
+  appointmentTime: FormDataEntryValue | null,
+  required: boolean,
+): AppointmentSelection {
+  const date = typeof appointmentDate === "string" ? appointmentDate.trim() : "";
+  const time = typeof appointmentTime === "string" ? appointmentTime.trim() : "";
+  if (!date && !time) {
+    return required
+      ? { success: false, error: "Select a Maintenance Date and Maintenance Time before approving the job." }
+      : { success: true, appointment: null };
+  }
+  if (!date || !time) {
+    return { success: false, error: "Maintenance Date and Maintenance Time must either both be provided or both be blank." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !appointmentTimeValues.includes(time as (typeof appointmentTimeValues)[number])) {
+    return { success: false, error: "Select a valid Maintenance Date and Maintenance Time." };
+  }
+  return { success: true, appointment: { appointmentDate: date, appointmentTime: time as (typeof appointmentTimeValues)[number] } };
+}

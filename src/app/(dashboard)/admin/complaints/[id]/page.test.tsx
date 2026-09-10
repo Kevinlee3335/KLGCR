@@ -70,6 +70,45 @@ import ComplaintDetail from "./page";
 import { createClient } from "@/lib/supabase/server";
 
 describe("Complaint Review", () => {
+  it("does not show tenant-presence or appointment-required warnings when access is granted", async () => {
+    const client = await createClient();
+    vi.mocked(client.from).mockImplementation((table: string) => {
+      if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
+      if (table === "profiles") return query({ data: [] }) as never;
+      if (table === "appointments") return query({ data: [], error: null }) as never;
+      const complaintQuery = query({ data: complaint, error: null });
+      complaintQuery.select.mockImplementation((columns: string) =>
+        columns.startsWith("preferred_date")
+          ? query({ data: { room_access_permission: " YES ", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
+          : complaintQuery,
+      );
+      return complaintQuery as never;
+    });
+    const html = renderToStaticMarkup(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    expect(html).not.toContain("TENANT MUST BE PRESENT");
+    expect(html).not.toContain("Appointment Required");
+    expect(html).toContain("Scheduling a visit is optional");
+  });
+
+  it("shows the required appointment warnings when access is denied", async () => {
+    const client = await createClient();
+    vi.mocked(client.from).mockImplementation((table: string) => {
+      if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
+      if (table === "profiles") return query({ data: [] }) as never;
+      if (table === "appointments") return query({ data: [], error: null }) as never;
+      const complaintQuery = query({ data: complaint, error: null });
+      complaintQuery.select.mockImplementation((columns: string) =>
+        columns.startsWith("preferred_date")
+          ? query({ data: { room_access_permission: " no ", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
+          : complaintQuery,
+      );
+      return complaintQuery as never;
+    });
+    const html = renderToStaticMarkup(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    expect(html).toContain("TENANT MUST BE PRESENT");
+    expect(html).toContain("Appointment Required");
+  });
+
   it("renders the complaint when the optional availability lookup fails", async () => {
     const client = await createClient();
     vi.mocked(client.from).mockImplementation((table: string) => {
