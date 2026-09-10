@@ -27,10 +27,10 @@ export async function GET(request: Request) {
   const format=params.get("format")==="xls"?"xls":"csv";
 
   if(dataset==="appointments"){
-    let query=db.from("appointments").select("appointment_date,appointment_time,status,assigned_staff,complaints!appointment_complaint_id_fkey(complaint_no,room_no,room_access_permission,appointment_required,blocks(code)),profiles!appointments_assigned_staff_fkey(full_name)").order("appointment_date",{ascending:false});
+    let query=db.from("appointments").select("appointment_date,appointment_time,status,assigned_staff,complaints!appointment_complaint_id_fkey(complaint_no,room_no,room_access_permission,blocks(code)),profiles!appointments_assigned_staff_fkey(full_name)").order("appointment_date",{ascending:false});
     if(date)query=query.eq("appointment_date",date);if(staff)query=query.eq("assigned_staff",staff);
     const {data,error}=await query;if(error)return new Response(error.message,{status:500});
-    const rows:unknown[][]=(data??[]).filter((r:any)=>!block||block==="ALL"||block.includes(r.complaints?.blocks?.code??"")).map((r:any)=>[r.appointment_date,r.appointment_time,r.complaints?.complaint_no,r.complaints?.blocks?.code,r.complaints?.room_no,r.profiles?.full_name,String(r.complaints?.room_access_permission??"").toUpperCase(),r.complaints?.appointment_required?"Yes":"No",String(r.status).replaceAll("_"," ")]);
+    const rows:unknown[][]=(data??[]).filter((r:any)=>!block||block==="ALL"||block.includes(r.complaints?.blocks?.code??"")).map((r:any)=>[r.appointment_date,r.appointment_time,r.complaints?.complaint_no,r.complaints?.blocks?.code,r.complaints?.room_no,r.profiles?.full_name,String(r.complaints?.room_access_permission??"").toUpperCase(),r.complaints?.room_access_permission==="no"?"Yes":"No",String(r.status).replaceAll("_"," ")]);
     return download(rows,["Appointment Date","Appointment Time","Complaint","Block","Room","Assigned Staff","Room Access Permission","Appointment Required","Appointment Status"],format,"KLGCR-Appointments");
   }
 

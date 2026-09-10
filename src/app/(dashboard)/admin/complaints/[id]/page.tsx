@@ -26,17 +26,17 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError},{data:appointmentRows,error:appointmentError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
-    s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,appointment_required,room_access_permission").eq("id",id).maybeSingle(),
+    s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,room_access_permission").eq("id",id).maybeSingle(),
     // Appointment lookup is deliberately independent from the complaint lookup.
     // A missing row produces [], and an appointment/schema error is non-fatal.
     s.from("appointments").select("id,appointment_date,appointment_time,remarks,status,created_at,staff:profiles!assigned_staff(full_name)").eq("complaint_id",id).order("created_at",{ascending:false}),
   ]);
   if (availabilityError) console.error("Optional complaint availability data could not be loaded", availabilityError.message);
   if (appointmentError) console.error("Optional appointment data could not be loaded", appointmentError.message);
-  const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,appointment_required:true,room_access_permission:null};
+  const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,room_access_permission:null};
   const appointments = appointmentRows ?? [];
   // Room access is the workflow decision in V4. Derive the UI from the answer
-  // itself so a stale legacy appointment_required value can never reverse it.
+  // itself so legacy derived flags can never reverse it.
   const requiresAppointment = appointmentRequired(extra.room_access_permission);
   return <AppShell profile={profile} title="Complaint Review"><div className="section-head"><div><p className="eyebrow">{complaint.complaint_no}</p><h2>Block {complaint.block?.code} · {complaint.room_no}</h2><p className="subtle">Submitted {formatDate(complaint.submitted_at)}</p></div><div className="actions"><PriorityBadge value={complaint.priority}/><StatusBadge value={complaint.status}/></div></div>{q.error&&<p className="error">{q.error}</p>}{q.saved&&<p className="success">Review changes saved.</p>}{q.appointment&&<p className="success">Appointment saved.</p>}
   <ReporterInformation name={complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={extra.room_access_permission??complaint.room_access_permission}/>

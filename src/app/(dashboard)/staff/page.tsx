@@ -11,12 +11,25 @@ export default async function StaffPage() {
   const supabase = await createClient();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year:"numeric",month:"2-digit",day:"2-digit" }).format(new Date());
   const [statusResult, recentResult, appointmentResult] = await Promise.all([
-    supabase.from("maintenance_jobs").select("status,complaint:complaints!complaint_id(appointment_required,availability_date,availability_time,room_access_permission)"),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,complaint:complaints!complaint_id(appointment_required,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").order("assigned_at", { ascending: false }).limit(5),
+    supabase.from("maintenance_jobs").select("status"),
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").order("assigned_at", { ascending: false }).limit(5),
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,complaint:complaints!complaint_id(room_no,category,complainant_contact,availability_date,availability_time,room_access_permission,block:blocks!block_id(code))").eq("appointment_date",today).not("status","in",'("completed","cancelled","no_show")').order("appointment_date").order("appointment_time").limit(10),
   ]);
-  const statuses = (statusResult.data || []).filter((row) => !(row.complaint as unknown as {appointment_required:boolean}|null)?.appointment_required);
-  const rows = (recentResult.data || []).filter((row) => !(row.complaint as unknown as {appointment_required:boolean}|null)?.appointment_required) as unknown as JobRow[];
+  const statuses = statusResult.data || [];
+  const jobs = (recentResult.data || []) as unknown as JobRow[];
+  const complaintIds = [...new Set(jobs.map((job) => job.complaint?.id).filter((id): id is string => Boolean(id)))];
+  const appointmentsByComplaint = new Map<string, NonNullable<JobRow["appointments"]>>();
+  if (complaintIds.length) {
+    const { data: jobAppointments } = await supabase.from("appointments")
+      .select("complaint_id,appointment_date,appointment_time,status")
+      .in("complaint_id", complaintIds);
+    for (const appointment of jobAppointments || []) {
+      const existing = appointmentsByComplaint.get(appointment.complaint_id) || [];
+      existing.push(appointment);
+      appointmentsByComplaint.set(appointment.complaint_id, existing);
+    }
+  }
+  const rows = jobs.map((job) => ({ ...job, appointments: job.complaint?.id ? appointmentsByComplaint.get(job.complaint.id) || [] : [] }));
   const blocks = profile.blocks?.map((block) => `Block ${block.code}`).join(" & ");
   const count = (status: string) => statuses.filter((row) => row.status === status).length;
   const appointments=(appointmentResult.data||[]) as unknown as Array<{id:string;job_id:string|null;appointment_date:string;appointment_time:string;status:string;complaint:{room_no:string;category:string;complainant_contact:string|null;room_access_permission:string|null;block:{code:string}|null}|null}>;
