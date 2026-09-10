@@ -7,11 +7,12 @@ export const formatDate = (value: string) => new Intl.DateTimeFormat("en-MY", { 
 
 export type ComplaintRow = {
   id:string; complaint_no:string; source:string; room_no:string; complainant_name:string|null; complainant_contact:string|null;
+  availability_date:string|null;availability_time:string|null;room_access_permission:string|null;
   category:string; description:string; priority:string; status:string; submitted_at:string; assigned_at:string|null;
   block:{id:number;code:string}|null; assignee:{id:string;full_name:string}|null;
 };
 export type JobRow = {
   id:string;job_no:string;room_no:string;category:string;description:string;priority:string;status:string;assigned_at:string;updated_at:string;
-  started_at:string|null;completed_at:string|null;action_taken:string|null;monitoring_note:string|null;monitoring_started_at:string|null;monitoring_review_at:string|null;pending_material_note:string|null;block:{id:number;code:string}|null;assignee?:{id:string;full_name:string}|null;complaint?:{complaint_no:string}|null;
+  started_at:string|null;completed_at:string|null;action_taken:string|null;monitoring_note:string|null;monitoring_started_at:string|null;monitoring_review_at:string|null;pending_material_note:string|null;block:{id:number;code:string}|null;assignee?:{id:string;full_name:string}|null;complaint?:{complaint_no:string;complainant_name?:string|null;complainant_contact?:string|null;availability_date?:string|null;availability_time?:string|null;room_access_permission?:string|null}|null;
   appointments?:{appointment_date:string;appointment_time:string;status:string}[];
 };
