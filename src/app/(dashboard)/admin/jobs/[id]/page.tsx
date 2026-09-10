@@ -19,12 +19,11 @@ export default async function AdminJobDetail({ params }: { params: Promise<{ id:
   if (error) throw new Error(`Unable to load maintenance job: ${error.message}`);
   if (!data) notFound();
   const job = data as unknown as JobRow;
-  const [{ data: appointmentRows, error: appointmentError }, { data: historyRows, error: historyError }, { data: materialRows, error: materialError }] = await Promise.all([
-    supabase.from("appointments").select("id,appointment_date,appointment_time,status,remarks,created_at,staff:profiles!assigned_staff(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
-    supabase.from("job_status_history").select("id,previous_status,new_status,note,created_at,actor:profiles!changed_by(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
-    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,reviewed_at,issued_at,requester:profiles!requested_by(full_name),reviewer:profiles!reviewed_by(full_name),issuer:profiles!issued_by(full_name),items:material_request_items(requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: true }),
+  const [{ data: appointmentRows }, { data: historyRows }, { data: materialRows }] = await Promise.all([
+    supabase.from("appointments").select("id,appointment_date,appointment_time,status,remarks,created_at,staff:profiles!appointments_assigned_staff_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
+    supabase.from("job_status_history").select("id,previous_status,new_status,note,created_at,actor:profiles!job_status_history_changed_by_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
+    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,reviewed_at,issued_at,requester:profiles!material_requests_requested_by_fkey(full_name),reviewer:profiles!material_requests_reviewed_by_fkey(full_name),issuer:profiles!material_requests_issued_by_fkey(full_name),items:material_request_items!material_request_items_request_id_fkey(requested_qty,approved_qty,issued_qty,item:inventory_items!material_request_items_inventory_item_id_fkey(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: true }),
   ]);
-  if (appointmentError || historyError || materialError) throw new Error(`Unable to load job activity: ${appointmentError?.message || historyError?.message || materialError?.message}`);
   const appointments = (appointmentRows || []) as unknown as AppointmentActivityRow[];
   const appointment = appointments.filter(({ status }) => !["cancelled", "no_show"].includes(status)).at(-1) ?? null;
   const events = buildJobActivity({ job, history: (historyRows || []) as unknown as JobHistoryRow[], materials: (materialRows || []) as unknown as MaterialRequestRow[], appointments });
