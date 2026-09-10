@@ -3,6 +3,7 @@ import {
   appointmentRequired,
   appointmentTimeValues,
   normalizeRoomAccessPermission,
+  validateAppointmentSelection,
 } from "./appointments";
 
 describe("normalizeRoomAccessPermission", () => {
@@ -34,5 +35,30 @@ describe("appointmentRequired", () => {
 describe("appointment time slots", () => {
   it("contains only the five approved start times", () => {
     expect(appointmentTimeValues).toEqual(["09:30", "10:30", "13:00", "14:00", "15:00"]);
+  });
+});
+
+describe("approval appointment validation", () => {
+  it("allows access-granted job creation without an appointment", () => {
+    expect(validateAppointmentSelection("", "", false)).toEqual({ success: true, appointment: null });
+  });
+
+  it("creates an appointment selection for access-granted approval when both values are supplied", () => {
+    expect(validateAppointmentSelection("2026-09-12", "09:30", false)).toEqual({
+      success: true,
+      appointment: { appointmentDate: "2026-09-12", appointmentTime: "09:30" },
+    });
+  });
+
+  it.each([["2026-09-12", ""], ["", "09:30"]])("rejects an incomplete optional appointment", (date, time) => {
+    expect(validateAppointmentSelection(date, time, false).success).toBe(false);
+  });
+
+  it("rejects access-denied job creation without an appointment", () => {
+    expect(validateAppointmentSelection("", "", true).success).toBe(false);
+  });
+
+  it("creates an appointment selection for access-denied approval when both values are supplied", () => {
+    expect(validateAppointmentSelection("2026-09-12", "10:30", true).success).toBe(true);
   });
 });
