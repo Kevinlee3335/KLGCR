@@ -1,3 +1,4 @@
+import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,16 +8,17 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/components/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
 }));
-vi.mock("@/components/complaint-form", () => ({
-  ComplaintForm: () => <div>Complaint form</div>,
-  AssignmentForm: () => <div>Assignment form</div>,
-}));
+vi.mock("@/components/complaint-form", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/complaint-form")>();
+  return { ...actual, ComplaintForm: () => <div>Complaint form</div> };
+});
 vi.mock("@/components/reject-complaint-form", () => ({ RejectComplaintForm: () => null }));
 vi.mock("@/components/phase2-ui", () => ({
   StatusBadge: () => null,
   PriorityBadge: () => null,
 }));
 vi.mock("../actions", () => ({
+  assignComplaint: vi.fn(),
   createAppointment: vi.fn(),
   updateAppointment: vi.fn(),
 }));
@@ -70,43 +72,48 @@ import ComplaintDetail from "./page";
 import { createClient } from "@/lib/supabase/server";
 
 describe("Complaint Review", () => {
-  it("does not show tenant-presence or appointment-required warnings when access is granted", async () => {
+  it("renders optional appointment inputs for a Google Form YES when the optional lookup fails", async () => {
     const client = await createClient();
+    const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "YES" };
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
       if (table === "appointments") return query({ data: [], error: null }) as never;
-      const complaintQuery = query({ data: complaint, error: null });
+      const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
         columns.startsWith("preferred_date")
-          ? query({ data: { room_access_permission: " YES ", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
+          ? query({ data: null, error: { message: "optional column is unavailable" } })
           : complaintQuery,
       );
       return complaintQuery as never;
     });
-    const html = renderToStaticMarkup(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
-    expect(html).not.toContain("TENANT MUST BE PRESENT");
-    expect(html).not.toContain("Appointment Required");
-    expect(html).toContain("Scheduling a visit is optional");
+    render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
+    expect(screen.getByLabelText("Maintenance Time")).not.toBeRequired();
+    expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
+    expect(screen.getByText(/Scheduling a visit is optional\./)).toBeInTheDocument();
   });
 
-  it("shows the required appointment warnings when access is denied", async () => {
+  it("renders required appointment inputs for a Google Form NO", async () => {
     const client = await createClient();
+    const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "NO" };
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
       if (table === "appointments") return query({ data: [], error: null }) as never;
-      const complaintQuery = query({ data: complaint, error: null });
+      const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
         columns.startsWith("preferred_date")
-          ? query({ data: { room_access_permission: " no ", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
+          ? query({ data: { room_access_permission: "NO", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
           : complaintQuery,
       );
       return complaintQuery as never;
     });
-    const html = renderToStaticMarkup(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
-    expect(html).toContain("TENANT MUST BE PRESENT");
-    expect(html).toContain("Appointment Required");
+    render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByLabelText("Maintenance Date *")).toBeRequired();
+    expect(screen.getByLabelText("Maintenance Time *")).toBeRequired();
+    expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
+    expect(screen.getByText("Appointment Required.")).toBeInTheDocument();
   });
 
   it("renders the complaint when the optional availability lookup fails", async () => {
