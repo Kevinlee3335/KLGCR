@@ -81,6 +81,15 @@ describe("Admin Job Detail", () => {
     expect(html).toContain("Job Activity Timeline");
     expect(html).toContain("Job Assigned");
     expect(html).not.toContain("Maintenance Appointment");
+    expect(html).toContain("Add Appointment");
+  });
+
+  it("shows appointment details and management controls when an active appointment exists", async () => {
+    queries.set("appointments", query({ data: [{ id: "appointment-id", appointment_date: "2026-09-12", appointment_time: "09:30:00", status: "confirmed", remarks: "Call first", created_at: "2026-09-10T00:00:00Z", staff: { full_name: "Alex Staff" } }], error: null }));
+    const html = renderToStaticMarkup(await AdminJobDetail({ params: Promise.resolve({ id: job.id }) }));
+    expect(html).toContain("Manage / Reschedule Appointment");
+    expect(html).toContain("2026-09-12");
+    expect(html).toContain("Job Activity Timeline");
   });
 
   it("uses schema-defined foreign-key constraints for every new timeline relationship", async () => {
