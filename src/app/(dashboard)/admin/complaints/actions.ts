@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { appointmentTimeValues } from "@/lib/appointments";
+import { appointmentTimeValues, complaintAppointmentRequired, validateAppointmentSelection } from "@/lib/appointments";
 
 const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning","flex","other"]),blockId:z.coerce.number().int().positive(),room:z.string().trim().min(1,"Room is required."),name:z.string().trim().optional(),contact:z.string().trim().optional(),category:z.string().trim().min(1,"Category is required."),description:z.string().trim().min(1,"Description is required."),priority:z.enum(["low","normal","high","urgent"])});
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
@@ -15,8 +15,12 @@ export async function assignComplaint(id:string,data:FormData){
   await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
   if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
   const s=await createClient();
-  const date=String(data.get("appointmentDate")||"").trim()||null;
-  const time=String(data.get("appointmentTime")||"").trim()||null;
+  const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
+  if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
+  const appointment=validateAppointmentSelection(data.get("appointmentDate"),data.get("appointmentTime"),complaintAppointmentRequired(complaint.source,complaint.room_access_permission));
+  if(!appointment.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(appointment.error)}`);
+  const date=appointment.appointment?.appointmentDate||null;
+  const time=appointment.appointment?.appointmentTime||null;
   const remarks=String(data.get("remarks")||"").trim()||null;
   const {error}=await s.rpc("assign_complaint_with_schedule",{p_complaint_id:id,p_assigned_to:staffId,p_appointment_date:date,p_appointment_time:time,p_remarks:remarks});
   if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
