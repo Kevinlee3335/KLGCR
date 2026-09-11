@@ -81,7 +81,7 @@ describe("Complaint Review", () => {
       if (table === "appointments") return query({ data: [], error: null }) as never;
       const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
-        columns.startsWith("preferred_date")
+        columns.startsWith("availability_date")
           ? query({ data: null, error: { message: "optional column is unavailable" } })
           : complaintQuery,
       );
@@ -103,8 +103,8 @@ describe("Complaint Review", () => {
       if (table === "appointments") return query({ data: [], error: null }) as never;
       const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
-        columns.startsWith("preferred_date")
-          ? query({ data: { room_access_permission: "NO", preferred_date: null, preferred_time: null, availability_date: null, availability_time: null, reporter_phone: null }, error: null })
+        columns.startsWith("availability_date")
+          ? query({ data: { room_access_permission: "NO", availability_date: null, availability_time: null, reporter_phone: null }, error: null })
           : complaintQuery,
       );
       return complaintQuery as never;
@@ -125,7 +125,7 @@ describe("Complaint Review", () => {
 
       const complaintQuery = query({ data: complaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
-        columns.startsWith("preferred_date")
+        columns.startsWith("availability_date")
           ? query({ data: null, error: { message: "optional column is unavailable" } })
           : complaintQuery,
       );

@@ -25,10 +25,10 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
-    s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,room_access_permission").eq("id",id).maybeSingle(),
+    s.from("complaints").select("availability_date,availability_time,reporter_phone,room_access_permission").eq("id",id).maybeSingle(),
   ]);
   if (availabilityError) console.error("Optional complaint availability data could not be loaded", availabilityError.message);
-  const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,room_access_permission:null};
+  const extra = availabilityData ?? {availability_date:null,availability_time:null,reporter_phone:null,room_access_permission:null};
   // Room access is the workflow decision in V4. Derive the UI from the answer
   // from the primary complaint when the optional-field lookup is unavailable.
   // The primary lookup always includes this workflow-critical field.
