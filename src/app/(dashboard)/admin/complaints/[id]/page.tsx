@@ -6,8 +6,7 @@ import { StatusBadge, PriorityBadge } from "@/components/phase2-ui";
 import { requireRole } from "@/lib/auth";
 import { formatDate, type ComplaintRow } from "@/lib/phase2";
 import { createClient } from "@/lib/supabase/server";
-import { createAppointment, updateAppointment } from "../actions";
-import { appointmentRequired, appointmentStatuses, appointmentTimeSlots, titleCase } from "@/lib/appointments";
+import { appointmentRequired } from "@/lib/appointments";
 import { ReporterInformation } from "@/components/reporter-information";
 
 export default async function ComplaintDetail({ params, searchParams }: { params: Promise<{id:string}>; searchParams: Promise<{error?:string;saved?:string;appointment?:string}> }) {
@@ -23,18 +22,13 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   if (!data) notFound();
   const complaint = data as unknown as ComplaintRow;
   const source = data as unknown as { photo_url:string|null; source_reference:string|null };
-  const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError},{data:appointmentRows,error:appointmentError}] = await Promise.all([
+  const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
     s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,room_access_permission").eq("id",id).maybeSingle(),
-    // Appointment lookup is deliberately independent from the complaint lookup.
-    // A missing row produces [], and an appointment/schema error is non-fatal.
-    s.from("appointments").select("id,appointment_date,appointment_time,remarks,status,created_at,staff:profiles!assigned_staff(full_name)").eq("complaint_id",id).order("created_at",{ascending:false}),
   ]);
   if (availabilityError) console.error("Optional complaint availability data could not be loaded", availabilityError.message);
-  if (appointmentError) console.error("Optional appointment data could not be loaded", appointmentError.message);
   const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,room_access_permission:null};
-  const appointments = appointmentRows ?? [];
   // Room access is the workflow decision in V4. Derive the UI from the answer
   // from the primary complaint when the optional-field lookup is unavailable.
   // The primary lookup always includes this workflow-critical field.
@@ -44,6 +38,5 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   <ReporterInformation name={complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={roomAccessPermission}/>
   <aside className={`workflow-notice ${requiresAppointment?"workflow-warning":"workflow-success"}`}><strong>{requiresAppointment?"TENANT MUST BE PRESENT":"ROOM ACCESS GRANTED"}</strong><span>{requiresAppointment?"Appointment Required.":"Maintenance staff may enter without the student. Scheduling a visit is optional."}</span></aside>
   {(source.photo_url||source.source_reference)&&<section className="panel" style={{marginBottom:18}}><h3>Google Form Source</h3>{source.source_reference&&<p><strong>Response:</strong> {source.source_reference}</p>}{source.photo_url&&<p><a className="text-link" href={source.photo_url} target="_blank" rel="noreferrer">Open Google Drive Photo / Attachment ↗</a></p>}</section>}<ComplaintForm blocks={blocks||[]} complaint={complaint} mode="review"/>{!["assigned","rejected","closed"].includes(complaint.status)&&<section className="panel assignment-panel"><h3>Approve and assign</h3><p className="subtle">Only active maintenance staff assigned to Block {complaint.block?.code} are available.</p><AssignmentForm complaintId={id} eligible={eligible||[]} requiresAppointment={requiresAppointment}/><RejectComplaintForm complaintId={id}/></section>}
-  {complaint.status==="assigned"&&<section className="panel assignment-panel"><h3>Maintenance Appointment</h3><p className="subtle">Schedule the actual maintenance visit here. This does not change the tenant&apos;s read-only preferred availability or room access response from the Google Form.</p><form action={createAppointment.bind(null,id)} className="form-grid"><div className="field"><label>Maintenance Date</label><input name="appointmentDate" type="date" required/></div><div className="field"><label>Maintenance Time</label><select name="appointmentTime" defaultValue="" required><option value="" disabled>Choose a time slot</option>{appointmentTimeSlots.map(slot=><option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></div><div className="field"><label>Assigned Staff</label><select name="staffId" defaultValue={complaint.assignee?.id||""} required><option value="">Choose staff</option>{eligible?.map(x=><option key={x.id} value={x.id}>{x.full_name}</option>)}</select></div><div className="field field-wide"><label>Remarks</label><textarea name="remarks" rows={3}/></div><div><button className="button">Create Appointment</button></div></form></section>}
-  {complaint.status==="assigned"&&<section className="panel assignment-panel"><h3>Appointment Details</h3>{!appointments.length?<p className="subtle">No appointment scheduled</p>:<div className="table-wrap"><table className="table"><thead><tr><th>Date</th><th>Time</th><th>Assigned Staff</th><th>Remarks</th><th>Appointment Status</th></tr></thead><tbody>{appointments.map(a=><tr key={a.id}><td>{a.appointment_date}</td><td>{a.appointment_time.slice(0,5)}</td><td>{(a.staff as unknown as {full_name:string}|null)?.full_name||"—"}</td><td>{a.remarks||"—"}</td><td><form action={updateAppointment.bind(null,id,a.id)} className="actions"><select name="status" defaultValue={a.status}>{appointmentStatuses.map(x=><option key={x} value={x}>{titleCase(x)}</option>)}</select><button className="button secondary">Update</button></form></td></tr>)}</tbody></table></div>}</section>}</AppShell>;
+  </AppShell>;
 }
