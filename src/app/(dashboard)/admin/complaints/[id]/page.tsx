@@ -6,7 +6,7 @@ import { StatusBadge, PriorityBadge } from "@/components/phase2-ui";
 import { requireRole } from "@/lib/auth";
 import { formatDate, type ComplaintRow } from "@/lib/phase2";
 import { createClient } from "@/lib/supabase/server";
-import { appointmentRequired } from "@/lib/appointments";
+import { complaintAppointmentRequired } from "@/lib/appointments";
 import { ReporterInformation } from "@/components/reporter-information";
 
 export default async function ComplaintDetail({ params, searchParams }: { params: Promise<{id:string}>; searchParams: Promise<{error?:string;saved?:string;appointment?:string}> }) {
@@ -33,10 +33,11 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   // from the primary complaint when the optional-field lookup is unavailable.
   // The primary lookup always includes this workflow-critical field.
   const roomAccessPermission = extra.room_access_permission ?? complaint.room_access_permission;
-  const requiresAppointment = appointmentRequired(roomAccessPermission);
+  const requiresAppointment = complaintAppointmentRequired(complaint.source, roomAccessPermission);
+  const isManual = complaint.source === "manual";
   return <AppShell profile={profile} title="Complaint Review"><div className="section-head"><div><p className="eyebrow">{complaint.complaint_no}</p><h2>Block {complaint.block?.code} · {complaint.room_no}</h2><p className="subtle">Submitted {formatDate(complaint.submitted_at)}</p></div><div className="actions"><PriorityBadge value={complaint.priority}/><StatusBadge value={complaint.status}/></div></div>{q.error&&<p className="error">{q.error}</p>}{q.saved&&<p className="success">Review changes saved.</p>}{q.appointment&&<p className="success">Appointment saved.</p>}
   <ReporterInformation name={complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={roomAccessPermission}/>
-  <aside className={`workflow-notice ${requiresAppointment?"workflow-warning":"workflow-success"}`}><strong>{requiresAppointment?"TENANT MUST BE PRESENT":"ROOM ACCESS GRANTED"}</strong><span>{requiresAppointment?"Appointment Required.":"Maintenance staff may enter without the student. Scheduling a visit is optional."}</span></aside>
+  <aside className={`workflow-notice ${requiresAppointment?"workflow-warning":"workflow-success"}`}><strong>{requiresAppointment?"TENANT MUST BE PRESENT":isManual?"APPOINTMENT OPTIONAL":"ROOM ACCESS GRANTED"}</strong><span>{requiresAppointment?"Appointment Required.":isManual?"Assign eligible staff now; provide both date and time only when scheduling a visit.":"Maintenance staff may enter without the student. Scheduling a visit is optional."}</span></aside>
   {(source.photo_url||source.source_reference)&&<section className="panel" style={{marginBottom:18}}><h3>Google Form Source</h3>{source.source_reference&&<p><strong>Response:</strong> {source.source_reference}</p>}{source.photo_url&&<p><a className="text-link" href={source.photo_url} target="_blank" rel="noreferrer">Open Google Drive Photo / Attachment ↗</a></p>}</section>}<ComplaintForm blocks={blocks||[]} complaint={complaint} mode="review"/>{!["assigned","rejected","closed"].includes(complaint.status)&&<section className="panel assignment-panel"><h3>Approve and assign</h3><p className="subtle">Only active maintenance staff assigned to Block {complaint.block?.code} are available.</p><AssignmentForm complaintId={id} eligible={eligible||[]} requiresAppointment={requiresAppointment}/><RejectComplaintForm complaintId={id}/></section>}
   </AppShell>;
 }
