@@ -40,12 +40,12 @@ export function appointmentRequired(roomAccess: string | null | undefined) {
   return normalizeRoomAccessPermission(roomAccess) !== "yes";
 }
 
-/** Manual complaints may be assigned without room-access data or an appointment. */
+/** Only Google Form complaints use room access to determine whether scheduling is required. */
 export function complaintAppointmentRequired(
   source: string | null | undefined,
   roomAccess: string | null | undefined,
 ) {
-  return source === "manual" ? false : appointmentRequired(roomAccess);
+  return source === "google_form" ? appointmentRequired(roomAccess) : false;
 }
 
 export type AppointmentSelection =
@@ -73,4 +73,22 @@ export function validateAppointmentSelection(
     return { success: false, error: "Select a valid Maintenance Date and Maintenance Time." };
   }
   return { success: true, appointment: { appointmentDate: date, appointmentTime: time as (typeof appointmentTimeValues)[number] } };
+}
+
+/** Apply source-specific room-access rules before validating the optional schedule pair. */
+export function validateComplaintAppointmentSelection(
+  source: string | null | undefined,
+  roomAccess: string | null | undefined,
+  appointmentDate: FormDataEntryValue | null,
+  appointmentTime: FormDataEntryValue | null,
+): AppointmentSelection {
+  if (source === "google_form" && normalizeRoomAccessPermission(roomAccess) === null) {
+    return { success: false, error: "Room access permission must be YES or NO." };
+  }
+
+  return validateAppointmentSelection(
+    appointmentDate,
+    appointmentTime,
+    complaintAppointmentRequired(source, roomAccess),
+  );
 }
