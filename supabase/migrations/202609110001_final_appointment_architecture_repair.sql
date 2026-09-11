@@ -32,11 +32,38 @@ alter table public.appointments drop constraint if exists appointments_status_ch
 alter table public.appointments add constraint appointments_status_check check (status in
   ('pending_confirmation','confirmed','completed','cancelled','rescheduled','no_show'));
 
--- Use stable FK names relied on by PostgREST relationship hints.
-do $$ begin
+-- Use stable FK names relied on by PostgREST relationship hints. Some historical
+-- databases used the plural `appointments_complaint_id_fkey`; rename (rather
+-- than duplicate) any equivalent relationship and remove equivalent leftovers.
+do $$
+declare v_equivalent_name text;
+begin
   if not exists (select 1 from pg_constraint where conrelid='public.appointments'::regclass and conname='appointment_complaint_id_fkey') then
-    alter table public.appointments add constraint appointment_complaint_id_fkey foreign key (complaint_id) references public.complaints(id) on delete cascade;
+    select c.conname into v_equivalent_name
+    from pg_constraint c
+    where c.conrelid='public.appointments'::regclass
+      and c.confrelid='public.complaints'::regclass
+      and c.contype='f'
+      and c.conkey=array[(select attnum from pg_attribute where attrelid='public.appointments'::regclass and attname='complaint_id')]::smallint[]
+      and c.confkey=array[(select attnum from pg_attribute where attrelid='public.complaints'::regclass and attname='id')]::smallint[]
+    order by (c.conname='appointments_complaint_id_fkey') desc
+    limit 1;
+    if v_equivalent_name is not null then
+      execute format('alter table public.appointments rename constraint %I to appointment_complaint_id_fkey',v_equivalent_name);
+    else
+      alter table public.appointments add constraint appointment_complaint_id_fkey foreign key (complaint_id) references public.complaints(id) on delete cascade;
+    end if;
   end if;
+  for v_equivalent_name in
+    select c.conname from pg_constraint c
+    where c.conrelid='public.appointments'::regclass
+      and c.confrelid='public.complaints'::regclass
+      and c.contype='f' and c.conname<>'appointment_complaint_id_fkey'
+      and c.conkey=array[(select attnum from pg_attribute where attrelid='public.appointments'::regclass and attname='complaint_id')]::smallint[]
+      and c.confkey=array[(select attnum from pg_attribute where attrelid='public.complaints'::regclass and attname='id')]::smallint[]
+  loop
+    execute format('alter table public.appointments drop constraint %I',v_equivalent_name);
+  end loop;
   if not exists (select 1 from pg_constraint where conrelid='public.appointments'::regclass and conname='appointments_job_id_fkey') then
     alter table public.appointments add constraint appointments_job_id_fkey foreign key (job_id) references public.maintenance_jobs(id) on delete cascade;
   end if;
@@ -98,10 +125,24 @@ create trigger appointments_updated_at before update on public.appointments for 
 create or replace function public.sync_appointment_job_schedule()
 returns trigger language plpgsql security definer set search_path='' as $$
 begin
+  -- work_state is an independently managed operational classification used by
+  -- reports. Appointments own scheduled_for only, so KIV/partially-completed
+  -- (and explicit appointment labels) are never overwritten by synchronization.
+  if tg_op='UPDATE' and old.job_id is distinct from new.job_id
+    and not exists (select 1 from public.appointments a where a.job_id=old.job_id and a.id<>old.id and a.status not in ('cancelled','no_show','completed')) then
+    update public.maintenance_jobs set scheduled_for=null,updated_at=now()
+      where id=old.job_id and scheduled_for=old.appointment_date;
+  end if;
   if new.status not in ('cancelled','no_show','completed') then
-    update public.maintenance_jobs set scheduled_for=new.appointment_date,work_state='appointment',updated_at=now() where id=new.job_id;
+    update public.maintenance_jobs set scheduled_for=new.appointment_date,updated_at=now() where id=new.job_id;
   elsif not exists (select 1 from public.appointments a where a.job_id=new.job_id and a.id<>new.id and a.status not in ('cancelled','no_show','completed')) then
-    update public.maintenance_jobs set scheduled_for=null,work_state='standard',updated_at=now() where id=new.job_id;
+    if tg_op='UPDATE' then
+      update public.maintenance_jobs set scheduled_for=null,updated_at=now()
+        where id=new.job_id and scheduled_for in (new.appointment_date,old.appointment_date);
+    else
+      update public.maintenance_jobs set scheduled_for=null,updated_at=now()
+        where id=new.job_id and scheduled_for=new.appointment_date;
+    end if;
   end if;
   return new;
 end $$;
