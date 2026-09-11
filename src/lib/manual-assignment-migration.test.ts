@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync("supabase/migrations/202609110004_manual_assignment_optional_schedule.sql", "utf8");
+const sql = readFileSync("supabase/migrations/202609110005_google_form_assignment_schedule_rule.sql", "utf8");
 
 describe("manual complaint assignment migration", () => {
   it("creates every job but creates an appointment only when a complete schedule is supplied", () => {
@@ -11,8 +11,9 @@ describe("manual complaint assignment migration", () => {
   });
 
   it("requires room access and a schedule only for Google Form NO complaints", () => {
-    expect(sql).toContain("v_complaint.source<>'manual' and v_access not in ('yes','no')");
-    expect(sql).toContain("v_complaint.source<>'manual' and v_access='no' and p_appointment_date is null");
+    expect(sql).toContain("v_complaint.source='google_form' and v_access not in ('yes','no')");
+    expect(sql).toContain("v_complaint.source='google_form' and v_access='no' and p_appointment_date is null");
+    expect(sql).not.toContain("v_complaint.source<>'manual'");
   });
 
   it("preserves active maintenance staff and profile block eligibility", () => {

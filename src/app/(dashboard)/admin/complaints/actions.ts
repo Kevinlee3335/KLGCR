@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { appointmentTimeValues, complaintAppointmentRequired, validateAppointmentSelection } from "@/lib/appointments";
+import { appointmentTimeValues, validateComplaintAppointmentSelection } from "@/lib/appointments";
 
 const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning","flex","other"]),blockId:z.coerce.number().int().positive(),room:z.string().trim().min(1,"Room is required."),name:z.string().trim().optional(),contact:z.string().trim().optional(),category:z.string().trim().min(1,"Category is required."),description:z.string().trim().min(1,"Description is required."),priority:z.enum(["low","normal","high","urgent"])});
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
@@ -17,7 +17,7 @@ export async function assignComplaint(id:string,data:FormData){
   const s=await createClient();
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
-  const appointment=validateAppointmentSelection(data.get("appointmentDate"),data.get("appointmentTime"),complaintAppointmentRequired(complaint.source,complaint.room_access_permission));
+  const appointment=validateComplaintAppointmentSelection(complaint.source,complaint.room_access_permission,data.get("appointmentDate"),data.get("appointmentTime"));
   if(!appointment.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(appointment.error)}`);
   const date=appointment.appointment?.appointmentDate||null;
   const time=appointment.appointment?.appointmentTime||null;
