@@ -4,6 +4,7 @@ import {
   complaintAppointmentRequired,
   appointmentTimeValues,
   normalizeRoomAccessPermission,
+  validateComplaintAppointmentSelection,
   validateAppointmentSelection,
 } from "./appointments";
 
@@ -44,9 +45,37 @@ describe("complaintAppointmentRequired", () => {
     expect(complaintAppointmentRequired("google_form", "yes")).toBe(false);
   });
 
-  it("keeps unknown and other complaint sources on the existing safe rule", () => {
-    expect(complaintAppointmentRequired("other", null)).toBe(true);
-    expect(complaintAppointmentRequired(undefined, "yes")).toBe(false);
+  it.each(["manual", "cleaning", "flex", "other"])("makes scheduling optional for %s complaints", (source) => {
+    expect(complaintAppointmentRequired(source, null)).toBe(false);
+    expect(complaintAppointmentRequired(source, "no")).toBe(false);
+  });
+});
+
+describe("complaint appointment validation", () => {
+  it("requires a complete schedule for a Google Form NO complaint", () => {
+    expect(validateComplaintAppointmentSelection("google_form", "NO", "", "").success).toBe(false);
+    expect(validateComplaintAppointmentSelection("google_form", "NO", "2026-09-12", "09:30").success).toBe(true);
+  });
+
+  it("allows a Google Form YES complaint without a schedule", () => {
+    expect(validateComplaintAppointmentSelection("google_form", "YES", "", "")).toEqual({ success: true, appointment: null });
+  });
+
+  it.each([null, "", "sometimes"])("rejects Google Form permission %j", (permission) => {
+    expect(validateComplaintAppointmentSelection("google_form", permission, "2026-09-12", "09:30")).toEqual({
+      success: false,
+      error: "Room access permission must be YES or NO.",
+    });
+  });
+
+  it.each(["manual", "cleaning", "flex", "other"])("allows %s complaints without a schedule or room-access permission", (source) => {
+    expect(validateComplaintAppointmentSelection(source, null, "", "")).toEqual({ success: true, appointment: null });
+  });
+
+  it.each(["google_form", "manual", "cleaning", "flex", "other"])("rejects a partial schedule for %s complaints", (source) => {
+    const permission = source === "google_form" ? "YES" : null;
+    expect(validateComplaintAppointmentSelection(source, permission, "2026-09-12", "").success).toBe(false);
+    expect(validateComplaintAppointmentSelection(source, permission, "", "09:30").success).toBe(false);
   });
 });
 
