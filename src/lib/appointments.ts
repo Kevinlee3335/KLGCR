@@ -40,6 +40,14 @@ export function appointmentRequired(roomAccess: string | null | undefined) {
   return normalizeRoomAccessPermission(roomAccess) !== "yes";
 }
 
+/** Manual complaints may be assigned without room-access data or an appointment. */
+export function complaintAppointmentRequired(
+  source: string | null | undefined,
+  roomAccess: string | null | undefined,
+) {
+  return source === "manual" ? false : appointmentRequired(roomAccess);
+}
+
 export type AppointmentSelection =
   | { success: true; appointment: null }
   | { success: true; appointment: { appointmentDate: string; appointmentTime: (typeof appointmentTimeValues)[number] } }
