@@ -11,11 +11,16 @@ function query(result: unknown) {
   return builder;
 }
 
+const futureAvailability = new Date();
+futureAvailability.setUTCDate(futureAvailability.getUTCDate() + 30);
+const futureAvailabilityDate = futureAvailability.toISOString().slice(0, 10);
+const formattedFutureAvailabilityDate = `${String(futureAvailability.getUTCDate()).padStart(2, "0")} ${new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(futureAvailability)} ${futureAvailability.getUTCFullYear()}`;
+
 const job = {
   id: "job-id", job_no: "JOB-1", room_no: "101", category: "Plumbing", description: "Leak", priority: "normal", status: "assigned",
   assigned_at: "2026-09-09T00:00:00Z", updated_at: "2026-09-09T00:00:00Z", started_at: null, completed_at: null, action_taken: null,
   monitoring_note: null, monitoring_started_at: null, monitoring_review_at: null, pending_material_note: null, block: { id: 1, code: "A" },
-  complaint: { id: "complaint-id", complaint_no: "CMP-1", reporter_name: "Resident Name", reporter_phone: "0199999999", preferred_date: "2026-09-12", preferred_time: "10:00:00", complainant_name: null, complainant_contact: null, availability_date: null, availability_time: null, room_access_permission: "YES" },
+  complaint: { id: "complaint-id", complaint_no: "CMP-1", reporter_name: "Resident Name", reporter_phone: "0199999999", complainant_name: null, complainant_contact: null, availability_date: futureAvailabilityDate, availability_time: "10:00:00", room_access_permission: "YES" },
 };
 const queries = new Map<string, ReturnType<typeof query>>();
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn().mockResolvedValue({ from: vi.fn((table: string) => queries.get(table)) }) }));
@@ -33,7 +38,7 @@ describe("Staff Job Detail", () => {
     const html = renderToStaticMarkup(await StaffJob({ params: Promise.resolve({ id: job.id }), searchParams: Promise.resolve({}) }));
     expect(html).toContain("Reporter Information");
     expect(html).toContain("Resident Name"); expect(html).toContain("0199999999");
-    expect(html).toContain("12 Sep 2026"); expect(html).toContain("10:00 AM"); expect(html).toContain("YES");
+    expect(html).toContain(formattedFutureAvailabilityDate); expect(html).toContain("10:00 AM"); expect(html).toContain("YES");
     const projection = queries.get("maintenance_jobs")?.select.mock.calls[0][0];
     expect(projection).toContain("maintenance_jobs_complaint_id_fkey"); expect(projection).not.toContain("reporter_email");
   });
@@ -46,7 +51,7 @@ describe("Staff Job Detail", () => {
   });
 
   it("omits an empty appointment card and tolerates null optional reporter fields", async () => {
-    queries.set("maintenance_jobs", query({ data: { ...job, complaint: { ...job.complaint, reporter_name: null, reporter_phone: null, preferred_date: null, preferred_time: null, complainant_name: null, complainant_contact: null, availability_date: null, availability_time: null, room_access_permission: null } }, error: null }));
+    queries.set("maintenance_jobs", query({ data: { ...job, complaint: { ...job.complaint, reporter_name: null, reporter_phone: null, complainant_name: null, complainant_contact: null, availability_date: null, availability_time: null, room_access_permission: null } }, error: null }));
     const html = renderToStaticMarkup(await StaffJob({ params: Promise.resolve({ id: job.id }), searchParams: Promise.resolve({}) }));
     expect(html).toContain("Reporter Information"); expect(html).not.toContain("Maintenance Appointment");
   });
