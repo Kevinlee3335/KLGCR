@@ -72,6 +72,12 @@ import ComplaintDetail from "./page";
 import { createClient } from "@/lib/supabase/server";
 
 describe("Complaint Review", () => {
+  it("renders optional appointment inputs for a manual complaint without room access", async () => {
+    render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
+    expect(screen.getByLabelText("Maintenance Time")).not.toBeRequired();
+    expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
+  });
   it("renders optional appointment inputs for a Google Form YES when the optional lookup fails", async () => {
     const client = await createClient();
     const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "YES" };
