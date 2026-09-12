@@ -1,6 +1,7 @@
 type ReporterInformationProps = {
   name?: string | null;
   phone?: string | null;
+  email?: string | null;
   availabilityDate?: string | null;
   availabilityTime?: string | null;
   roomAccessPermission?: string | null;
@@ -22,11 +23,12 @@ function formatAvailabilityTime(value: string) {
   });
 }
 
-export function ReporterInformation({ name, phone, availabilityDate, availabilityTime, roomAccessPermission }: ReporterInformationProps) {
+export function ReporterInformation({ name, phone, email, availabilityDate, availabilityTime, roomAccessPermission }: ReporterInformationProps) {
   return <section className="panel detail-grid" style={{marginBottom:18}}>
     <div className="field-wide"><h3>Reporter Information</h3></div>
     {name && <div><span>Reporter Name</span><strong>{name}</strong></div>}
     {phone && <div><span>Phone</span><strong>{phone}</strong></div>}
+    {email && <div><span>Email</span><strong>{email}</strong></div>}
     {availabilityDate && <div><span>Preferred Availability Date</span><strong>{formatAvailabilityDate(availabilityDate)}</strong></div>}
     {availabilityTime && <div><span>Preferred Availability Time</span><strong>{formatAvailabilityTime(availabilityTime)}</strong></div>}
     {roomAccessPermission && <div><span>Room Access Permission</span><strong>{roomAccessPermission.toUpperCase()}</strong></div>}

@@ -47,3 +47,31 @@ export async function setPendingMaterial(id: string, data: FormData) {
 export async function resumeJob(id: string) {
   await runJobRpc(id, "resume_assigned_job", {}, "resumed");
 }
+
+export async function markTenantNotAvailable(id: string, data: FormData) {
+  await requireRole(["maintenance_staff"]);
+  const remarks = z.string().trim().max(1000, "Remarks are too long.").safeParse(data.get("remarks") || "");
+  if (!remarks.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(remarks.error.issues[0]?.message || "Invalid remarks")}`);
+  const supabase = await createClient();
+  const { data: attendance, error } = await supabase.rpc("mark_tenant_not_available", { p_job_id: id, p_remarks: remarks.data || null });
+  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+
+  const result = Array.isArray(attendance) ? attendance[0] : attendance;
+  if (result?.complaint_id) {
+    const { data: complaint } = await supabase.from("complaints")
+      .select("complaint_no,room_no,description,reporter_name,reporter_email")
+      .eq("id", result.complaint_id).maybeSingle();
+    if (complaint) {
+      const { tenantNotAvailableEmail, sendTransactionalEmail } = await import("@/lib/email");
+      await sendTransactionalEmail(complaint.reporter_email, tenantNotAvailableEmail({
+        reporterName: complaint.reporter_name, complaintNo: complaint.complaint_no,
+        roomNo: complaint.room_no, description: complaint.description,
+        appointmentDate: result.appointment_date, appointmentTime: result.appointment_time,
+        attendedAt: result.attended_at,
+      }));
+    }
+  }
+  revalidatePath(`/staff/jobs/${id}`);
+  revalidatePath(`/admin/jobs/${id}`);
+  redirect(`/staff/jobs/${id}?success=tenant-not-available`);
+}
