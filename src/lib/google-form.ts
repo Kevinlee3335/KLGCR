@@ -62,3 +62,20 @@ export function roomAccessPermission(value: string): "yes" | "no" | null {
   if (/^(no|false|0)\b/.test(answer)) return "no";
   return null;
 }
+
+export function roomAvailability(value: {
+  accessRequest: string;
+  date: string;
+  time: string;
+}) {
+  const accessPermission = roomAccessPermission(value.accessRequest);
+  const availabilityDate = toIsoDate(value.date);
+  const availabilityTime = value.time.trim() || null;
+  const hasDate = Boolean(value.date);
+  const hasTime = Boolean(availabilityTime);
+
+  if (!accessPermission || hasDate !== hasTime || (hasDate && !availabilityDate)) return null;
+  if (accessPermission === "no" && (!availabilityDate || !availabilityTime)) return null;
+
+  return { accessPermission, availabilityDate, availabilityTime };
+}

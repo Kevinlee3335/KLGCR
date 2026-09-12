@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { formValue, roomAccessPermission, toDatabaseTime, toIsoDate, type GoogleFormPayload } from "@/lib/google-form";
+import { formValue, roomAvailability, type GoogleFormPayload } from "@/lib/google-form";
 import { complaintReceivedEmail, sendTransactionalEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -66,13 +66,18 @@ export async function POST(request: NextRequest) {
   const reporterPhone = formValue(body, "PHONE NUMBER (WHATSAPP)");
   const reporterEmail = formValue(body, "EMAIL ADDRESS", "Email Address");
   const timestamp = formValue(body, "Timestamp");
-  const availabilityDate = toIsoDate(formValue(body, "Preferred Date", "Room Availability Date", "ROOM AVAILABILITY (DATE)"));
-  const availabilityTime = toDatabaseTime(formValue(body, "Preferred Time", "Room Availability Time", "ROOM AVAILABILITY (TIME)"));
+  const availabilityDateValue = formValue(body, "Preferred Date", "Room Availability Date", "ROOM AVAILABILITY (DATE)");
+  const availabilityTimeValue = formValue(body, "Preferred Time", "Room Availability Time", "ROOM AVAILABILITY (TIME)");
   const accessRequest = formValue(body, "Room Access Permission", "Request For Room Access Due To Tenant's Unavailability", "REQUEST FOR ROOM ACCESS DUE TO TENANT'S UNAVAILABILITY");
-  const accessPermission = roomAccessPermission(accessRequest);
-  if (!availabilityDate || !availabilityTime || !accessPermission) {
+  const availability = roomAvailability({
+    accessRequest,
+    date: availabilityDateValue,
+    time: availabilityTimeValue,
+  });
+  if (!availability) {
     return NextResponse.json({ error: "Missing or invalid room availability/access fields" }, { status: 400 });
   }
+  const { accessPermission, availabilityDate, availabilityTime } = availability;
 
   const payload = {
     block_id: blockRow.id,
