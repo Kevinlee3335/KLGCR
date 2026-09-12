@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formValue, roomAccessPermission, toDatabaseTime, toIsoDate, type GoogleFormPayload } from "@/lib/google-form";
+import { complaintReceivedEmail, sendTransactionalEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -89,8 +90,6 @@ export async function POST(request: NextRequest) {
     reporter_email: reporterEmail || null,
     availability_date: availabilityDate,
     availability_time: availabilityTime,
-    preferred_date: availabilityDate,
-    preferred_time: availabilityTime,
     // Store the Google Form answer explicitly. YES grants access and therefore
     // needs no appointment; NO requires an admin-scheduled appointment.
     room_access_permission: accessPermission,
@@ -99,12 +98,17 @@ export async function POST(request: NextRequest) {
     submitted_at: toIsoTimestamp(timestamp),
   };
 
-  const { data, error } = await supabase.from("complaints").insert(payload).select("id").single();
+  const { data, error } = await supabase.from("complaints").insert(payload).select("id,complaint_no").single();
   if (error) {
     if (error.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
     console.error("Google Form webhook insert failed", error);
     return NextResponse.json({ error: "Insert failed", code: error.code, message: error.message }, { status: 500 });
   }
+
+  await sendTransactionalEmail(reporterEmail, complaintReceivedEmail({
+    reporterName, complaintNo: data.complaint_no, roomNo: room, description,
+    submittedAt: payload.submitted_at,
+  }));
 
   return NextResponse.json({ ok: true, complaint_id: data.id });
 }

@@ -25,10 +25,10 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
-    s.from("complaints").select("preferred_date,preferred_time,availability_date,availability_time,reporter_phone,room_access_permission").eq("id",id).maybeSingle(),
+    s.from("complaints").select("availability_date,availability_time,reporter_phone,reporter_email,reporter_name,room_access_permission").eq("id",id).maybeSingle(),
   ]);
   if (availabilityError) console.error("Optional complaint availability data could not be loaded", availabilityError.message);
-  const extra = availabilityData ?? {preferred_date:null,preferred_time:null,availability_date:null,availability_time:null,reporter_phone:null,room_access_permission:null};
+  const extra = availabilityData ?? {availability_date:null,availability_time:null,reporter_phone:null,reporter_email:null,reporter_name:null,room_access_permission:null};
   // Room access is the workflow decision in V4. Derive the UI from the answer
   // from the primary complaint when the optional-field lookup is unavailable.
   // The primary lookup always includes this workflow-critical field.
@@ -36,7 +36,7 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   const requiresAppointment = complaintAppointmentRequired(complaint.source, roomAccessPermission);
   const isManual = complaint.source === "manual";
   return <AppShell profile={profile} title="Complaint Review"><div className="section-head"><div><p className="eyebrow">{complaint.complaint_no}</p><h2>Block {complaint.block?.code} · {complaint.room_no}</h2><p className="subtle">Submitted {formatDate(complaint.submitted_at)}</p></div><div className="actions"><PriorityBadge value={complaint.priority}/><StatusBadge value={complaint.status}/></div></div>{q.error&&<p className="error">{q.error}</p>}{q.saved&&<p className="success">Review changes saved.</p>}{q.appointment&&<p className="success">Appointment saved.</p>}
-  <ReporterInformation name={complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={roomAccessPermission}/>
+  <ReporterInformation name={extra.reporter_name||complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} email={extra.reporter_email} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={roomAccessPermission}/>
   <aside className={`workflow-notice ${requiresAppointment?"workflow-warning":"workflow-success"}`}><strong>{requiresAppointment?"TENANT MUST BE PRESENT":isManual?"APPOINTMENT OPTIONAL":"ROOM ACCESS GRANTED"}</strong><span>{requiresAppointment?"Appointment Required.":isManual?"Assign eligible staff now; provide both date and time only when scheduling a visit.":"Maintenance staff may enter without the student. Scheduling a visit is optional."}</span></aside>
   {(source.photo_url||source.source_reference)&&<section className="panel" style={{marginBottom:18}}><h3>Google Form Source</h3>{source.source_reference&&<p><strong>Response:</strong> {source.source_reference}</p>}{source.photo_url&&<p><a className="text-link" href={source.photo_url} target="_blank" rel="noreferrer">Open Google Drive Photo / Attachment ↗</a></p>}</section>}<ComplaintForm blocks={blocks||[]} complaint={complaint} mode="review"/>{!["assigned","rejected","closed"].includes(complaint.status)&&<section className="panel assignment-panel"><h3>Approve and assign</h3><p className="subtle">Only active maintenance staff assigned to Block {complaint.block?.code} are available.</p><AssignmentForm complaintId={id} eligible={eligible||[]} requiresAppointment={requiresAppointment}/><RejectComplaintForm complaintId={id}/></section>}
   </AppShell>;

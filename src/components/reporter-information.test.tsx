@@ -10,6 +10,13 @@ describe("ReporterInformation", () => {
     expect(screen.getByText("YES")).toBeInTheDocument();
   });
 
+  it("shows email only when supplied", () => {
+    const { rerender } = render(<ReporterInformation email="tenant@example.com"/>);
+    expect(screen.getByText("tenant@example.com")).toBeInTheDocument();
+    rerender(<ReporterInformation email={null}/>);
+    expect(screen.queryByText("Email")).not.toBeInTheDocument();
+  });
+
   it("hides unavailable values", () => {
     render(<ReporterInformation availabilityDate={null} availabilityTime={null} roomAccessPermission={null}/>);
     expect(screen.queryByText("Availability Date")).not.toBeInTheDocument();

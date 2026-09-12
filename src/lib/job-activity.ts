@@ -41,7 +41,10 @@ export type AppointmentActivityRow = {
   appointment_time: string;
   status: string;
   remarks: string | null;
+  no_show_remarks?: string | null;
   staff: { full_name: string } | null;
+  attended_at?: string | null;
+  attendee?: { full_name: string } | null;
 };
 
 type TimelineSource = {
@@ -91,10 +94,10 @@ export function buildJobActivity({ job, history, materials, appointments }: Time
 
   appointments.forEach((appointment) => add({
     id: `appointment-${appointment.id}`,
-    timestamp: `${appointment.appointment_date}T${appointment.appointment_time}+08:00`,
-    action: "Maintenance Appointment Scheduled",
-    actor: appointment.staff?.full_name,
-    remarks: [appointment.remarks, appointment.status !== "confirmed" ? `Status: ${appointment.status.replaceAll("_", " ")}` : null].filter(Boolean).join(" · ") || null,
+    timestamp: appointment.attended_at || `${appointment.appointment_date}T${appointment.appointment_time}+08:00`,
+    action: appointment.status === "no_show" ? "Tenant Not Available / No Show" : "Maintenance Appointment Scheduled",
+    actor: appointment.status === "no_show" ? appointment.attendee?.full_name : appointment.staff?.full_name,
+    remarks: [appointment.status === "no_show" ? appointment.no_show_remarks : appointment.remarks, appointment.status !== "confirmed" ? `Status: ${appointment.status.replaceAll("_", " ")}` : null].filter(Boolean).join(" · ") || null,
   }));
 
   let hasMonitoring = false;
