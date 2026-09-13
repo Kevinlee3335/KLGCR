@@ -16,6 +16,6 @@ export const getSessionProfile = cache(async function getSessionProfile(): Promi
 export async function requireRole(allowed: AppRole[]): Promise<Profile> {
   const profile = await getSessionProfile();
   if (!profile) redirect("/login");
-  if (!allowed.includes(profile.role)) redirect(profile.role === "maintenance_staff" ? "/staff" : "/admin");
+  if (!allowed.includes(profile.role)) redirect(profile.role === "cleaner" ? "/staff/checkouts" : profile.role === "maintenance_staff" ? "/staff" : "/admin");
   return profile;
 }
