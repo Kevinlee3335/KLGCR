@@ -29,15 +29,6 @@ export default async function NotificationsPage(){
 
   const out=(stock??[]).filter(i=>Number(i.balance_qty)===0).length;
   const near=(stock??[]).filter(i=>Number(i.balance_qty)>0&&Number(i.balance_qty)<=Number(i.reorder_level)).length;
-  const cards=[
-    ["New Complaints",newComplaints??0,"/admin/complaints?status=new","Needs Admin review before assignment."],
-    ["Tenant Not Available",tenantNoShows.length,"/admin/notifications#tenant-not-available","Appointments that need Admin rescheduling."],
-    ["Pending Material",pendingMaterial??0,"/admin/jobs?status=pending_material","Jobs waiting for material."],
-    ["Under Monitoring",monitoring??0,"/admin/jobs?status=under_monitoring","Jobs waiting for follow-up monitoring."],
-    ["Out of Stock",out,"/admin/inventory","Inventory balance is zero."],
-    ["Near Reorder",near,"/admin/inventory","Inventory has reached reorder level."],
-  ] as const;
-
   const summaryCards=[
     ["New Complaints",newComplaints??0,"/admin/complaints?status=new","Waiting for review","blue"],
     ["Tenant Not Available",tenantNoShows.length,"#tenant-not-available","Needs another appointment","danger"],
