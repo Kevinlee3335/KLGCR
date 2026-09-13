@@ -37,7 +37,7 @@ const schema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/),
   email: z.string().email().toLowerCase(),
   password: z.string().min(10),
-  role: z.enum(["admin", "maintenance_staff", "management_viewer"]),
+  role: z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer"]),
 });
 
 export async function createUser(
