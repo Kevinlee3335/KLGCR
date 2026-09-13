@@ -2,16 +2,18 @@ import Link from "next/link";
 import {
   AlertTriangle, ArrowRight, Boxes, CheckCircle2, ClipboardCheck,
   ClipboardList, Clock3, FileBarChart, PackageOpen, PlayCircle,
-  ShieldAlert, Wrench,
+  ShieldAlert, UserX, Wrench,
 } from "lucide-react";
 
 type Complaint = { id: string; complaint_no: string; room_no: string; category: string; description: string; priority: string; status: string; submitted_at: string; block: { code: string } | null };
 type Task = { id: string; job_no: string; room_no: string; description: string; status: string; scheduled_for: string | null; assigned_at: string; block: { code: string } | null; assignee: { full_name: string } | null };
 type InventorySummary = { outOfStock: number; nearReorder: number };
+type TenantNoShow = { id: string; job_id: string; appointment_date: string; appointment_time: string; attended_at: string | null; no_show_remarks: string | null; attendee: { full_name: string } | null; job: { id: string; job_no: string; status: string; room_no: string; block: { code: string } | null } | null };
 type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number>;
 
 export type AdminDashboardData = {
-  kpis: { newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number;needAppointments?:number };
+  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number;needAppointments?:number };
+  tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
   tasks: Task[];
@@ -29,6 +31,7 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", hour12: false }).format(now));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const kpis = [
+    { title: "Tenant Not Available", value: data.kpis.tenantNotAvailable, subtitle: "Needs rescheduling", href: "/admin/notifications#tenant-not-available", icon: UserX, tone: "danger" },
     { title: "New Complaints", value: data.kpis.newComplaints, subtitle: "Needs triage", href: "/admin/complaints?status=new", icon: ShieldAlert, tone: "blue" },
     { title: "Today's Jobs", value: data.kpis.todayJobs, subtitle: "Assigned today", href: "/admin/jobs?scope=today-active", icon: ClipboardList, tone: "gold" },
     { title: "In Progress", value: data.kpis.inProgress, subtitle: "Active now", href: "/admin/jobs?status=in_progress", icon: PlayCircle, tone: "violet" },
@@ -59,6 +62,21 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
       <div className="command-time"><Clock3 size={17}/><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit", hour12: true }).format(now)} MYT</span></div>
     </section>
     <section className="admin-kpis" aria-label="Operational summary">{kpis.map(({ icon: Icon, ...kpi }) => <Link className={`kpi-card kpi-${kpi.tone}`} href={kpi.href} key={kpi.title}><span className="kpi-icon"><Icon size={20}/></span><div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0}}><span className="kpi-title" style={{display:"block"}}>{kpi.title}</span><strong style={{display:"block",fontSize:"1.8rem",lineHeight:1.1,marginTop:"5px"}}>{kpi.value}</strong><small style={{display:"block",marginTop:"5px"}}>{kpi.subtitle}</small></div><ArrowRight className="kpi-arrow" size={16}/></Link>)}</section>
+    {data.tenantNoShows.length > 0 && <section className="tenant-dashboard-alert" aria-label="Tenant not available alerts">
+      <div className="tenant-alert-heading">
+        <span className="tenant-alert-icon"><UserX size={22}/></span>
+        <div><p className="eyebrow">Action required</p><h3>Tenant Not Available</h3><p>Arrange another visit for these rooms.</p></div>
+        <Link href="/admin/notifications#tenant-not-available">View all <ArrowRight size={15}/></Link>
+      </div>
+      <div className="tenant-alert-items">
+        {data.tenantNoShows.slice(0,3).map((item) => item.job && <Link href={`/admin/jobs/${item.job.id}`} key={item.id}>
+          <span className="tenant-alert-room">Block {item.job.block?.code ?? "–"}<strong>{item.job.room_no}</strong></span>
+          <span className="tenant-alert-detail"><strong>{item.job.job_no}</strong><small>{item.attendee?.full_name ? `Reported by ${item.attendee.full_name}` : "Reported by maintenance staff"}</small>{item.no_show_remarks && <small>{item.no_show_remarks}</small>}</span>
+          <span className="tenant-alert-appointment"><small>Appointment</small><strong>{malaysiaDate(`${item.appointment_date}T${item.appointment_time}+08:00`, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}</strong></span>
+          <ArrowRight size={16}/>
+        </Link>)}
+      </div>
+    </section>}
     <section className="quick-section"><div className="dashboard-section-title"><div><span>Quick Actions</span><small>Common operational workflows</small></div></div><div className="quick-actions">{quickActions.map(([label, href, Icon]) => <Link href={href} key={label}><Icon size={18}/><span>{label}</span><ArrowRight size={15}/></Link>)}</div></section>
     <div className="operations-grid">
       <section className="dashboard-card jobs-overview"><div className="dashboard-section-title"><div><span>Jobs Overview</span><small>Current maintenance workflow</small></div><Wrench size={19}/></div><div className="jobs-chart-wrap"><div className="donut" style={{ background: `conic-gradient(${gradient})` }}><div><strong>{totalJobs}</strong><span>Total Jobs</span></div></div><div className="chart-legend">{jobSegments.map(([label, count, color]) => <div key={label}><i style={{background: color}}/><span>{label}</span><strong>{count}</strong></div>)}</div></div></section>
