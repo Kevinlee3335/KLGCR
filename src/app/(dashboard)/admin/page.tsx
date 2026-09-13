@@ -12,7 +12,7 @@ export default async function AdminPage() {
   const profile = await requireRole(["admin", "management_viewer"]);
   const supabase = await createClient();
   const today = malaysiaToday();
-  const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{count:needAppointments},{data:noShowRows,error:noShowError}] = await Promise.all([
+  const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{data:noShowRows,error:noShowError}] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
     supabase.from("maintenance_jobs").select("status").in("status", ["assigned", "in_progress", "pending_material", "under_monitoring", "completed"]),
     supabase.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)").order("submitted_at", { ascending: false }).limit(5),
@@ -20,7 +20,6 @@ export default async function AdminPage() {
     supabase.from("inventory_items").select("balance_qty,reorder_level").eq("is_active", true),
     supabase.from("appointments").select("*",{count:"exact",head:true}).eq("appointment_date",today).not("status","in",'("cancelled","no_show")'),
     supabase.from("appointments").select("*",{count:"exact",head:true}).eq("status","pending_confirmation"),
-    supabase.from("complaints").select("*",{count:"exact",head:true}).eq("room_access_permission","no").not("status","in",'("rejected","closed")'),
     supabase.from("appointments")
       .select("id,job_id,appointment_date,appointment_time,attended_at,no_show_remarks,attendee:profiles!appointments_attended_by_fkey(full_name),job:maintenance_jobs!appointments_job_id_fkey(id,job_no,status,room_no,block:blocks!block_id(code))")
       .eq("status","no_show")
@@ -39,7 +38,7 @@ export default async function AdminPage() {
   for (const row of statusRows ?? []) if (row.status in jobs) jobs[row.status as keyof typeof jobs]++;
   const stock = (inventory ?? []).reduce((summary, item) => { const balance = Number(item.balance_qty); const reorder = Number(item.reorder_level); if (balance <= 0) summary.outOfStock++; else if (balance <= reorder) summary.nearReorder++; return summary; }, { outOfStock: 0, nearReorder: 0 });
   const data: AdminDashboardData = {
-    kpis: { tenantNotAvailable: tenantNoShows.length, newComplaints: Number(counts?.new_complaints ?? 0), todayJobs: Number(counts?.today_tasks ?? 0), inProgress: jobs.in_progress, pendingMaterial: jobs.pending_material, underMonitoring: jobs.under_monitoring, completedToday: Number(counts?.completed_today ?? 0),todayAppointments:todayAppointments||0,pendingAppointments:pendingAppointments||0,needAppointments:needAppointments||0 },
+    kpis: { tenantNotAvailable: tenantNoShows.length, newComplaints: Number(counts?.new_complaints ?? 0), todayJobs: Number(counts?.today_tasks ?? 0), inProgress: jobs.in_progress, pendingMaterial: jobs.pending_material, underMonitoring: jobs.under_monitoring, completedToday: Number(counts?.completed_today ?? 0),todayAppointments:todayAppointments||0,pendingAppointments:pendingAppointments||0 },
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
   return <AppShell profile={profile} title="Dashboard"><Dashboard kind="admin" name={profile.full_name} data={data}/></AppShell>;
