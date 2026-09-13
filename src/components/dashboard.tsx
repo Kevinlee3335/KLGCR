@@ -12,7 +12,7 @@ type TenantNoShow = { id: string; job_id: string; appointment_date: string; appo
 type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number>;
 
 export type AdminDashboardData = {
-  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number;needAppointments?:number };
+  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number };
   tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
@@ -31,8 +31,8 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", hour12: false }).format(now));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const kpis = [
-    { title: "Tenant Not Available", value: data.kpis.tenantNotAvailable, subtitle: "Needs rescheduling", href: "/admin/notifications#tenant-not-available", icon: UserX, tone: "danger" },
     { title: "New Complaints", value: data.kpis.newComplaints, subtitle: "Needs triage", href: "/admin/complaints?status=new", icon: ShieldAlert, tone: "blue" },
+    { title: "Tenant Not Available", value: data.kpis.tenantNotAvailable, subtitle: "Needs rescheduling", href: "/admin/notifications#tenant-not-available", icon: UserX, tone: "danger" },
     { title: "Today's Jobs", value: data.kpis.todayJobs, subtitle: "Assigned today", href: "/admin/jobs?scope=today-active", icon: ClipboardList, tone: "gold" },
     { title: "In Progress", value: data.kpis.inProgress, subtitle: "Active now", href: "/admin/jobs?status=in_progress", icon: PlayCircle, tone: "violet" },
     { title: "Pending Material", value: data.kpis.pendingMaterial, subtitle: "Awaiting material", href: "/admin/jobs?status=pending_material", icon: PackageOpen, tone: "amber" },
@@ -40,7 +40,6 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
     { title: "Completed Today", value: data.kpis.completedToday, subtitle: "Completed today", href: "/admin/jobs?scope=completed-today", icon: CheckCircle2, tone: "green" },
     { title: "Today's Appointments", value: data.kpis.todayAppointments, subtitle: "Scheduled visits", href: "/admin/daily-tasks", icon: Clock3, tone: "gold" },
     { title: "Pending Confirmation", value: data.kpis.pendingAppointments, subtitle: "Awaiting confirmation", href: "/admin/reports?appointmentStatus=pending_confirmation", icon: ClipboardCheck, tone: "amber" },
-    { title: "Need Appointment", value: data.kpis.needAppointments, subtitle: "Resident requested", href: "/admin/complaints?needAppointment=1", icon: ShieldAlert, tone: "violet" },
   ];
   const quickActions = [
     ["Review Complaints", "/admin/complaints", ShieldAlert], ["Schedule Tasks", "/admin/daily-tasks", ClipboardCheck],
