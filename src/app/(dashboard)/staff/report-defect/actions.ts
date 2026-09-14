@@ -2,21 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
-const schema = z.object({
-  locationType: z.enum(["room", "common_area"]),
-  blockId: z.coerce.number().int().positive(),
-  room: z.string().trim().optional(),
-  commonArea: z.string().trim().optional(),
-  priority: z.enum(["low", "normal", "high", "urgent"]),
-});
-
-function defectsFrom(data: FormData) {
+function parseDefects(value: FormDataEntryValue | null): string[] {
   try {
-    const parsed = JSON.parse(String(data.get("defectsJson") || "[]"));
+    const parsed: unknown = JSON.parse(String(value || "[]"));
     return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
   } catch {
     return [];
@@ -25,34 +16,34 @@ function defectsFrom(data: FormData) {
 
 export async function createCleanerDefectReport(data: FormData) {
   const profile = await requireRole(["cleaner"]);
-  const parsed = schema.safeParse({
-    locationType: data.get("locationType"),
-    blockId: data.get("blockId"),
-    room: data.get("room"),
-    commonArea: data.get("commonArea"),
-    priority: data.get("priority"),
-  });
-  const errorPath = (message: string) => redirect(`/staff/report-defect?error=${encodeURIComponent(message)}`);
-  if (!parsed.success) errorPath(parsed.error.issues[0]?.message || "Complete the report fields.");
-  const defects = defectsFrom(data);
-  if (!defects.length) errorPath("Add at least one defect.");
+  const locationType = String(data.get("locationType") || "");
+  const blockId = Number(data.get("blockId"));
+  const room = String(data.get("room") || "").trim();
+  const commonArea = String(data.get("commonArea") || "").trim();
+  const priority = String(data.get("priority") || "normal");
+  const allowedPriorities = ["low", "normal", "high", "urgent"];
+  const fail = (message: string): never => redirect(`/staff/report-defect?error=${encodeURIComponent(message)}`);
 
-  const location = parsed.data.locationType === "room"
-    ? parsed.data.room || ""
-    : parsed.data.commonArea || "";
-  if (!location) errorPath(parsed.data.locationType === "room" ? "Room is required." : "Choose the common area.");
+  if ((locationType !== "room" && locationType !== "common_area") || !Number.isInteger(blockId) || blockId < 1) fail("Choose the location and block.");
+  if (!allowedPriorities.includes(priority)) fail("Choose a valid priority.");
+
+  const location = locationType === "room" ? room : commonArea;
+  if (!location) fail(locationType === "room" ? "Room is required." : "Choose the common area.");
+
+  const defects = parseDefects(data.get("defectsJson"));
+  if (!defects.length) fail("Add at least one defect.");
 
   const db = await createClient();
   const { error } = await db.from("complaints").insert({
     source: "cleaning",
-    block_id: parsed.data.blockId,
+    block_id: blockId,
     room_no: location,
     complainant_name: profile.full_name,
-    category: parsed.data.locationType === "room" ? "Cleaner Room Report" : "Cleaner Common Area Report",
+    category: locationType === "room" ? "Cleaner Room Report" : "Cleaner Common Area Report",
     description: defects.map((defect, index) => `${index + 1}. ${defect}`).join("\n"),
-    priority: parsed.data.priority,
+    priority,
   });
-  if (error) errorPath(error.message);
+  if (error) fail(error.message);
 
   revalidatePath("/admin");
   revalidatePath("/admin/complaints");
