@@ -55,6 +55,53 @@ export async function createCheckout(data: FormData) {
   revalidatePath("/admin/checkouts");
   go(checkoutRoom.id);
 }
-export async function completeInspection(id:string,data:FormData){const actor=await requireRole(["admin"]);const db=await createClient();const notes=String(data.get("notes")||"").trim();const extra=String(data.get("newDefect")||"").trim();const assignee=String(data.get("assignee")||"");if(!assignee)go(id,"Assign Abdullah or Faiz before sending for rectification.");if(extra){const x=await db.from("checkout_defects").insert({checkout_room_id:id,description:extra,source:"second_inspection",created_by:actor.id});if(x.error)go(id,x.error.message);}try{for(const f of data.getAll("photos"))if(f instanceof File)await upload(db,id,actor.id,f,"inspection");}catch(e){go(id,e instanceof Error?e.message:"Photo upload failed");}const u=await db.from("checkout_rooms").update({inspection_notes:notes||null,assigned_to:assignee,status:"rectification"}).eq("id",id).eq("status","second_inspection");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"inspection_completed",notes,"second_inspection","rectification");revalidatePath(`/admin/checkouts/${id}`);go(id);}
+export async function completeInspection(id: string, data: FormData) {
+  const actor = await requireRole(["admin"]);
+  const db = await createClient();
+  const notes = String(data.get("notes") || "").trim();
+  const assignee = String(data.get("assignee") || "");
+  if (!assignee) go(id, "Assign Abdullah or Faiz before sending for rectification.");
+
+  let addedDefects: string[] = [];
+  try {
+    const parsed = JSON.parse(String(data.get("inspectionDefectsJson") || "[]"));
+    if (Array.isArray(parsed)) {
+      addedDefects = parsed
+        .map((value) => typeof value === "string" ? value.trim().slice(0, 500) : "")
+        .filter(Boolean)
+        .slice(0, 30);
+    }
+  } catch {
+    // Ignore an invalid client payload. The existing recorded defects remain intact.
+  }
+
+  if (addedDefects.length) {
+    const insert = await db.from("checkout_defects").insert(
+      addedDefects.map((description) => ({
+        checkout_room_id: id,
+        description,
+        source: "second_inspection",
+        created_by: actor.id,
+      })),
+    );
+    if (insert.error) go(id, insert.error.message);
+  }
+
+  try {
+    for (const file of data.getAll("photos")) if (file instanceof File) await upload(db, id, actor.id, file, "inspection");
+  } catch (error) {
+    go(id, error instanceof Error ? error.message : "Photo upload failed");
+  }
+
+  const update = await db.from("checkout_rooms")
+    .update({ inspection_notes: notes || null, assigned_to: assignee, status: "rectification" })
+    .eq("id", id)
+    .eq("status", "second_inspection");
+  if (update.error) go(id, update.error.message);
+
+  await history(db, id, actor.id, "inspection_completed", notes, "second_inspection", "rectification");
+  revalidatePath(`/admin/checkouts/${id}`);
+  go(id);
+}
 export async function handToCleaning(id:string,data:FormData){const actor=await requireRole(["admin"]);const cleaner=String(data.get("cleaner")||"");if(!cleaner)go(id,"Select a Cleaner / Housekeeping user.");const db=await createClient();const u=await db.from("checkout_rooms").update({cleaner_id:cleaner,status:"cleaning"}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"handed_to_housekeeping",undefined,"verification","cleaning");revalidatePath(`/admin/checkouts/${id}`);go(id);}
 export async function markReady(id:string,data:FormData){const actor=await requireRole(["admin"]);const notes=String(data.get("notes")||"");const db=await createClient();const u=await db.from("checkout_rooms").update({status:"ready_for_occupancy",ready_at:new Date().toISOString()}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"room_verified_ready",notes,"verification","ready_for_occupancy");revalidatePath(`/admin/checkouts/${id}`);go(id);}
