@@ -70,3 +70,28 @@
 .checkout-defect-added p{margin:0}
 @media (max-width:900px){.checkout-defect-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.checkout-defect-fields{grid-template-columns:1fr}.checkout-defect-builder>.button{width:100%}}
+
+
+/* Cleaner batch room turnover */
+.success{padding:10px 12px;border-radius:9px;background:#e7f5eb;color:#17603d;font-size:.85rem}
+.cleaner-queue{display:grid;gap:18px}
+.cleaner-queue-toolbar{display:grid;grid-template-columns:minmax(220px,1.7fr) minmax(150px,.8fr) minmax(180px,.9fr);gap:12px;padding-bottom:17px;border-bottom:1px solid var(--line)}
+.cleaner-queue-toolbar label{display:grid;gap:6px;font-size:.74rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.cleaner-queue-toolbar input,.cleaner-queue-toolbar select{min-height:45px;margin:0}
+.cleaner-bulk-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 15px;border:1px solid #dfd3af;border-radius:12px;background:#fdf8e9}
+.select-all{display:flex;align-items:center;gap:9px;font-size:.82rem;font-weight:800}
+.select-all input,.room-select input{width:18px;height:18px;accent-color:var(--gold-dark)}
+.cleaner-room-cards{display:grid!important;gap:12px}
+.cleaner-room-card{position:relative;padding:0;overflow:hidden}
+.cleaner-room-link{display:block;padding:20px 22px 20px 56px}
+.room-select{position:absolute;z-index:2;top:25px;left:20px}
+.cleaner-room-card h3{margin:13px 0 6px}
+.cleaner-room-card p{margin:0;color:var(--muted);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cleaner-detail-actions{display:grid;gap:20px}
+.cleaner-report-form{display:grid;gap:15px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.cleaner-report-form h4{margin:0 0 4px;font-size:1rem}
+.cleaner-report-form .checkout-defect-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cleaner-complete-single{display:grid;gap:11px}
+.cleaner-complete-single p{margin:0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:760px){.cleaner-queue-toolbar{grid-template-columns:1fr}.cleaner-bulk-bar{align-items:stretch;flex-direction:column}.cleaner-bulk-bar .button{width:100%}.cleaner-report-form .checkout-defect-fields{grid-template-columns:1fr}.cleaner-room-link{padding-left:54px}}
