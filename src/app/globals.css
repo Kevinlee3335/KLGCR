@@ -113,3 +113,13 @@
 .cleaner-report-builder p{margin:0}
 @media(max-width:900px){.cleaner-dashboard-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.cleaner-dashboard-rooms{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.cleaner-dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.cleaner-dashboard-rooms{grid-template-columns:1fr}}
+
+/* Cleaner complaint: match the main form input sizing exactly. */
+.cleaner-report-builder .checkout-defect-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.cleaner-report-builder .checkout-defect-fields label{gap:8px;color:var(--ink);font-size:1rem;font-weight:400;letter-spacing:0;text-transform:none}
+.cleaner-report-builder .checkout-defect-fields label span{font:inherit}
+.cleaner-report-builder .checkout-defect-fields select,
+.cleaner-report-builder .checkout-defect-fields input{width:100%;min-height:60px;padding:0 20px;border:1px solid #d9d5ca;border-radius:12px;background:#fff;color:var(--ink);font-size:1rem;font-weight:400}
+.cleaner-report-builder .checkout-defect-fields label:last-child{grid-column:1/-1}
+.cleaner-report-builder .checkout-defect-builder>.button{min-height:52px;padding:0 22px}
+@media(max-width:560px){.cleaner-report-builder .checkout-defect-fields{grid-template-columns:1fr}.cleaner-report-builder .checkout-defect-fields label:last-child{grid-column:auto}}
