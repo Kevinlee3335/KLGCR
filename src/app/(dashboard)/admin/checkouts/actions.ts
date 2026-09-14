@@ -105,3 +105,16 @@ export async function completeInspection(id: string, data: FormData) {
 }
 export async function handToCleaning(id:string,data:FormData){const actor=await requireRole(["admin"]);const cleaner=String(data.get("cleaner")||"");if(!cleaner)go(id,"Select a Cleaner / Housekeeping user.");const db=await createClient();const u=await db.from("checkout_rooms").update({cleaner_id:cleaner,status:"cleaning"}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"handed_to_housekeeping",undefined,"verification","cleaning");revalidatePath(`/admin/checkouts/${id}`);go(id);}
 export async function markReady(id:string,data:FormData){const actor=await requireRole(["admin"]);const notes=String(data.get("notes")||"");const db=await createClient();const u=await db.from("checkout_rooms").update({status:"ready_for_occupancy",ready_at:new Date().toISOString()}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"room_verified_ready",notes,"verification","ready_for_occupancy");revalidatePath(`/admin/checkouts/${id}`);go(id);}
+
+export async function assignCleanerReportedDefect(id:string,data:FormData){
+  const actor=await requireRole(["admin"]);
+  const assignee=String(data.get("assignee")||"");
+  if(!assignee)go(id,"Choose Abdullah or Faiz to rectify the Cleaner report.");
+  const db=await createClient();
+  const {count,error:countError}=await db.from("checkout_defects").select("id",{count:"exact",head:true}).eq("checkout_room_id",id).eq("source","cleaner").eq("status","open");
+  if(countError||!count)go(id,countError?.message||"No open Cleaner defect is available to assign.");
+  const update=await db.from("checkout_rooms").update({assigned_to:assignee,cleaner_id:null,status:"rectification"}).eq("id",id).eq("status","cleaning");
+  if(update.error)go(id,update.error.message);
+  await history(db,id,actor.id,"cleaner_report_assigned_to_maintenance",`${count} Cleaner-reported defect${count===1?"":"s"} assigned for rectification.`,"cleaning","rectification");
+  revalidatePath("/admin/checkouts");revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/staff/checkouts");go(id);
+}
