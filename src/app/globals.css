@@ -56,3 +56,17 @@
 .defect-status-form .button{white-space:nowrap}
 @media (max-width:900px){.defect-row-actionable{grid-template-columns:1fr!important}.defect-status-form{grid-template-columns:1fr 1fr auto;margin-top:10px}}
 @media (max-width:560px){.defect-status-form{grid-template-columns:1fr}.defect-status-form .button{width:100%}}
+
+/* Check-out room defect builder */
+.checkout-defect-builder{display:grid;gap:14px}
+.checkout-defect-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.checkout-defect-fields label{display:grid;gap:6px;font-size:.78rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.checkout-defect-fields select,.checkout-defect-fields input{min-width:0;margin:0}
+.checkout-defect-builder>.button{justify-self:start}
+.checkout-defect-added{display:grid;gap:8px}
+.checkout-defect-added>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.checkout-defect-added span{font-weight:700}
+.checkout-defect-added button{border:0;background:transparent;color:#9c3d32;font:inherit;font-weight:800;cursor:pointer}
+.checkout-defect-added p{margin:0}
+@media (max-width:900px){.checkout-defect-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.checkout-defect-fields{grid-template-columns:1fr}.checkout-defect-builder>.button{width:100%}}
