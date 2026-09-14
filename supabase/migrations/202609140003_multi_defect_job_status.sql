@@ -10,7 +10,7 @@ begin
   into v_total,v_completed,v_pending,v_monitoring from public.complaint_defects where complaint_id=v_complaint;
   select id into v_job from public.maintenance_jobs where complaint_id=v_complaint;
   if v_job is null or v_total<=1 then return coalesce(new,old); end if;
-  update public.maintenance_jobs set status=case when v_completed=v_total then 'completed'::public.job_status when v_pending>0 then 'pending_material'::public.job_status when v_monitoring>0 then 'under_monitoring'::public.job_status else 'in_progress'::public.job_status end,
+  update public.maintenance_jobs set status=case when v_completed=v_total then 'completed' when v_pending>0 then 'pending_material' when v_monitoring>0 then 'under_monitoring' else 'in_progress' end,
     completed_at=case when v_completed=v_total then coalesce(completed_at,now()) else null end
   where id=v_job;
   return coalesce(new,old);
