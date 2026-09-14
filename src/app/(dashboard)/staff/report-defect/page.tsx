@@ -10,11 +10,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   const { data: blocks } = await db.from("blocks").select("id,code").eq("is_active", true).order("code");
 
   return (
-    <AppShell profile={profile} title="Report Defect">
+    <AppShell profile={profile} title="New Complaint">
       <div className="section-head">
         <div>
           <p className="eyebrow">Daily cleaning report</p>
-          <h2>Report a defect</h2>
+          <h2>New complaint</h2>
           <p className="subtle">Report room or common-area problems found during daily cleaning. It goes directly to Admin&apos;s New Complaints.</p>
         </div>
       </div>
