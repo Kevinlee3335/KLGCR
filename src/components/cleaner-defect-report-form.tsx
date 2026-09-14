@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { CheckoutDefectBuilder } from "@/components/checkout-defect-builder";
+import { createCleanerDefectReport } from "@/app/(dashboard)/staff/report-defect/actions";
 
 export function CleanerDefectReportForm({ blocks }: { blocks: { id: number; code: string }[] }) {
   const [locationType, setLocationType] = useState<"room" | "common_area">("room");
   const [commonArea, setCommonArea] = useState("");
 
   return (
-    <form action="/staff/report-defect" method="post" className="panel cleaner-report-page-form">
+    <form action={createCleanerDefectReport} className="panel cleaner-report-page-form">
       <div className="form-grid">
         <label className="field"><span>Location type *</span>
           <select name="locationType" value={locationType} onChange={(event) => setLocationType(event.target.value as "room" | "common_area")}>
