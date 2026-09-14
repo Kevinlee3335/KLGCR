@@ -15,6 +15,8 @@ export async function assignComplaint(id:string,data:FormData){
   await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
   if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
   const s=await createClient();
+  const {count:defectCount,error:defectError}=await s.from("complaint_defects").select("id",{count:"exact",head:true}).eq("complaint_id",id).eq("status","confirmed");
+  if(defectError||!defectCount)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(defectError?.message||"Add at least one Admin Confirmed Defect before assigning maintenance.")}`);
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
   const appointment=validateComplaintAppointmentSelection(complaint.source,complaint.room_access_permission,data.get("appointmentDate"),data.get("appointmentTime"));
