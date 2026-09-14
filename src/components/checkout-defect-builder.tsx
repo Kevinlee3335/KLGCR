@@ -23,12 +23,14 @@ export function CheckoutDefectBuilder({
   allowedGroups = ["Room", "Bathroom", "Common Area"] as Area[],
   fixedCommonArea = "",
   groupLabel = "Area",
+  hideGroupSelector = false,
 }: {
   fieldName?: string;
   emptyMessage?: string;
   allowedGroups?: Area[];
   fixedCommonArea?: string;
   groupLabel?: string;
+  hideGroupSelector?: boolean;
 }) {
   const [draft, setDraft] = useState<DefectDraft>(initialDraft);
   const [defects, setDefects] = useState<string[]>([]);
@@ -41,6 +43,7 @@ export function CheckoutDefectBuilder({
   }, [allowedGroups, draft.group]);
 
   const selectedItem = items.find((entry) => entry.item === draft.item);
+  const itemOptions = hideGroupSelector ? defectCatalog.filter((entry) => allowedGroups.includes(entry.group)) : items;
   const isFixedCommonArea = draft.group === "Common Area" && Boolean(fixedCommonArea);
 
   function resetForArea(group: Area) {
@@ -61,7 +64,7 @@ export function CheckoutDefectBuilder({
     <div className="checkout-defect-builder">
       <input type="hidden" name={fieldName} value={JSON.stringify(defects)} />
       <div className="checkout-defect-fields">
-        {allowedGroups.length > 1 && (
+        {allowedGroups.length > 1 && !hideGroupSelector && (
           <label><span>{groupLabel}</span>
             <select value={draft.group} onChange={(event) => resetForArea(event.target.value as Area)}>
               {allowedGroups.map((group) => <option key={group} value={group}>{group}</option>)}
@@ -78,8 +81,16 @@ export function CheckoutDefectBuilder({
         )}
 
         <label><span>Item</span>
-          <select value={draft.item} onChange={(event) => setDraft({ ...draft, item: event.target.value, issue: "" })}>
-            <option value="">Select item</option>{items.map((item) => <option key={item.item} value={item.item}>{item.item}</option>)}
+          <select value={hideGroupSelector ? (draft.item ? `${draft.group}|${draft.item}` : "") : draft.item} onChange={(event) => {
+            const value = event.target.value;
+            if (hideGroupSelector) {
+              const [group, item] = value.split("|");
+              setDraft({ ...draft, group: group as Area, item, issue: "" });
+            } else {
+              setDraft({ ...draft, item: value, issue: "" });
+            }
+          }}>
+            <option value="">Select item</option>{itemOptions.map((item) => <option key={`${item.group}-${item.item}`} value={hideGroupSelector ? `${item.group}|${item.item}` : item.item}>{hideGroupSelector ? `${item.group} · ${item.item}` : item.item}</option>)}
           </select>
         </label>
 
