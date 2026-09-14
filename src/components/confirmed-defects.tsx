@@ -14,6 +14,5 @@ export function ConfirmedDefects({complaintId,defects}:{complaintId:string;defec
  <label className="field"><span>Issue *</span><select name="issue" value={issue} onChange={e=>setIssue(e.target.value)}>{selected.issues.map(x=><option key={x}>{x}</option>)}</select></label>
  {issue==="Other"&&<label className="field field-wide"><span>Other / Specify issue *</span><input name="otherIssue" required placeholder="Describe the issue"/></label>}
  <label className="field"><span>Exact Location / Detailed Location</span><input name="exactLocation" placeholder="e.g. Near window / above study table"/></label>
- <label className="field field-wide"><span>Admin Note / Instruction to Maintenance <em className="subtle">(Optional)</em></span><textarea name="instruction" rows={3} placeholder="e.g. Door closer arm is loose. Tighten and test the door closing."/></label>
  <div className="field-wide"><button className="button">Add confirmed defect</button></div></form></section>;
 }
