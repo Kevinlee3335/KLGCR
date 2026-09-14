@@ -42,7 +42,7 @@ export function CleanerDefectReportForm({ blocks }: { blocks: { id: number; code
           emptyMessage="Add at least one defect before sending this report."
           allowedGroups={locationType === "room" ? ["Room", "Bathroom"] : ["Common Area"]}
           fixedCommonArea={locationType === "common_area" ? commonArea : ""}
-          groupLabel="Part of room"
+          hideGroupSelector={locationType === "room"}
         />
       </div>
       <button className="button">Send report to Admin</button>
