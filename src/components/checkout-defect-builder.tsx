@@ -22,7 +22,7 @@ const initialDraft: DefectDraft = {
   commonArea: "",
 };
 
-export function CheckoutDefectBuilder() {
+export function CheckoutDefectBuilder({ fieldName = "defectsJson", emptyMessage = "{emptyMessage}" }: { fieldName?: string; emptyMessage?: string }) {
   const [draft, setDraft] = useState<DefectDraft>(initialDraft);
   const [defects, setDefects] = useState<string[]>([]);
   const items = useMemo(
@@ -50,7 +50,7 @@ export function CheckoutDefectBuilder() {
 
   return (
     <div className="checkout-defect-builder">
-      <input type="hidden" name="defectsJson" value={JSON.stringify(defects)} />
+      <input type="hidden" name={fieldName} value={JSON.stringify(defects)} />
       <div className="checkout-defect-fields">
         <label>
           <span>Area</span>
