@@ -75,3 +75,13 @@ export async function markTenantNotAvailable(id: string, data: FormData) {
   revalidatePath(`/admin/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=tenant-not-available`);
 }
+
+export async function updateDefectProgress(jobId:string,defectId:string,data:FormData){
+  const parsed=z.object({status:z.enum(["in_progress","pending_material","completed"]),note:z.string().trim().max(1000).optional()}).safeParse({status:data.get("status"),note:data.get("note")});
+  if(!parsed.success)redirect(`/staff/jobs/${jobId}?error=Invalid%20defect%20update`);
+  await requireRole(["maintenance_staff"]);const supabase=await createClient();
+  const {error}=await supabase.rpc("update_assigned_complaint_defect",{p_defect_id:defectId,p_status:parsed.data.status,p_completion_note:parsed.data.note||null});
+  if(error)redirect(`/staff/jobs/${jobId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath(`/staff/jobs/${jobId}`);revalidatePath("/staff");revalidatePath("/staff/tasks");
+  redirect(`/staff/jobs/${jobId}?success=defect-updated`);
+}
