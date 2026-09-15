@@ -118,3 +118,47 @@ export async function assignCleanerReportedDefect(id:string,data:FormData){
   await history(db,id,actor.id,"cleaner_report_assigned_to_maintenance",`${count} Cleaner-reported defect${count===1?"":"s"} assigned for rectification.`,"cleaning","rectification");
   revalidatePath("/admin/checkouts");revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/staff/checkouts");go(id);
 }
+
+
+type BatchRow={block:string;room:string;area?:string;item?:string;issue?:string;exactLocation?:string};
+const batchDefect=(row:BatchRow)=>{const item=String(row.item||"").trim(),issue=String(row.issue||"").trim();if(!item&&!issue)return "";const area=String(row.area||"Room").trim()||"Room";const location=String(row.exactLocation||"").trim();return `${area} · ${item||"Reported defect"}${issue?` — ${issue}`:""}${location?` · ${location}`:""}`;};
+
+export async function createCheckoutBatch(data:FormData){
+  const actor=await requireRole(["admin"]);
+  const db=await createClient();
+  let rows:BatchRow[]=[];
+  try{const parsed=JSON.parse(String(data.get("batchRowsJson")||"[]"));if(Array.isArray(parsed))rows=parsed.slice(0,3000) as BatchRow[];}catch{}
+  const grouped=new Map<string,{block:string;room:string;defects:string[]}>();
+  for(const row of rows){
+    const block=String(row.block||"").trim().replace(/^block\s*/i,"").toUpperCase();
+    const room=String(row.room||"").trim().toUpperCase();
+    if(!["A","B","C","D"].includes(block)||!room)continue;
+    const key=`${block}|${room}`;const current=grouped.get(key)||{block,room,defects:[]};
+    const defect=batchDefect(row);if(defect)current.defects.push(defect);grouped.set(key,current);
+  }
+  const rooms=[...grouped.values()];
+  if(!rooms.length)redirect("/admin/checkouts?error=Paste+at+least+one+valid+Block+and+Room+row");
+  if(rooms.length>1000)redirect("/admin/checkouts?error=One+batch+is+limited+to+1%2C000+rooms");
+  const {data:blocks,error:blockError}=await db.from("blocks").select("id,code");
+  if(blockError)redirect(`/admin/checkouts?error=${encodeURIComponent(blockError.message)}`);
+  const blockMap=new Map((blocks||[]).map((block)=>[String(block.code).toUpperCase(),Number(block.id)]));
+  const validRooms=rooms.filter((room)=>blockMap.has(room.block));
+  if(!validRooms.length)redirect("/admin/checkouts?error=No+valid+blocks+were+found");
+  const blockIds=[...new Set(validRooms.map((room)=>blockMap.get(room.block)!))];
+  const roomNos=[...new Set(validRooms.map((room)=>room.room))];
+  const {data:existing,error:existingError}=await db.from("checkout_rooms").select("block_id,room_no").in("block_id",blockIds).in("room_no",roomNos);
+  if(existingError)redirect(`/admin/checkouts?error=${encodeURIComponent(existingError.message)}`);
+  const existingKeys=new Set((existing||[]).map((room)=>`${room.block_id}|${String(room.room_no).toUpperCase()}`));
+  const newRooms=validRooms.filter((room)=>!existingKeys.has(`${blockMap.get(room.block)}|${room.room}`));
+  if(!newRooms.length)redirect(`/admin/checkouts?error=${encodeURIComponent("All pasted rooms already have a check-out record.")}`);
+  const {data:created,error:createError}=await db.from("checkout_rooms").insert(newRooms.map((room)=>({block_id:blockMap.get(room.block)!,room_no:room.room,utmspace_defects:room.defects.length?room.defects.join("\n"):"No reported defects",created_by:actor.id}))).select("id,block_id,room_no");
+  if(createError||!created?.length)redirect(`/admin/checkouts?error=${encodeURIComponent(createError?.message||"Unable to create check-out batch")}`);
+  const roomIdByKey=new Map(created.map((room)=>[`${room.block_id}|${String(room.room_no).toUpperCase()}`,room.id]));
+  const defects=newRooms.flatMap((room)=>room.defects.map((description)=>({checkout_room_id:roomIdByKey.get(`${blockMap.get(room.block)}|${room.room}`)!,description,source:"utmspace",created_by:actor.id})));
+  if(defects.length){const {error}=await db.from("checkout_defects").insert(defects);if(error)redirect(`/admin/checkouts?error=${encodeURIComponent("Rooms were created, but some defects could not be saved: "+error.message)}`);}
+  const historyRows=created.map((room)=>({checkout_room_id:room.id,actor_id:actor.id,action:"batch_record_created",notes:"Created through batch check-out import.",to_status:"second_inspection"}));
+  const {error:historyError}=await db.from("checkout_history").insert(historyRows);
+  if(historyError)console.error("batch checkout history failed",historyError.message);
+  revalidatePath("/admin/checkouts");revalidatePath("/admin/analysis");
+  redirect(`/admin/checkouts?success=${created.length}&skipped=${validRooms.length-newRooms.length}`);
+}
