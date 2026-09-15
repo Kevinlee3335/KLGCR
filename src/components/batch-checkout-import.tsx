@@ -10,11 +10,10 @@ function normalize(value:string){return value.trim().replace(/^block\s*/i,"").to
 function header(value:unknown){return String(value??"").trim().toLowerCase().replace(/[ _-]/g,"");}
 function asDefect(entry:Entry){if(!entry.item&&!entry.issue)return "";const parts=[entry.area||"Room",entry.item].filter(Boolean).join(" · ");const issue=entry.issue?" — "+entry.issue:"";const location=entry.exactLocation?" · "+entry.exactLocation:"";return (parts||"Reported defect")+issue+location;}
 function entriesFromRows(rows:unknown[][]){
-  const first=rows.findIndex((row)=>row.some((cell)=>String(cell??"").trim()));
-  if(first<0)return {entries:[] as Entry[],issues:[] as RowIssue[]};
+  const first=rows.findIndex((row)=>{const cells=row.map(header);return cells.includes("block")&&cells.includes("room");});
+  if(first<0)return {entries:[] as Entry[],issues:[{line:0,message:"Excel header must include Block and Room."}]};
   const headers=rows[first].map(header);
   const blockIndex=headers.indexOf("block"),roomIndex=headers.indexOf("room");
-  if(blockIndex<0||roomIndex<0)return {entries:[] as Entry[],issues:[{line:first+1,message:"Excel header must include Block and Room."}]};
   const at=(row:unknown[],name:string)=>{const index=headers.indexOf(name);return index<0?"":String(row[index]??"").trim();};
   const exactIndex=headers.findIndex((value)=>value==="exactlocation"||value==="location");
   const entries:Entry[]=[];const issues:RowIssue[]=[];
