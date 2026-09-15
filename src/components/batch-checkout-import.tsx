@@ -20,6 +20,7 @@ function entriesFromRows(rows:unknown[][]){
   rows.slice(first+1).forEach((row,offset)=>{
     if(!row.some((cell)=>String(cell??"").trim()))return;
     const block=normalize(String(row[blockIndex]??"")),room=String(row[roomIndex]??"").trim().toUpperCase(),line=first+offset+2;
+    if(!block&&!room)return;
     if(!block||!room){issues.push({line,message:"Block and Room are required."});return;}
     if(!["A","B","C","D"].includes(block)){issues.push({line,message:"Block must be A, B, C, or D."});return;}
     entries.push({block,room,area:at(row,"area"),item:at(row,"item"),issue:at(row,"issue"),exactLocation:exactIndex<0?"":String(row[exactIndex]??"").trim()});
