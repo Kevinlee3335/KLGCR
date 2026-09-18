@@ -4,6 +4,23 @@ import { normaliseInventorySheetRow } from "@/lib/inventory-google-sync";
 
 export const runtime = "nodejs";
 
+function syncDiagnostics(url: string, serviceKey: string) {
+  let supabaseProject = "unknown";
+  try { supabaseProject = new URL(url).hostname.split(".")[0] || "unknown"; } catch {}
+
+  let keyKind = "unknown";
+  let legacyKeyProject: string | null = null;
+  if (serviceKey.startsWith("sb_secret_")) keyKind = "secret";
+  else if (serviceKey.startsWith("eyJ")) {
+    keyKind = "legacy-jwt";
+    try {
+      const payload = JSON.parse(Buffer.from(serviceKey.split(".")[1] || "", "base64url").toString("utf8"));
+      legacyKeyProject = typeof payload.ref === "string" ? payload.ref : null;
+    } catch {}
+  } else if (serviceKey.startsWith("sb_publishable_")) keyKind = "publishable (wrong)";
+  return { supabaseProject, keyKind, legacyKeyProject };
+}
+
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-klgcr-inventory-secret");
   if (!process.env.GOOGLE_INVENTORY_SYNC_SECRET || secret !== process.env.GOOGLE_INVENTORY_SYNC_SECRET) {
@@ -21,14 +38,17 @@ export async function POST(request: NextRequest) {
     movement_category: item.movementCategory, balance_qty: item.balanceQty,
     reorder_level: item.reorderLevel, unit: item.unit, is_active: true,
   }));
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
     return NextResponse.json({ error: "Inventory sync is not configured" }, { status: 500 });
   }
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
   const { error } = await supabase.from("inventory_items").upsert(rows, { onConflict: "item_code" });
   if (error) {
-    console.error("Google inventory import failed", error);
-    return NextResponse.json({ error: "Inventory import failed", message: error.message }, { status: 500 });
+    const diagnostics = syncDiagnostics(url, serviceKey);
+    console.error("Google inventory import failed", { error, diagnostics });
+    return NextResponse.json({ error: "Inventory import failed", message: error.message, diagnostics }, { status: 500 });
   }
   return NextResponse.json({ ok: true, imported: rows.length });
 }
