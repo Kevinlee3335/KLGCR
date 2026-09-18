@@ -5,7 +5,14 @@
 const KLGCR_INVENTORY_CONFIG = {
   appSyncUrl: "https://YOUR-LIVE-URL/api/google-inventory/sync",
   secret: "PASTE_THE_SAME_SECRET_AS_VERCEL",
-  sourceSheet: "MASTERLIST M.STORE - UPDATED 2026",
+  // Do not use the hidden combined master page. These are the five live source tabs.
+  sourceSheets: [
+    "BUILDING - MASTERLIST M.STORE",
+    "ELECTRICAL - MASTERLIST M.STORE",
+    "CHEMICAL - MASTERLIST M.STORE",
+    "PIPPING - MASTERLIST M.STORE",
+    "PAINTING - MASTERLIST M.STORE ",
+  ],
 };
 
 function onOpen() {
@@ -17,18 +24,20 @@ function onOpen() {
 // Create this as an installable On edit trigger, not a simple trigger.
 function syncEditedInventoryRow(event) {
   const sheet = event && event.range && event.range.getSheet();
-  if (!sheet || sheet.getName() !== KLGCR_INVENTORY_CONFIG.sourceSheet) return;
+  if (!sheet || !KLGCR_INVENTORY_CONFIG.sourceSheets.includes(sheet.getName())) return;
   const item = inventoryRowFromSheet_(sheet, event.range.getRow());
   if (item) postToKlgcr_([item]);
 }
 
 function syncAllInventoryToApp() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(KLGCR_INVENTORY_CONFIG.sourceSheet);
-  if (!sheet) throw new Error("Source sheet was not found.");
   const items = [];
-  for (let row = 1; row <= sheet.getLastRow(); row++) {
-    const item = inventoryRowFromSheet_(sheet, row);
-    if (item) items.push(item);
+  for (const name of KLGCR_INVENTORY_CONFIG.sourceSheets) {
+    const sheet = SpreadsheetApp.getActive().getSheetByName(name);
+    if (!sheet) throw new Error(`Source sheet was not found: ${name}`);
+    for (let row = 1; row <= sheet.getLastRow(); row++) {
+      const item = inventoryRowFromSheet_(sheet, row);
+      if (item) items.push(item);
+    }
   }
   for (let start = 0; start < items.length; start += 200) postToKlgcr_(items.slice(start, start + 200));
   SpreadsheetApp.getActive().toast(`${items.length} inventory items sent to KLGCR App.`, "KLGCR Inventory", 6);
@@ -37,16 +46,15 @@ function syncAllInventoryToApp() {
 function doPost(event) {
   const body = JSON.parse(event.postData.contents || "{}");
   if (body.secret !== KLGCR_INVENTORY_CONFIG.secret || body.action !== "update_balance") return json_({ ok: false, error: "Unauthorized" });
-  const sheet = SpreadsheetApp.getActive().getSheetByName(KLGCR_INVENTORY_CONFIG.sourceSheet);
   const item = body.item;
-  if (!sheet || !item || !item.itemCode) return json_({ ok: false, error: "Invalid update" });
-  const row = findItemRow_(sheet, String(item.itemCode));
-  if (!row) return json_({ ok: false, error: "Item code not found" });
-  // Main Store layout: E description, F item code, G stock balance, J reorder level.
-  sheet.getRange(row, 5).setValue(item.description);
-  sheet.getRange(row, 7).setValue(`${item.balanceQty}${item.unit ? " " + item.unit : ""}`);
-  sheet.getRange(row, 10).setValue(item.reorderLevel);
-  return json_({ ok: true, row });
+  if (!item || !item.itemCode) return json_({ ok: false, error: "Invalid update" });
+  const target = findItemSheetRow_(String(item.itemCode));
+  if (!target) return json_({ ok: false, error: "Item code not found" });
+  // Live tab layout: E description, F item code, G stock balance, J minimum stock.
+  target.sheet.getRange(target.row, 5).setValue(item.description);
+  target.sheet.getRange(target.row, 7).setValue(`${item.balanceQty}${item.unit ? " " + item.unit : ""}`);
+  target.sheet.getRange(target.row, 10).setValue(item.reorderLevel);
+  return json_({ ok: true, sheet: target.sheet.getName(), row: target.row });
 }
 
 function inventoryRowFromSheet_(sheet, row) {
@@ -67,6 +75,16 @@ function inventoryRowFromSheet_(sheet, row) {
 function findItemRow_(sheet, itemCode) {
   const codes = sheet.getRange(1, 6, sheet.getLastRow(), 1).getDisplayValues();
   for (let index = 0; index < codes.length; index++) if (String(codes[index][0]).trim().toUpperCase() === itemCode.toUpperCase()) return index + 1;
+  return null;
+}
+
+function findItemSheetRow_(itemCode) {
+  const spreadsheet = SpreadsheetApp.getActive();
+  for (const name of KLGCR_INVENTORY_CONFIG.sourceSheets) {
+    const sheet = spreadsheet.getSheetByName(name);
+    const row = sheet && findItemRow_(sheet, itemCode);
+    if (row) return { sheet, row };
+  }
   return null;
 }
 
