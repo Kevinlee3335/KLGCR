@@ -15,11 +15,9 @@ export function CompletionPhotoPicker(){
   };
   return <div className="completion-photo-picker">
     <div className="completion-photo-heading"><strong>📷 Completion Photo *</strong><span>Take a new photo or choose one from your phone.</span></div>
-    <input ref={cameraRef} className="visually-hidden-file" type="file" accept="image/*" capture="environment" onChange={e=>choose(e.target.files?.[0])}/>
-    <input ref={uploadRef} className="visually-hidden-file" type="file" accept="image/*" onChange={e=>choose(e.target.files?.[0])}/>
-    <input className="visually-hidden-file" type="file" name="completionPhoto" required={!file} tabIndex={-1} aria-hidden="true"/>
+    <input ref={cameraRef} className="visually-hidden-file" type="file" name="completionPhoto" accept="image/*" capture="environment" onChange={e=>choose(e.target.files?.[0])}/>
+    <input ref={uploadRef} className="visually-hidden-file" type="file" name="completionPhoto" accept="image/*" onChange={e=>choose(e.target.files?.[0])}/>
     <div className="completion-photo-actions"><button type="button" className="button secondary" onClick={()=>cameraRef.current?.click()}><Camera size={18}/>Take Photo</button><button type="button" className="button secondary" onClick={()=>uploadRef.current?.click()}><ImagePlus size={18}/>Upload Photo</button></div>
     {preview&&file&&<div className="completion-photo-preview"><img src={preview} alt="Completion preview"/><div><strong>{file.name}</strong><small>{Math.max(1,Math.round(file.size/1024))} KB</small><button type="button" onClick={()=>choose()}><X size={15}/>Remove</button></div></div>}
-    {file&&<input type="hidden" name="completionPhotoSelected" value="yes"/>}
   </div>;
 }
