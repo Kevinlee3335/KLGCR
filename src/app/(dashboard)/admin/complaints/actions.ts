@@ -28,6 +28,21 @@ export async function assignComplaint(id:string,data:FormData){
 }
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
 
+export async function deleteComplaint(id:string){
+  await requireRole(["admin"]);
+  const s=await createClient();
+  const {data:complaint,error:lookupError}=await s.from("complaints").select("id,status").eq("id",id).maybeSingle();
+  if(lookupError||!complaint)redirect("/admin/complaints/"+id+"?error="+encodeURIComponent(lookupError?.message||"Complaint not found."));
+  if(!["new","under_review","rejected"].includes(complaint.status))redirect("/admin/complaints/"+id+"?error=Only%20unassigned%20or%20rejected%20complaints%20can%20be%20deleted.");
+  const {data:removed,error}=await s.from("complaints").delete().eq("id",id).select("id").maybeSingle();
+  if(error)redirect("/admin/complaints/"+id+"?error="+encodeURIComponent(error.message));
+  if(!removed)redirect("/admin/complaints/"+id+"?error=This%20complaint%20has%20a%20maintenance%20job%20and%20cannot%20be%20deleted.");
+  revalidatePath("/admin");
+  revalidatePath("/admin/complaints");
+  revalidatePath("/admin/jobs");
+  redirect("/admin/complaints?deleted=1");
+}
+
 const appointmentSchema=z.object({
   appointmentDate:z.string().date(),appointmentTime:z.enum(appointmentTimeValues),staffId:z.string().uuid(),
   remarks:z.string().trim().max(1000).optional(),
