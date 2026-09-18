@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { pushInventoryItemToGoogle } from "@/lib/inventory-google-sync";
 
 function numberField(value: FormDataEntryValue | null, allowNull = false) {
   const text = String(value || "").trim();
@@ -65,6 +66,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(url, 303);
   }
 
-  if (error) url.searchParams.set("error", error.message); else url.searchParams.set("success", action);
+  if (error) url.searchParams.set("error", error.message);
+  else {
+    const itemId = action === "create" ? null : String(form.get("itemId") || "");
+    const itemCode = action === "create" ? String(form.get("itemCode") || "").trim() : null;
+    const query = itemId ? supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("id", itemId).maybeSingle() : supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("item_code", itemCode!).maybeSingle();
+    const { data: item } = await query;
+    if (item) await pushInventoryItemToGoogle(item);
+    url.searchParams.set("success", action);
+  }
   return NextResponse.redirect(url, 303);
 }
