@@ -64,9 +64,16 @@ function inventoryRowFromSheet_(sheet, row) {
   if (!itemCode || !description || itemCode.toUpperCase() === "ITEM CODE") return null;
   const rawBalance = String(values[6] || "").trim();
   const lower = rawBalance.toLowerCase();
+  const explicitBalance = {
+    B00022: 2, // R410A aircond gas: count 2 units as requested.
+    P00003: 5, // Jotun Jotaplast: count all 5 drums as requested.
+  };
   const match = rawBalance.match(/^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/);
-  const balanceQty = lower.indexOf("out of stock") >= 0 ? 0 : match ? Number(match[1]) : NaN;
-  if (!Number.isFinite(balanceQty) || /\bused\b|\bhalf\b|^n\/a$/.test(lower)) return null;
+  let balanceQty;
+  if (lower.indexOf("out of stock") >= 0 || lower === "n/a") balanceQty = 0;
+  else if (/\bused\b|\bhalf\b/.test(lower)) balanceQty = explicitBalance[itemCode] ?? 0.5;
+  else balanceQty = match ? Number(match[1]) : NaN;
+  if (!Number.isFinite(balanceQty)) return null;
   const unit = match && match[2] ? match[2].toLowerCase() : "";
   const reorderMatch = String(values[9] || "").match(/\d+(?:\.\d+)?/);
   return { itemCode, description, category: categoryFor_(itemCode), movementCategory: movementFor_(values[7], values[8]), balanceQty, reorderLevel: reorderMatch ? Number(reorderMatch[0]) : 0, unit };
