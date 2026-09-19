@@ -26,7 +26,27 @@ export async function startJob(id: string) {
 export async function completeJob(id: string, data: FormData) {
   const result = requiredNote.safeParse(data.get("actionTaken"));
   if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Action taken is required.")}`);
-  await runJobRpc(id, "complete_assigned_job", { p_action_taken: result.data }, "completed");
+  const files = data.getAll("completionPhoto").filter((value): value is File => value instanceof File && value.size > 0);
+  const photo = files[0];
+  if (!photo) redirect(`/staff/jobs/${id}?error=${encodeURIComponent("A completion photo is required.")}`);
+  if (photo.size > 10 * 1024 * 1024) redirect(`/staff/jobs/${id}?error=${encodeURIComponent("Completion photo must be 10 MB or smaller.")}`);
+  if (!photo.type.startsWith("image/")) redirect(`/staff/jobs/${id}?error=${encodeURIComponent("Completion evidence must be an image.")}`);
+
+  const profile = await requireRole(["maintenance_staff"]);
+  const supabase = await createClient();
+  const extension = photo.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const storagePath = `${id}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const { error: uploadError } = await supabase.storage.from("maintenance-evidence").upload(storagePath, photo, { contentType: photo.type, upsert: false });
+  if (uploadError) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(`Photo upload failed: ${uploadError.message}`)}`);
+  const { error: evidenceError } = await supabase.from("maintenance_job_photos").insert({ job_id: id, storage_path: storagePath, uploaded_by: profile.id });
+  if (evidenceError) {
+    await supabase.storage.from("maintenance-evidence").remove([storagePath]);
+    redirect(`/staff/jobs/${id}?error=${encodeURIComponent(`Photo record failed: ${evidenceError.message}`)}`);
+  }
+  const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
+  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath(`/staff/jobs/${id}`);
+  redirect(`/staff/jobs/${id}?success=completed`);
 }
 
 export async function monitorJob(id: string, data: FormData) {
