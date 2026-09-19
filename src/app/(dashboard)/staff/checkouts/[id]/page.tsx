@@ -1,2 +1,79 @@
-import {notFound} from "next/navigation";import {AppShell} from "@/components/app-shell";import {requireRole} from "@/lib/auth";import {checkoutStatusLabel,type CheckoutRoom} from "@/lib/checkouts";import {createClient} from "@/lib/supabase/server";import {completeCleaning,completeRectification} from "../actions";
-export default async function Page({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{error?:string}>}){const profile=await requireRole(["maintenance_staff","cleaner"]);const {id}=await params;const q=await searchParams;const db=await createClient();const [{data:r},{data:defects},{data:events}]=await Promise.all([db.from("checkout_rooms").select("id,reference_no,room_no,utmspace_defects,inspection_notes,status,assigned_to,cleaner_id,created_at,ready_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name),cleaner:profiles!cleaner_id(full_name)").eq("id",id).single(),db.from("checkout_defects").select("id,description,source,status").eq("checkout_room_id",id),db.from("checkout_history").select("id,action,notes,created_at,actor:profiles!actor_id(full_name)").eq("checkout_room_id",id).order("created_at",{ascending:false})]);if(!r)notFound();const room=r as unknown as CheckoutRoom;return <AppShell profile={profile} title="Check-out Room"><div className="checkout-hero panel"><div><p className="eyebrow">{room.reference_no}</p><h2>Block {room.block?.code} · Room {room.room_no}</h2></div><span className={`status-badge status-${room.status}`}>{checkoutStatusLabel[room.status]}</span></div>{q.error&&<p className="error">{q.error}</p>}<div className="checkout-grid"><section className="panel"><h3>Defects to rectify</h3><div className="defect-list">{defects?.map(d=><div key={d.id}><span className={`status-badge status-${d.status}`}>{d.status}</span><strong>{d.description}</strong><small>{d.source.replaceAll("_"," ")}</small></div>)}</div>{room.inspection_notes&&<><h3>Inspection notes</h3><p>{room.inspection_notes}</p></>}</section><section className="panel"><h3>Complete your stage</h3>{profile.role==="maintenance_staff"&&room.status==="rectification"?<form action={completeRectification.bind(null,id)}><div className="field"><label>Rectification notes</label><textarea name="notes" required rows={4}/></div><div className="field"><label>Completion photo</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required/></div><button className="button">Complete rectification</button></form>:profile.role==="cleaner"&&room.status==="cleaning"?<form action={completeCleaning.bind(null,id)}><div className="field"><label>Cleaning notes</label><textarea name="notes" required rows={4}/></div><div className="field"><label>Cleaning completion photo</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required/></div><button className="button">Report cleaning completed</button></form>:<p className="subtle">Your work for this room is complete, or it is awaiting another team.</p>}</section></div><section className="panel"><h3>History</h3><div className="history-list">{events?.map(e=><div key={e.id}><strong>{e.action.replaceAll("_"," ")}</strong><span>{(e.actor as unknown as {full_name:string}|null)?.full_name} · {new Date(e.created_at).toLocaleString("en-MY")}</span>{e.notes&&<p>{e.notes}</p>}</div>)}</div></section></AppShell>}
+import { notFound } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { CheckoutDefectBuilder } from "@/components/checkout-defect-builder";
+import { CheckoutDefectProgressControls } from "@/components/checkout-defect-progress-controls";
+import { requireRole } from "@/lib/auth";
+import { checkoutStatusLabel, type CheckoutRoom } from "@/lib/checkouts";
+import { createClient } from "@/lib/supabase/server";
+import { completeCleaning, completeRectification, reportCleaningDefects } from "../actions";
+
+const defectStatusLabel: Record<string, string> = { open: "In Progress", rectified: "Completed" };
+
+export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
+  const profile = await requireRole(["maintenance_staff", "cleaner"]);
+  const { id } = await params;
+  const query = await searchParams;
+  const db = await createClient();
+  const [{ data: roomRow }, { data: defectRows }, { data: events }] = await Promise.all([
+    db.from("checkout_rooms").select("id,reference_no,room_no,utmspace_defects,inspection_notes,status,assigned_to,cleaner_id,created_at,ready_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name),cleaner:profiles!cleaner_id(full_name)").eq("id", id).single(),
+    db.from("checkout_defects").select("id,description,source,status").eq("checkout_room_id", id).order("created_at"),
+    db.from("checkout_history").select("id,action,notes,created_at,actor:profiles!actor_id(full_name)").eq("checkout_room_id", id).order("created_at", { ascending: false }),
+  ]);
+  if (!roomRow) notFound();
+
+  const room = roomRow as unknown as CheckoutRoom;
+  const defects = defectRows || [];
+  const outstandingDefects = defects.filter((defect) => defect.status === "open").length;
+  const isCleanerWorking = profile.role === "cleaner" && room.status === "cleaning";
+
+  return (
+    <AppShell profile={profile} title="Check-out Room">
+      <div className="checkout-hero panel">
+        <div><p className="eyebrow">{room.reference_no}</p><h2>Block {room.block?.code} · Room {room.room_no}</h2></div>
+        <span className={`status-badge status-${room.status}`}>{checkoutStatusLabel[room.status]}</span>
+      </div>
+      {query.error && <p className="error">{query.error}</p>}
+
+      <div className="checkout-grid">
+        <section className="panel">
+          <h3>Defects to rectify</h3>
+          <p className="subtle">{profile.role === "maintenance_staff" ? "Update each Defect as work progresses. Complete rectification only after every item is completed." : "Maintenance has completed the recorded defects. Report anything new you find while cleaning."}</p>
+          <div className="defect-list checkout-staff-defects">
+            {defects.map((defect) => (
+              <div key={defect.id} className="defect-row defect-row-actionable">
+                <div className="defect-detail">
+                  <span className={`status-badge status-${defect.status === "open" ? "in_progress" : "rectified"}`}>{defectStatusLabel[defect.status] || defect.status}</span>
+                  <strong>{defect.description}</strong><small>{defect.source.replaceAll("_", " ")}</small>
+                </div>
+                {profile.role === "maintenance_staff" && room.status === "rectification" && <CheckoutDefectProgressControls checkoutId={id} defectId={defect.id} status={defect.status} />}
+              </div>
+            ))}
+          </div>
+          {room.inspection_notes && <><h3>Inspection notes</h3><p>{room.inspection_notes}</p></>}
+        </section>
+
+        <section className="panel">
+          <h3>{isCleanerWorking ? "Cleaning action" : "Complete your stage"}</h3>
+          {profile.role === "maintenance_staff" && room.status === "rectification" ? (
+            outstandingDefects > 0 ? <p className="subtle">{outstandingDefects} Defect{outstandingDefects === 1 ? "" : "s"} still In Progress. Update each Defect on the left before completing rectification.</p> :
+            <form action={completeRectification.bind(null, id)}><div className="field"><label>Rectification notes</label><textarea name="notes" required rows={4} /></div><div className="field"><label>Completion photo</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required /></div><button className="button">Complete rectification</button></form>
+          ) : isCleanerWorking ? (
+            <div className="cleaner-detail-actions">
+              <form action={reportCleaningDefects.bind(null, id)} className="cleaner-report-form">
+                <div><h4>Found another defect?</h4><p className="subtle">Optional. Add it using the same defect list; Admin will see it when this room returns for verification.</p></div>
+                <CheckoutDefectBuilder fieldName="cleanerDefectsJson" emptyMessage="No new defect to report." />
+                <button className="button secondary">Report new defect to Admin</button>
+              </form>
+              <form action={completeCleaning.bind(null, id)} className="cleaner-complete-single">
+                <p className="subtle">No notes or photo required. Use this only after the room is cleaned.</p>
+                <button className="button">Complete this room</button>
+              </form>
+            </div>
+          ) : <p className="subtle">Your work for this room is complete, or it is awaiting another team.</p>}
+        </section>
+      </div>
+
+      <section className="panel"><h3>History</h3><div className="history-list">{events?.map((event) => <div key={event.id}><strong>{event.action.replaceAll("_", " ")}</strong><span>{(event.actor as unknown as { full_name: string } | null)?.full_name} · {new Date(event.created_at).toLocaleString("en-MY")}</span>{event.notes && <p>{event.notes}</p>}</div>)}</div></section>
+    </AppShell>
+  );
+}

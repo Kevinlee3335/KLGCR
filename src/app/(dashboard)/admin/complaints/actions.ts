@@ -15,6 +15,8 @@ export async function assignComplaint(id:string,data:FormData){
   await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
   if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
   const s=await createClient();
+  const {count:defectCount,error:defectError}=await s.from("complaint_defects").select("id",{count:"exact",head:true}).eq("complaint_id",id).eq("status","confirmed");
+  if(defectError||!defectCount)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(defectError?.message||"Add at least one Admin Confirmed Defect before assigning maintenance.")}`);
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
   const appointment=validateComplaintAppointmentSelection(complaint.source,complaint.room_access_permission,data.get("appointmentDate"),data.get("appointmentTime"));
@@ -68,3 +70,5 @@ export async function updateAppointment(complaintId:string,appointmentId:string,
   if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath(`/admin/complaints/${complaintId}`);redirect(`/admin/complaints/${complaintId}?appointment=1`);
 }
+
+export async function addComplaintDefect(complaintId:string,data:FormData){const actor=await requireRole(["admin"]);const [group,item]=String(data.get("item")||"").split("|");const issue=String(data.get("issue")||"").trim();const other=String(data.get("otherIssue")||"").trim();const location=String(data.get("exactLocation")||"").trim();const commonArea=String(data.get("commonArea")||"").trim();const confirmed=String(data.get("confirmedIssue")||"").trim();const instruction=String(data.get("instruction")||"").trim();if(!group||!item||!issue||(issue==="Other"&&!other)||(group==="Common Area"&&!commonArea))redirect(`/admin/complaints/${complaintId}?error=Complete%20all%20confirmed%20defect%20fields.`);const s=await createClient();const {error}=await s.from("complaint_defects").insert({complaint_id:complaintId,item_group:group,item_name:item,issue_type:issue,other_issue:other||null,exact_location:(group==="Common Area"?`${commonArea}${location?` · ${location}`:""}`:location)||null,admin_confirmed_issue:confirmed,maintenance_instruction:instruction,status:"confirmed",created_by:actor.id,confirmed_by:actor.id,confirmed_at:new Date().toISOString()});if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${complaintId}`);revalidatePath("/admin/complaints");}

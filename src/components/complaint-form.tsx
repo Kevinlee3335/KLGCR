@@ -37,7 +37,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
       </>
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
-      <label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000}/></label>
+      <label className="field field-wide"><span>Instruction / Remarks to Maintenance</span><textarea name="remarks" rows={3} maxLength={1000} placeholder="Optional overall instruction for this job, e.g. check and repair all listed defects; update with completion photos."/></label>
       <div className="field field-wide"><button className="button" type="submit">Approve &amp; create job</button></div>
     </form>
   );

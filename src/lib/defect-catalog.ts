@@ -1,0 +1,30 @@
+export type DefectCatalogItem={group:"Room"|"Bathroom"|"Common Area";item:string;issues:string[]};
+const base=["Broken","Missing","Other"];
+export const defectCatalog:DefectCatalogItem[]=[
+{group:"Room",item:"Door Handle",issues:["Loose","Broken","Missing","Rusty","Other"]},
+{group:"Room",item:"Door Closer",issues:["Loose","Broken","Missing","Other"]},
+{group:"Room",item:"Door Lock / Key",issues:["Loose","Broken","Key Missing","Rusty","Other"]},
+{group:"Room",item:"Ceiling Fan",issues:["Noisy","No Power Supply","Loose / Wobbly","Other"]},
+{group:"Room",item:"AC",issues:["Not Cooling","No Power Supply","Leaking","Remote Malfunction","Other"]},
+{group:"Room",item:"Lighting",issues:["Broken","No Power Supply","Other"]},
+{group:"Room",item:"Divan",issues:base},{group:"Room",item:"Headboard",issues:base},{group:"Room",item:"Mattress",issues:base},
+{group:"Room",item:"Study Table",issues:["Broken","Missing","Swollen / Bloated","Other"]},
+{group:"Room",item:"Utility Table",issues:["Broken","Missing","Swollen / Bloated","Other"]},
+{group:"Room",item:"Chair",issues:base},{group:"Room",item:"Bookshelf",issues:["Broken","Missing","Swollen / Bloated","Other"]},
+{group:"Room",item:"Wardrobe",issues:["Broken","Missing","Swollen / Bloated","Other"]},{group:"Room",item:"Curtain",issues:["Broken","Missing","Dirty","Other"]},
+{group:"Room",item:"Curtain Hook / Holder",issues:base},{group:"Room",item:"Floor",issues:["Water Stain / Water Mark","Leaking","Vinyl Tiles Broken","Other"]},
+{group:"Room",item:"Wall",issues:["Leaking","Mouldy","Dirty","Wall Damp","Other"]},{group:"Room",item:"Ceiling",issues:["Leaking","Mouldy","Dirty","Water Stain / Water Mark","Other"]},
+{group:"Room",item:"Window",issues:["Broken","Missing","Loose","Other"]},{group:"Room",item:"Window Handle",issues:["Broken","Missing","Loose","Other"]},
+{group:"Room",item:"Switch / Socket",issues:["No Power Supply","Broken","Other"]},
+{group:"Bathroom",item:"Toilet Light",issues:["No Power Supply","Broken","Other"]},{group:"Bathroom",item:"Door Knob",issues:["Loose","Broken","Cannot Open","Other"]},
+{group:"Bathroom",item:"Wash Basin / Sink",issues:["Leaking","Broken","Bottle Trap Leaking","Other"]},
+{group:"Bathroom",item:"Water Tap / Sink Tap",issues:["Leaking","Broken","Low Water Pressure","Other"]},{group:"Bathroom",item:"Shower Head",issues:["Broken","Leaking","Other"]},
+{group:"Bathroom",item:"Shower Valve",issues:["Leaking","Broken","Low Water Pressure","Other"]},{group:"Bathroom",item:"Toilet Seat",issues:["Dirty","Broken","Other"]},
+{group:"Bathroom",item:"Flexible Hose",issues:["Leaking","Broken","Low Water Pressure","Other"]},{group:"Bathroom",item:"Two Way Pipe",issues:["Leaking","Broken","Low Water Pressure","Other"]},
+{group:"Bathroom",item:"Overhead Pipe",issues:["Leaking","Broken","Water Stain / Water Mark","Other"]},{group:"Bathroom",item:"Floor",issues:["Leaking","Tiles Broken","Other"]},
+{group:"Bathroom",item:"Wall",issues:["Leaking","Tiles Broken","Mouldy","Dirty","Other"]},{group:"Bathroom",item:"Ceiling",issues:["Leaking","Tiles Broken","Mouldy","Dirty","Other"]},
+{group:"Bathroom",item:"Window",issues:["Broken","Missing","Loose","Other"]},{group:"Bathroom",item:"Window Handle",issues:["Broken","Missing","Loose","Other"]},
+{group:"Common Area",item:"Lighting",issues:["No Power Supply","Broken","Other"]},{group:"Common Area",item:"Wall / Ceiling / Floor",issues:["Leaking","Water Stain / Water Mark","Mouldy","Dirty","Tiles Broken","Other"]},
+{group:"Common Area",item:"Door / Window",issues:["Loose","Broken","Missing","Other"]},{group:"Common Area",item:"Plumbing",issues:["Leaking","Broken","Low Water Pressure","Other"]},
+];
+export const commonAreas=["Corridor","Balcony","Lobby","Common Bathroom","Staircase","Drying Area","Visitor Room","Utility Room","Pantry","Other"];
