@@ -8,8 +8,16 @@ import type { CalendarEvent } from "./calendar-event-list";
 const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const malaysia = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" });
 const time = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
-function isoDate(value: Date) { return malaysia.format(value); }
+function isoDate(value: Date | string) {
+  const parts = malaysia.formatToParts(new Date(value));
+  const part = (type: "year" | "month" | "day") => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
 function firstOfMonth(value: Date) { return new Date(value.getFullYear(), value.getMonth(), 1, 12); }
+function nextCalendarDate(key: string) {
+  const [year, month, day] = key.split("-").map(Number);
+  return isoDate(new Date(Date.UTC(year, month - 1, day + 1, 12)));
+}
 
 export function CalendarBoard({ events, admin, form }: { events: CalendarEvent[]; admin?: boolean; form: ReactNode }) {
   const [month, setMonth] = useState(() => firstOfMonth(new Date()));
@@ -17,9 +25,9 @@ export function CalendarBoard({ events, admin, form }: { events: CalendarEvent[]
   const title = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric" }).format(month);
   const dates = useMemo(() => { const start = new Date(month.getFullYear(), month.getMonth(), 1 - month.getDay(), 12); return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index, 12)); }, [month]);
   const eventsByDay = useMemo(() => { const map = new Map<string, CalendarEvent[]>(); for (const event of events) {
-      const start = new Date(event.starts_at); const end = new Date(event.ends_at || event.starts_at);
-      for (let day = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12); day <= end; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 12)) {
-        const key = isoDate(day); map.set(key, [...(map.get(key) || []), event]);
+      const endKey = isoDate(event.ends_at || event.starts_at);
+      for (let key = isoDate(event.starts_at); key <= endKey; key = nextCalendarDate(key)) {
+        map.set(key, [...(map.get(key) || []), event]);
       }
     } return map; }, [events]);
   const holidays = useMemo(() => new Map(johorPublicHolidays.map((holiday) => [holiday.date, holiday.name])), []);
