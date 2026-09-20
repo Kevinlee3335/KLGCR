@@ -77,7 +77,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
       href: null, tone: `calendar-${event.event_type}`,
     })),
   ];
-  const loadError = appointmentResult.error || eventResult.error;
+  const loadError = appointmentResult.error;
 
   return <AppShell profile={profile} title="Calendar">
     {profile.role === "admin" && !eventResult.error && <section className="calendar-event-card">
@@ -92,7 +92,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
         <button className="button" type="submit">Add to Calendar</button>
       </form>
     </section>}
-    {query.error && <p className="error">{query.error}</p>}
+    {eventResult.error && <p className="subtle">Leave, Meeting and Other events are being connected. Existing maintenance appointments remain available below.</p>}\n    {query.error && <p className="error">{query.error}</p>}
     {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items}/>}
   </AppShell>;
 }
