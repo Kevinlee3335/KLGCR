@@ -22,11 +22,12 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month || "") ? query.month! : currentMonth();
   const { start, end, next } = monthRange(month);
   const supabase = await createClient();
-  const [appointmentResult, jobResult, eventResult, staffResult] = await Promise.all([
+  const [appointmentResult, jobResult, eventResult, staffResult, allEventsResult] = await Promise.all([
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,job:maintenance_jobs!appointments_job_id_fkey(job_no),staff:profiles!appointments_assigned_staff_fkey(full_name),complaint:complaints!appointment_complaint_id_fkey(room_no,category,block:blocks!complaints_block_id_fkey(code))").gte("appointment_date", start).lte("appointment_date", end).not("status", "in", '("cancelled","no_show")').order("appointment_date").order("appointment_time"),
     supabase.from("maintenance_jobs").select("id,job_no,room_no,category,scheduled_for,status,block:blocks!maintenance_jobs_block_id_fkey(code),assignee:profiles!maintenance_jobs_assigned_to_fkey(full_name)").gte("scheduled_for", start).lte("scheduled_for", end).not("status", "in", '("completed","cancelled")').order("scheduled_for"),
     supabase.from("calendar_events").select("id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").gte("starts_at", `${start}T00:00:00+08:00`).lt("starts_at", `${next}T00:00:00+08:00`).order("starts_at"),
     supabase.from("profiles").select("id,full_name,role").in("role", ["maintenance_staff", "cleaner"]).eq("is_active", true).is("deleted_at", null).order("full_name"),
+    supabase.from("calendar_events").select("id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").order("starts_at", { ascending: false }),
   ]);
 
   async function createCalendarEvent(formData: FormData) {
@@ -47,10 +48,21 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
 
+  async function deleteCalendarEvent(formData: FormData) {
+    "use server";
+    await requireRole(["admin"]);
+    const eventId = String(formData.get("event_id") || "");
+    if (!eventId) return;
+    const { error } = await (await createClient()).from("calendar_events").delete().eq("id", eventId);
+    if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
+    revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
+  }
+
   const appointments = (appointmentResult.data || []) as unknown as AppointmentRow[];
   const appointmentJobIds = new Set(appointments.map((row) => row.job_id).filter((id): id is string => Boolean(id)));
   const jobs = ((jobResult.data || []) as unknown as JobRow[]).filter((job) => !appointmentJobIds.has(job.id));
   const events = (eventResult.data || []) as unknown as CalendarEvent[];
+  const allEvents = (allEventsResult.data || []) as unknown as CalendarEvent[];
   const items: CalendarItem[] = [
     ...appointments.map((a) => ({ id: `appointment-${a.id}`, date: a.appointment_date, time: a.appointment_time, label: `Block ${a.complaint?.block?.code || "–"} · ${a.complaint?.room_no || "–"}`, detail: `${a.staff?.full_name || "Unassigned"} · ${a.job?.job_no || a.complaint?.category || "Appointment"}`, href: a.job_id ? `/admin/jobs/${a.job_id}` : null, tone: `calendar-${a.status}` })),
     ...jobs.map((job) => ({ id: `job-${job.id}`, date: job.scheduled_for, time: "09:00", label: `Block ${job.block?.code || "–"} · ${job.room_no}`, detail: `${job.assignee?.full_name || "Unassigned"} · ${job.job_no}`, href: `/admin/jobs/${job.id}`, tone: "calendar-work" })),
@@ -61,6 +73,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   return <AppShell profile={profile} title="Calendar">
     {profile.role === "admin" && <section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><form action={createCalendarEvent} className="calendar-event-form"><select name="event_type" defaultValue="leave"><option value="leave">Leave</option><option value="meeting">Meeting</option><option value="other">Other</option><option value="work">Work</option></select><input name="title" required minLength={2} placeholder="Title, e.g. Lift maintenance" /><input name="event_date" required type="date" aria-label="From date" /><input name="end_date" required type="date" aria-label="To date" /><input name="start_time" defaultValue="09:00" type="time" /><select name="audience" defaultValue="all_staff" aria-label="Publish to"><option value="all_staff">Publish to All staff</option><option value="individual">Publish to Specific staff</option></select><select name="recipient" defaultValue="" aria-label="Specific staff"><option value="">Select specific staff</option>{(staffResult.data || []).map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select><select name="subject_staff" defaultValue="" aria-label="Who is on leave"><option value="">Who is on leave? (Leave only)</option>{(staffResult.data || []).map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select><input name="notes" placeholder="Notes (optional)" /><button className="button" type="submit">Add to Calendar</button></form></section>}
     {query.error && <p className="error">{query.error}</p>}
+    {profile.role === "admin" && <section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{allEvents.length} items</span></header>{allEvents.length ? <div className="calendar-settings-list">{allEvents.map((event) => <article key={event.id} className="calendar-setting-row"><div><strong>{event.title}</strong><span>{eventLabels[event.event_type]} · {malaysiaDate(event.starts_at)}{event.ends_at && malaysiaDate(event.ends_at) !== malaysiaDate(event.starts_at) ? ` to ${malaysiaDate(event.ends_at)}` : ""}</span><small>Publish: {event.audience === "all_staff" ? "All staff" : event.staff?.full_name || "Specific staff"}{event.subject ? ` · On leave: ${event.subject.full_name}` : ""}{event.notes ? ` · ${event.notes}` : ""}</small></div><form action={deleteCalendarEvent}><input type="hidden" name="event_id" value={event.id}/><button className="delete-calendar-event" type="submit">Delete</button></form></article>)}</div> : <p className="subtle">No calendar settings yet.</p>}</section>}
     {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items}/>}
   </AppShell>;
 }
