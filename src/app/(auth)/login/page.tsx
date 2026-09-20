@@ -68,19 +68,29 @@ export default function LoginPage() {
         <div className="login-ambient login-ambient-one" />
         <div className="login-ambient login-ambient-two" />
         <div className="login-card">
-          <div className="group-logo">
+          <div className="login-brand-panel">
             <Image
-              src="/klg-logo.svg"
-              alt="Kean Leng Group"
-              width={180}
-              height={60}
+              className="login-residence-logo"
+              src="/klg-campus-residence-logo.png"
+              alt="KLG Campus Residence"
+              width={560}
+              height={186}
               priority
             />
           </div>
 
-          <div className="login-company-name">
+          <div className="login-operator">
+            <span>Operated by</span>
             <strong>K Hotel Sdn. Bhd.</strong>
-            <span>A Member of Kean Leng Group</span>
+            <span>A Member of</span>
+            <Image
+              className="login-group-logo"
+              src="/kean-leng-group-logo.png"
+              alt="Kean Leng Group"
+              width={360}
+              height={121}
+              priority
+            />
           </div>
 
           <div className="login-card-heading">
