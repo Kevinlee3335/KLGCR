@@ -1,3 +1,4 @@
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import { RejectComplaintForm } from "@/components/reject-complaint-form";
 import { AppShell } from "@/components/app-shell";
@@ -22,6 +23,20 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   if (!data) notFound();
   const complaint = data as unknown as ComplaintRow;
   const source = data as unknown as { photo_url:string|null; source_reference:string|null };
+  let photoHref = source.photo_url;
+  if (photoHref?.startsWith("storage://")) {
+    const address = photoHref.slice("storage://".length);
+    const separator = address.indexOf("/");
+    const bucket = separator > 0 ? address.slice(0, separator) : "";
+    const path = separator > 0 ? address.slice(separator + 1) : "";
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (bucket && path && url && key) {
+      const admin = createSupabaseAdminClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: signed } = await admin.storage.from(bucket).createSignedUrl(path, 3600);
+      photoHref = signed?.signedUrl || null;
+    } else photoHref = null;
+  }
   const [{data:blocks},{data:eligible},{data:availabilityData,error:availabilityError}] = await Promise.all([
     s.from("blocks").select("id,code").eq("is_active",true).order("code"),
     complaint.block ? s.from("profiles").select("id,full_name,profile_blocks!inner(block_id)").eq("role","maintenance_staff").eq("is_active",true).eq("profile_blocks.block_id",complaint.block.id) : Promise.resolve({data:[]}),
@@ -38,6 +53,6 @@ export default async function ComplaintDetail({ params, searchParams }: { params
   return <AppShell profile={profile} title="Complaint Review"><div className="section-head"><div><p className="eyebrow">{complaint.complaint_no}</p><h2>Block {complaint.block?.code} · {complaint.room_no}</h2><p className="subtle">Submitted {formatDate(complaint.submitted_at)}</p></div><div className="actions"><PriorityBadge value={complaint.priority}/><StatusBadge value={complaint.status}/></div></div>{q.error&&<p className="error">{q.error}</p>}{q.saved&&<p className="success">Review changes saved.</p>}{q.appointment&&<p className="success">Appointment saved.</p>}
   <ReporterInformation name={extra.reporter_name||complaint.complainant_name} phone={extra.reporter_phone||complaint.complainant_contact} email={extra.reporter_email} availabilityDate={extra.availability_date??complaint.availability_date} availabilityTime={extra.availability_time??complaint.availability_time} roomAccessPermission={roomAccessPermission}/>
   <aside className={`workflow-notice ${requiresAppointment?"workflow-warning":"workflow-success"}`}><strong>{requiresAppointment?"TENANT MUST BE PRESENT":isManual?"APPOINTMENT OPTIONAL":"ROOM ACCESS GRANTED"}</strong><span>{requiresAppointment?"Appointment Required.":isManual?"Assign eligible staff now; provide both date and time only when scheduling a visit.":"Maintenance staff may enter without the student. Scheduling a visit is optional."}</span></aside>
-  {(source.photo_url||source.source_reference)&&<section className="panel" style={{marginBottom:18}}><h3>Google Form Source</h3>{source.source_reference&&<p><strong>Response:</strong> {source.source_reference}</p>}{source.photo_url&&<p><a className="text-link" href={source.photo_url} target="_blank" rel="noreferrer">Open Google Drive Photo / Attachment ↗</a></p>}</section>}<ComplaintForm blocks={blocks||[]} complaint={complaint} mode="review"/>{!["assigned","rejected","closed"].includes(complaint.status)&&<section className="panel assignment-panel"><h3>Approve and assign</h3><p className="subtle">Only active maintenance staff assigned to Block {complaint.block?.code} are available.</p><AssignmentForm complaintId={id} eligible={eligible||[]} requiresAppointment={requiresAppointment}/><RejectComplaintForm complaintId={id}/></section>}
+  {(source.photo_url||source.source_reference)&&<section className="panel" style={{marginBottom:18}}><h3>{complaint.source==="cleaning"?"Cleaner Report":"Google Form Source"}</h3>{complaint.source!=="cleaning"&&source.source_reference&&<p><strong>Response:</strong> {source.source_reference}</p>}{photoHref?<p><a className="button-link button" href={photoHref} target="_blank" rel="noreferrer">Open Complaint Photo ↗</a></p>:source.photo_url&&<p className="error">The attached photo is temporarily unavailable.</p>}</section>}<ComplaintForm blocks={blocks||[]} complaint={complaint} mode="review"/>{!["assigned","rejected","closed"].includes(complaint.status)&&<section className="panel assignment-panel"><h3>Approve and assign</h3><p className="subtle">Only active maintenance staff assigned to Block {complaint.block?.code} are available.</p><AssignmentForm complaintId={id} eligible={eligible||[]} requiresAppointment={requiresAppointment}/><RejectComplaintForm complaintId={id}/></section>}
   </AppShell>;
 }
