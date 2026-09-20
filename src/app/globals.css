@@ -1494,8 +1494,8 @@ p {
   z-index: -2;
   inset: -7px;
   background: url("/klg-campus-entrance-enhanced.webp") center/cover no-repeat;
-  filter: blur(2.6px) brightness(0.58) saturate(0.5) sepia(0.18)
-    contrast(1.05);
+  filter: blur(0.8px) brightness(0.82) saturate(0.82) sepia(0.06)
+    contrast(1.03);
   transform: scale(1.018);
 }
 .login-story:after {
@@ -1504,8 +1504,8 @@ p {
   z-index: -1;
   inset: 0;
   background:
-    linear-gradient(90deg, #07060426 0%, #0807054d 48%, #080705d9 88%, #080705 100%),
-    linear-gradient(0deg, #080705b8 0%, transparent 43%, #08070529 100%);
+    linear-gradient(90deg, transparent 0%, #08070512 48%, #080705a8 88%, #080705 100%),
+    linear-gradient(0deg, #08070545 0%, transparent 45%, #08070514 100%);
 }
 .residence-brand {
   animation: login-fade 0.65s ease-out both;
@@ -1940,8 +1940,8 @@ p {
   }
   .login-story:after {
     background:
-      linear-gradient(0deg, #080705 0%, #0807058f 25%, transparent 62%),
-      linear-gradient(90deg, #0807051f, #08070566);
+      linear-gradient(0deg, #080705 0%, #08070555 25%, transparent 62%),
+      linear-gradient(90deg, #0807050f, #0807053d);
   }
   .login-access {
     min-height: auto;
