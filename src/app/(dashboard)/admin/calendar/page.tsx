@@ -12,7 +12,7 @@ type CalendarEvent = { id: string; title: string; notes: string | null; starts_a
 function currentMonth() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit" }).format(new Date()); }
 function monthRange(month: string) { const [year, value] = month.split("-").map(Number); const lastDay = new Date(year, value, 0).getDate(); return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}`, next: `${value === 12 ? year + 1 : year}-${String(value === 12 ? 1 : value + 1).padStart(2, "0")}-01` }; }
 function malaysiaDate(value: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)); }
-function malaysiaTime(value: string) { return new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }
+function malaysiaTime(value: string) { return new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }\nfunction eventDates(event: CalendarEvent) { const first = malaysiaDate(event.starts_at); const last = malaysiaDate(event.ends_at || event.starts_at); const dates: string[] = []; const cursor = new Date(`${first}T00:00:00Z`); const endDate = new Date(`${last}T00:00:00Z`); while (cursor <= endDate) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
 const eventLabels = { work: "Work", leave: "Leave", no_leave: "No leave", meeting: "Meeting", other: "Other" } as const;
 
 export default async function AdminCalendar({ searchParams }: { searchParams: Promise<{ month?: string; error?: string }> }) {
@@ -34,11 +34,11 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     const eventType = String(formData.get("event_type") || "");
     const title = String(formData.get("title") || "").trim();
     const eventDate = String(formData.get("event_date") || "");
-    const startTime = String(formData.get("start_time") || "09:00");
+    const startTime = String(formData.get("start_time") || "09:00");\n    const endDate = String(formData.get("end_date") || "") || eventDate;
     const assignedTo = String(formData.get("assigned_to") || "") || null;
     const notes = String(formData.get("notes") || "").trim() || null;
     if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
-    const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, audience: assignedTo ? "individual" : "all_staff", assigned_to: assignedTo });
+    const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, audience: assignedTo ? "individual" : "all_staff", assigned_to: assignedTo });
     if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
@@ -50,12 +50,12 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const items: CalendarItem[] = [
     ...appointments.map((a) => ({ id: `appointment-${a.id}`, date: a.appointment_date, time: a.appointment_time, label: `Block ${a.complaint?.block?.code || "–"} · ${a.complaint?.room_no || "–"}`, detail: `${a.staff?.full_name || "Unassigned"} · ${a.job?.job_no || a.complaint?.category || "Appointment"}`, href: a.job_id ? `/admin/jobs/${a.job_id}` : null, tone: `calendar-${a.status}` })),
     ...jobs.map((job) => ({ id: `job-${job.id}`, date: job.scheduled_for, time: "09:00", label: `Block ${job.block?.code || "–"} · ${job.room_no}`, detail: `${job.assignee?.full_name || "Unassigned"} · ${job.job_no}`, href: `/admin/jobs/${job.id}`, tone: "calendar-work" })),
-    ...events.map((event) => ({ id: `event-${event.id}`, date: malaysiaDate(event.starts_at), time: malaysiaTime(event.starts_at), label: event.title, detail: `${eventLabels[event.event_type]} · ${event.staff?.full_name || "All staff"}${event.notes ? ` · ${event.notes}` : ""}`, href: null, tone: `calendar-${event.event_type}` })),
+    ...events.flatMap((event) => eventDates(event).filter((date) => date >= start && date <= end).map((date, index) => ({ id: `event-${event.id}-${date}`, date, time: index === 0 ? malaysiaTime(event.starts_at) : "All day", label: event.title, detail: `${eventLabels[event.event_type]} · ${event.staff?.full_name || "All staff"}${event.notes ? ` · ${event.notes}` : ""}`, href: null, tone: `calendar-${event.event_type}` }))),
   ];
   const loadError = appointmentResult.error || jobResult.error || eventResult.error;
 
   return <AppShell profile={profile} title="Calendar">
-    {profile.role === "admin" && <section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><form action={createCalendarEvent} className="calendar-event-form"><select name="event_type" defaultValue="leave"><option value="leave">Leave</option><option value="meeting">Meeting</option><option value="other">Other</option><option value="work">Work</option></select><input name="title" required minLength={2} placeholder="Title, e.g. Lift maintenance" /><input name="event_date" required type="date" /><input name="start_time" defaultValue="09:00" type="time" /><select name="assigned_to" defaultValue=""><option value="">All staff</option>{(staffResult.data || []).map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select><input name="notes" placeholder="Notes (optional)" /><button className="button" type="submit">Add to Calendar</button></form></section>}
+    {profile.role === "admin" && <section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><form action={createCalendarEvent} className="calendar-event-form"><select name="event_type" defaultValue="leave"><option value="leave">Leave</option><option value="meeting">Meeting</option><option value="other">Other</option><option value="work">Work</option></select><input name="title" required minLength={2} placeholder="Title, e.g. Lift maintenance" /><input name="event_date" required type="date" aria-label="From date" /><input name="end_date" required type="date" aria-label="To date" /><input name="start_time" defaultValue="09:00" type="time" /><select name="assigned_to" defaultValue=""><option value="">All staff</option>{(staffResult.data || []).map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select><input name="notes" placeholder="Notes (optional)" /><button className="button" type="submit">Add to Calendar</button></form></section>}
     {query.error && <p className="error">{query.error}</p>}
     {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items}/>}
   </AppShell>;
