@@ -17,7 +17,7 @@ const cleanerNav = [["Check-out Rooms", "/staff/checkouts"]] as const;
 const staffNav = [
   ["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"],
   ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
-  ["Calendar & Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
+  ["Calendar", "/staff/calendar"], ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
 ] as const;
 
 function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }) {
@@ -59,7 +59,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <nav className="mobile-nav" aria-label="Mobile quick navigation">
       <Link href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></Link>
       <Link href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></Link>
-      {isStaff ? <Link href="/staff/appointments"><NavIcon kind="calendar"/><span>Calendar</span></Link> : <Link href="/admin/daily-tasks"><NavIcon kind="calendar"/><span>Calendar</span></Link>}
+      {isStaff ? <Link href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></Link> : <Link href="/admin/daily-tasks"><NavIcon kind="calendar"/><span>Calendar</span></Link>}
       <Link href={isStaff ? "/staff/material-request" : "/admin/reports"}><NavIcon kind="more"/><span>{isStaff ? "Materials" : "Reports"}</span></Link>
     </nav>
   </div>;
