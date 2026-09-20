@@ -64,7 +64,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       const formData = new FormData(event.currentTarget);
       prepared = await prepareCleanerComplaint(formData);
       if ("error" in prepared) {
-        setError(prepared.error);
+        setError(prepared.error ?? "Unable to prepare the complaint.");
         return;
       }
       const compressed = await compressPhoto(photo);
@@ -77,7 +77,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       }
       const finalized = await finalizeCleanerComplaint(prepared.complaintId, prepared.path);
       if ("error" in finalized) {
-        setError(finalized.error);
+        setError(finalized.error ?? "Unable to finish sending the complaint.");
         return;
       }
       router.replace(`/staff/complaints/new?created=${encodeURIComponent(finalized.complaintNo)}`);
