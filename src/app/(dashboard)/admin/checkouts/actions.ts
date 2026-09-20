@@ -16,3 +16,29 @@ export async function createCheckout(data:FormData){const actor=await requireRol
 export async function completeInspection(id:string,data:FormData){const actor=await requireRole(["admin"]);const db=await createClient();const notes=String(data.get("notes")||"").trim();const extra=String(data.get("newDefect")||"").trim();const assignee=String(data.get("assignee")||"");if(!assignee)go(id,"Assign Abdullah or Faiz before sending for rectification.");if(extra){const x=await db.from("checkout_defects").insert({checkout_room_id:id,description:extra,source:"second_inspection",created_by:actor.id});if(x.error)go(id,x.error.message);}try{for(const f of data.getAll("photos"))if(f instanceof File)await upload(db,id,actor.id,f,"inspection");}catch(e){go(id,e instanceof Error?e.message:"Photo upload failed");}const u=await db.from("checkout_rooms").update({inspection_notes:notes||null,assigned_to:assignee,status:"rectification"}).eq("id",id).eq("status","second_inspection");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"inspection_completed",notes,"second_inspection","rectification");revalidatePath(`/admin/checkouts/${id}`);go(id);}
 export async function handToCleaning(id:string,data:FormData){const actor=await requireRole(["admin"]);const cleaner=String(data.get("cleaner")||"");if(!cleaner)go(id,"Select a Cleaner / Housekeeping user.");const db=await createClient();const u=await db.from("checkout_rooms").update({cleaner_id:cleaner,status:"cleaning"}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"handed_to_housekeeping",undefined,"verification","cleaning");revalidatePath(`/admin/checkouts/${id}`);go(id);}
 export async function markReady(id:string,data:FormData){const actor=await requireRole(["admin"]);const notes=String(data.get("notes")||"");const db=await createClient();const u=await db.from("checkout_rooms").update({status:"ready_for_occupancy",ready_at:new Date().toISOString()}).eq("id",id).eq("status","verification");if(u.error)go(id,u.error.message);await history(db,id,actor.id,"room_verified_ready",notes,"verification","ready_for_occupancy");revalidatePath(`/admin/checkouts/${id}`);go(id);}
+export type BatchCheckoutInput={blockId:number;roomNo:string;defects:string[]};
+export async function createCheckoutBatch(input:BatchCheckoutInput[]){
+ const actor=await requireRole(["admin"]);const db=await createClient();
+ if(!Array.isArray(input)||!input.length)return {error:"Choose a valid Excel file with at least one room."};
+ if(input.length>1000)return {error:"Import up to 1,000 rooms at one time."};
+ const seen=new Set<string>();const rooms:BatchCheckoutInput[]=[];
+ for(const row of input){const blockId=Number(row.blockId);const roomNo=String(row.roomNo||"").trim();const defects=[...new Set((row.defects||[]).map(x=>String(x).trim()).filter(Boolean))];
+  if(!Number.isInteger(blockId)||blockId<=0||!roomNo||!defects.length)return {error:"Every row needs Block, Room and at least one defect."};
+  if(roomNo.length>80||defects.some(x=>x.length>2000))return {error:"One room number or defect description is too long."};
+  const roomKey=blockId+":"+roomNo.toLowerCase();if(seen.has(roomKey))return {error:"Duplicate room in this file: "+roomNo+"."};seen.add(roomKey);rooms.push({blockId,roomNo,defects});
+ }
+ const {data:existing,error:existingError}=await db.from("checkout_rooms").select("block_id,room_no");
+ if(existingError)return {error:existingError.message};
+ const present=new Set((existing||[]).map(r=>String(r.block_id)+":"+String(r.room_no).toLowerCase()));
+ const fresh=rooms.filter(r=>!present.has(String(r.blockId)+":"+r.roomNo.toLowerCase()));
+ if(!fresh.length)return {error:"All rooms in this file are already in Check-out Rooms."};
+ const {data:created,error:createError}=await db.from("checkout_rooms").insert(fresh.map(r=>({block_id:r.blockId,room_no:r.roomNo,utmspace_defects:r.defects.join("\n"),created_by:actor.id}))).select("id,block_id,room_no");
+ if(createError||!created)return {error:createError?.message||"Unable to create the check-out rooms."};
+ const ids=new Map(created.map(r=>[String(r.block_id)+":"+String(r.room_no).toLowerCase(),r.id]));
+ const defects=fresh.flatMap(r=>r.defects.map(description=>({checkout_room_id:ids.get(String(r.blockId)+":"+r.roomNo.toLowerCase()),description,source:"utmspace",created_by:actor.id})));
+ const defectResult=await db.from("checkout_defects").insert(defects);
+ if(defectResult.error)return {error:"Rooms were created but defects could not be saved: "+defectResult.error.message};
+ const historyResult=await db.from("checkout_history").insert(created.map(r=>({checkout_room_id:r.id,actor_id:actor.id,action:"record_created",notes:"UTMSPACE batch check-out defects imported",from_status:null,to_status:"second_inspection"})));
+ if(historyResult.error)return {error:"Rooms were created but history could not be saved: "+historyResult.error.message};
+ revalidatePath("/admin/checkouts");return {ok:true,created:created.length,skipped:rooms.length-fresh.length};
+}
