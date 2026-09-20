@@ -3,11 +3,11 @@ import { LogoutForm } from "./logout-form";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
-import { Bell, Boxes, ClipboardCheck, DoorOpen, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ClipboardCheck, DoorOpen, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
 
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
-  ["Maintenance Jobs", "/admin/jobs", Wrench], ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
+  ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays], ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
   ["Check-out Rooms", "/admin/checkouts", DoorOpen],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
   ["Reports", "/admin/reports", FileBarChart], ["Notifications", "/admin/notifications", Bell],
@@ -59,7 +59,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <nav className="mobile-nav" aria-label="Mobile quick navigation">
       <Link href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></Link>
       <Link href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></Link>
-      {isStaff ? <Link href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></Link> : <Link href="/admin/daily-tasks"><NavIcon kind="calendar"/><span>Calendar</span></Link>}
+      {isStaff ? <Link href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></Link> : <Link href="/admin/calendar"><NavIcon kind="calendar"/><span>Calendar</span></Link>}
       <Link href={isStaff ? "/staff/material-request" : "/admin/reports"}><NavIcon kind="more"/><span>{isStaff ? "Materials" : "Reports"}</span></Link>
     </nav>
   </div>;
