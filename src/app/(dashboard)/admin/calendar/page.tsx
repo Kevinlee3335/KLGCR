@@ -40,7 +40,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     const assignedTo = String(formData.get("assigned_to") || "") || null;
     const notes = String(formData.get("notes") || "").trim() || null;
     if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < eventDate) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
-    const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, audience: assignedTo ? "individual" : "all_staff", assigned_to: assignedTo });
+    const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, created_by: profile.id, audience: assignedTo ? "individual" : "all_staff", assigned_to: assignedTo });
     if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
