@@ -3,15 +3,6 @@ import { LoginForm } from "@/components/login-form";
 
 export const dynamic = "force-dynamic";
 
-const operations = [
-  "Complaints",
-  "Maintenance",
-  "Inventory",
-  "Reports",
-  "Appointments",
-  "Dashboard",
-];
-
 function malaysiaDate() {
   const now = new Date();
   const weekday = new Intl.DateTimeFormat("en-MY", {
@@ -33,36 +24,7 @@ export default function LoginPage() {
 
   return (
     <main className="enterprise-login">
-      <section className="login-story" aria-labelledby="login-headline">
-        <div className="residence-brand">
-          <Image
-            src="/klg-mark.svg"
-            alt="KLG Campus Residence"
-            width={64}
-            height={64}
-            priority
-          />
-        </div>
-
-        <div className="login-story-copy">
-          <p className="login-kicker"><span /> Internal Operations</p>
-          <div className="login-system-name">
-            <strong>KLG Campus Residence</strong>
-            <span>Operations Management System</span>
-          </div>
-          <h1 id="login-headline">
-            One place to manage<br />every maintenance operation.
-          </h1>
-          <ul className="login-capabilities" aria-label="Portal capabilities">
-            {operations.map((operation) => <li key={operation}>{operation}</li>)}
-          </ul>
-        </div>
-
-        <footer className="login-meta">
-          <span>Version 1.0</span>
-          <span>Authorized Personnel Only</span>
-        </footer>
-      </section>
+      <section className="login-story" aria-hidden="true" />
 
       <section className="login-access" aria-label="Account access">
         <div className="login-ambient login-ambient-one" />
