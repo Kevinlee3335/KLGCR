@@ -12,7 +12,8 @@ type CalendarEvent = { id: string; title: string; notes: string | null; starts_a
 function currentMonth() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit" }).format(new Date()); }
 function monthRange(month: string) { const [year, value] = month.split("-").map(Number); const lastDay = new Date(year, value, 0).getDate(); return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}`, next: `${value === 12 ? year + 1 : year}-${String(value === 12 ? 1 : value + 1).padStart(2, "0")}-01` }; }
 function malaysiaDate(value: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)); }
-function malaysiaTime(value: string) { return new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }\nfunction eventDates(event: CalendarEvent) { const first = malaysiaDate(event.starts_at); const last = malaysiaDate(event.ends_at || event.starts_at); const dates: string[] = []; const cursor = new Date(`${first}T00:00:00Z`); const endDate = new Date(`${last}T00:00:00Z`); while (cursor <= endDate) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
+function malaysiaTime(value: string) { return new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }
+function eventDates(event: CalendarEvent) { const first = malaysiaDate(event.starts_at); const last = malaysiaDate(event.ends_at || event.starts_at); const dates: string[] = []; const cursor = new Date(`${first}T00:00:00Z`); const endDate = new Date(`${last}T00:00:00Z`); while (cursor <= endDate) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
 const eventLabels = { work: "Work", leave: "Leave", no_leave: "No leave", meeting: "Meeting", other: "Other" } as const;
 
 export default async function AdminCalendar({ searchParams }: { searchParams: Promise<{ month?: string; error?: string }> }) {
@@ -34,10 +35,11 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     const eventType = String(formData.get("event_type") || "");
     const title = String(formData.get("title") || "").trim();
     const eventDate = String(formData.get("event_date") || "");
-    const startTime = String(formData.get("start_time") || "09:00");\n    const endDate = String(formData.get("end_date") || "") || eventDate;
+    const startTime = String(formData.get("start_time") || "09:00");
+    const endDate = String(formData.get("end_date") || "") || eventDate;
     const assignedTo = String(formData.get("assigned_to") || "") || null;
     const notes = String(formData.get("notes") || "").trim() || null;
-    if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
+    if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < eventDate) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
     const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, audience: assignedTo ? "individual" : "all_staff", assigned_to: assignedTo });
     if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
