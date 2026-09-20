@@ -8,9 +8,9 @@ import { requireRole } from "@/lib/auth";
 const detailsSchema = z.object({
   blockId: z.coerce.number().int().positive("Choose a block."),
   area: z.enum(["Corridor", "Balcony", "Lobby", "Common Bathroom", "Staircase", "Drying Area", "Visitor Room", "Utility Room", "Pantry", "Room", "Other"]),
-  location: z.string().trim().min(1, "Enter the room or exact location.").max(120),
+  location: z.string().trim().max(120),
   defectType: z.enum(["Lighting", "Water Leakage", "Door / Lock", "Plumbing", "Furniture", "Air Conditioning", "Cleaning Issue", "Other"]),
-  description: z.string().trim().min(3, "Describe the problem.").max(3000),
+  description: z.string().trim().max(3000),
   priority: z.enum(["low", "normal", "high", "urgent"]),
 });
 
