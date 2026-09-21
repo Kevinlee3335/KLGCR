@@ -33,19 +33,24 @@ export async function completeJob(id: string, data: FormData) {
   const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
-  const { data: job } = await supabase.from("maintenance_jobs")
-    .select("id,job_no,room_no,description,completed_at,complaint:complaints!maintenance_jobs_complaint_id_fkey(complaint_no,reporter_name,reporter_email)")
+  const { data: job, error: jobLookupError } = await supabase.from("maintenance_jobs")
+    .select("id,job_no,room_no,description,completed_at,complaint_id")
     .eq("id", id).maybeSingle();
-  const complaint = Array.isArray(job?.complaint) ? job?.complaint[0] : job?.complaint;
-  if (job && complaint?.reporter_email) {
+  if (jobLookupError) console.error("Unable to load completed job for resident email", jobLookupError);
+  const { data: complaint, error: complaintLookupError } = job?.complaint_id
+    ? await supabase.from("complaints").select("complaint_no,reporter_name,reporter_email,complainant_contact").eq("id", job.complaint_id).maybeSingle()
+    : { data: null, error: null };
+  if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
+  const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
+  if (job && complaint && reporterEmail) {
     const admin = createAdminClient();
     const { data: feedback, error: feedbackError } = await admin.from("maintenance_job_feedback")
-      .upsert({ job_id: job.id, reporter_email: complaint.reporter_email }, { onConflict: "job_id" })
+      .upsert({ job_id: job.id, reporter_email: reporterEmail }, { onConflict: "job_id" })
       .select("token").single();
     if (feedbackError) console.error("Unable to create resident feedback request", feedbackError);
     if (feedback?.token) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://klgcr-maintenance-system.vercel.app";
-      await sendTransactionalEmail(complaint.reporter_email, jobCompletedEmail({
+      await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
         reporterName: complaint.reporter_name,
         complaintNo: complaint.complaint_no,
         roomNo: job.room_no,
