@@ -27,10 +27,16 @@ export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   );
 }
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean }) {
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, category, description }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean; category: string; description: string }) {
   const action = assignComplaint.bind(null, complaintId);
   return (
     <form action={action} className="form-grid">
+      <div className="field field-wide assignment-confirmation">
+        <h4>Confirmed issue for maintenance</h4>
+        <p className="subtle">Confirm the exact problem before assigning this job. This is the instruction Maintenance will receive.</p>
+      </div>
+      <label className="field"><span>Confirmed Category *</span><input name="confirmedCategory" required defaultValue={category}/></label>
+      <label className="field field-wide"><span>Confirmed Problem / Instruction *</span><textarea name="confirmedDescription" required rows={4} defaultValue={description}/></label>
       <>
         <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
         <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
