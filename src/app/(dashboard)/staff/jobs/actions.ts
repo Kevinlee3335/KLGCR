@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
+import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
@@ -26,7 +28,36 @@ export async function startJob(id: string) {
 export async function completeJob(id: string, data: FormData) {
   const result = requiredNote.safeParse(data.get("actionTaken"));
   if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Action taken is required.")}`);
-  await runJobRpc(id, "complete_assigned_job", { p_action_taken: result.data }, "completed");
+  await requireRole(["maintenance_staff"]);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
+  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+
+  const { data: job } = await supabase.from("maintenance_jobs")
+    .select("id,job_no,room_no,description,completed_at,complaint:complaints!maintenance_jobs_complaint_id_fkey(complaint_no,reporter_name,reporter_email)")
+    .eq("id", id).maybeSingle();
+  const complaint = Array.isArray(job?.complaint) ? job?.complaint[0] : job?.complaint;
+  if (job && complaint?.reporter_email) {
+    const admin = createAdminClient();
+    const { data: feedback, error: feedbackError } = await admin.from("maintenance_job_feedback")
+      .upsert({ job_id: job.id, reporter_email: complaint.reporter_email }, { onConflict: "job_id" })
+      .select("token").single();
+    if (feedbackError) console.error("Unable to create resident feedback request", feedbackError);
+    if (feedback?.token) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://klgcr-maintenance-system.vercel.app";
+      await sendTransactionalEmail(complaint.reporter_email, jobCompletedEmail({
+        reporterName: complaint.reporter_name,
+        complaintNo: complaint.complaint_no,
+        roomNo: job.room_no,
+        description: job.description,
+        completedAt: job.completed_at || new Date().toISOString(),
+        ratingUrl: `${appUrl}/feedback/${feedback.token}`,
+      }));
+    }
+  }
+  revalidatePath(`/staff/jobs/${id}`);
+  revalidatePath(`/admin/jobs/${id}`);
+  redirect(`/staff/jobs/${id}?success=completed`);
 }
 
 export async function monitorJob(id: string, data: FormData) {
