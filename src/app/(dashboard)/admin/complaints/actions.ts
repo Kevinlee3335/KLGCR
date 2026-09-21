@@ -14,6 +14,9 @@ export async function reviewComplaint(id:string,data:FormData){await requireRole
 export async function assignComplaint(id:string,data:FormData){
   await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
   if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
+  const confirmedCategory=String(data.get("confirmedCategory")||"").trim();
+  const confirmedDescription=String(data.get("confirmedDescription")||"").trim();
+  if(!confirmedCategory||!confirmedDescription)redirect(`/admin/complaints/${id}?error=Confirm%20the%20issue%20for%20Maintenance%20before%20assigning.`);
   const s=await createClient();
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
@@ -22,6 +25,8 @@ export async function assignComplaint(id:string,data:FormData){
   const date=appointment.appointment?.appointmentDate||null;
   const time=appointment.appointment?.appointmentTime||null;
   const remarks=String(data.get("remarks")||"").trim()||null;
+  const {error: confirmationError}=await s.from("complaints").update({category:confirmedCategory,description:confirmedDescription,status:"under_review"}).eq("id",id).in("status",["new","under_review"]);
+  if(confirmationError)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(confirmationError.message)}`);
   const {error}=await s.rpc("assign_complaint_with_schedule",{p_complaint_id:id,p_assigned_to:staffId,p_appointment_date:date,p_appointment_time:time,p_remarks:remarks});
   if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath("/admin/jobs");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath("/staff/tasks");redirect("/admin/jobs?assigned=1")
