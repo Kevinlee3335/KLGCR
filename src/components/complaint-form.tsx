@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { assignComplaint, createComplaint, reviewComplaint } from "@/app/(dashboard)/admin/complaints/actions";
 import { appointmentTimeSlots } from "@/lib/appointments";
 import { priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
@@ -27,16 +28,34 @@ export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   );
 }
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, category, description }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean; category: string; description: string }) {
+const defectOptions = {
+  Room: {
+    "Door Handle": ["Loose", "Broken", "Missing", "Rusty"], "Door Closer": ["Loose", "Broken", "Missing"], "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty"], "Ceiling Fan": ["Noisy", "No Power", "Shaking"], "Air Conditioning": ["Not Cool", "No Power", "Leaking", "Remote Malfunction"], Lighting: ["Not Working", "Broken"], Divan: ["Broken", "Missing"], Headboard: ["Broken", "Missing"], Mattress: ["Broken", "Missing"], "Study Table": ["Broken", "Missing", "Bloated"], "Utility Table": ["Broken", "Missing", "Bloated"], Chair: ["Broken", "Missing"], Bookshelf: ["Broken", "Missing", "Bloated"], Wardrobe: ["Broken", "Missing", "Bloated"], Curtain: ["Broken", "Missing", "Dirty"], "Curtain Hook / Holder": ["Broken", "Missing"], Floor: ["Water Mark", "Leaking", "Vinyl Tiles Broken"], Wall: ["Water Seepage", "Mouldy", "Near Window", "Near Door", "Near Bathroom"], Other: ["Other"],
+  },
+  Bathroom: { "Door Knob": ["Loose", "Broken", "Cannot Open"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"], "Shower Valve": ["Leaking", "Broken", "Slow Pressure"], "Toilet Seat": ["Dirty", "Broken"], "Flexible Hose": ["Leaking", "Broken"], Other: ["Other"] },
+  "Common Area": { Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"] },
+} as const;
+type DefectArea = keyof typeof defectOptions;
+
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean }) {
   const action = assignComplaint.bind(null, complaintId);
+  const [area, setArea] = useState<DefectArea>("Room");
+  const items = useMemo(() => Object.keys(defectOptions[area]), [area]);
+  const [item, setItem] = useState(items[0]);
+  const issues = defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[];
+  const [issue, setIssue] = useState(issues[0]);
+  const chooseArea = (nextArea: DefectArea) => { const nextItem = Object.keys(defectOptions[nextArea])[0]; const nextIssue = (defectOptions[nextArea][nextItem as keyof (typeof defectOptions)[typeof nextArea]] as readonly string[])[0]; setArea(nextArea); setItem(nextItem); setIssue(nextIssue); };
+  const chooseItem = (nextItem: string) => { const nextIssue = (defectOptions[area][nextItem as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0]; setItem(nextItem); setIssue(nextIssue); };
   return (
     <form action={action} className="form-grid">
       <div className="field field-wide assignment-confirmation">
         <h4>Confirmed issue for maintenance</h4>
-        <p className="subtle">Confirm the exact problem before assigning this job. This is the instruction Maintenance will receive.</p>
+        <p className="subtle">Select the verified defect. This is the exact problem Maintenance will receive.</p>
       </div>
-      <label className="field"><span>Confirmed Category *</span><input name="confirmedCategory" required defaultValue={category}/></label>
-      <label className="field field-wide"><span>Confirmed Problem / Instruction *</span><textarea name="confirmedDescription" required rows={4} defaultValue={description}/></label>
+      <label className="field"><span>Area *</span><select name="defectArea" value={area} onChange={(event) => chooseArea(event.target.value as DefectArea)}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label className="field"><span>Defect Item *</span><select name="defectItem" value={item} onChange={(event) => chooseItem(event.target.value)}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label className="field"><span>Problem *</span><select name="defectIssue" value={issue} onChange={(event) => setIssue(event.target.value)}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label className="field field-wide"><span>Location / Other Note</span><input name="defectNote" maxLength={500} placeholder="Example: Near window, beside main door, or describe other defect"/></label>
       <>
         <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
         <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
