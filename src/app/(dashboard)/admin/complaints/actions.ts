@@ -14,9 +14,13 @@ export async function reviewComplaint(id:string,data:FormData){await requireRole
 export async function assignComplaint(id:string,data:FormData){
   await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
   if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
-  const confirmedCategory=String(data.get("confirmedCategory")||"").trim();
-  const confirmedDescription=String(data.get("confirmedDescription")||"").trim();
-  if(!confirmedCategory||!confirmedDescription)redirect(`/admin/complaints/${id}?error=Confirm%20the%20issue%20for%20Maintenance%20before%20assigning.`);
+  const defectArea=String(data.get("defectArea")||"").trim();
+  const defectItem=String(data.get("defectItem")||"").trim();
+  const defectIssue=String(data.get("defectIssue")||"").trim();
+  const defectNote=String(data.get("defectNote")||"").trim();
+  if(!defectArea||!defectItem||!defectIssue)redirect(`/admin/complaints/${id}?error=Select%20the%20confirmed%20defect%20before%20assigning.`);
+  const confirmedCategory=defectArea==="Bathroom"?["Water Tap / Sink Tap","Shower Valve","Flexible Hose"].includes(defectItem)?"Plumbing":"Bathroom":defectItem==="Air Conditioning"?"Air Conditioning":["Lighting","Ceiling Fan"].includes(defectItem)?"Electrical":defectArea==="Common Area"?"Common Area":"Room Maintenance";
+  const confirmedDescription=[defectArea, defectItem, defectIssue].join(" — ")+(defectNote?` (${defectNote})`:"");
   const s=await createClient();
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
