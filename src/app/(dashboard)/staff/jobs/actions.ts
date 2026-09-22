@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
@@ -43,12 +42,11 @@ export async function completeJob(id: string, data: FormData) {
   if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
   const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
   if (job && complaint && reporterEmail) {
-    const admin = createAdminClient();
-    const { data: feedback, error: feedbackError } = await admin.from("maintenance_job_feedback")
-      .upsert({ job_id: job.id, reporter_email: reporterEmail }, { onConflict: "job_id" })
-      .select("token").single();
+    const feedbackToken = crypto.randomUUID();
+    const { error: feedbackError } = await supabase.from("maintenance_job_feedback")
+      .insert({ job_id: job.id, reporter_email: reporterEmail, token: feedbackToken });
     if (feedbackError) console.error("Unable to create resident feedback request", feedbackError);
-    if (feedback?.token) {
+    else {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://klgcr-maintenance-system.vercel.app";
       await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
         reporterName: complaint.reporter_name,
@@ -56,7 +54,7 @@ export async function completeJob(id: string, data: FormData) {
         roomNo: job.room_no,
         description: job.description,
         completedAt: job.completed_at || new Date().toISOString(),
-        ratingUrl: `${appUrl}/feedback/${feedback.token}`,
+        ratingUrl: `${appUrl}/feedback/${feedbackToken}`,
       }));
     }
   }
