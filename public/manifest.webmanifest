@@ -1,0 +1,9 @@
+{
+  "name": "KLGCR Operations",
+  "short_name": "KLGCR",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#111714",
+  "theme_color": "#111714",
+  "icons": [{ "src": "/klg-campus-residence-logo.png", "sizes": "512x512", "type": "image/png" }]
+}
