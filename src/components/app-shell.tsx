@@ -1,5 +1,6 @@
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
+import { NotificationBell } from "./notification-bell";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
@@ -41,7 +42,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <main className="main">
       <header className="topbar">
         <div><span className="topbar-label">KLG Campus Residence</span><h1>{title}</h1></div>
-        <div className="topbar-actions"><span className="topbar-date">{date}</span>{!isStaff && <Link href="/admin/notifications" className="notification-link" aria-label="Notifications"><Bell size={19}/><span>Notifications</span></Link>}<span className="badge">{profile.blocks?.map((block) => `Block ${block.code}`).join(" · ") || "All blocks"}</span></div>
+        <div className="topbar-actions"><span className="topbar-date">{date}</span><NotificationBell userId={profile.id}/><span className="badge">{profile.blocks?.map((block) => `Block ${block.code}`).join(" · ") || "All blocks"}</span></div>
       </header>
       <div className="content">{children}</div>
     </main>
