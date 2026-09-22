@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { appointmentTimeValues, validateComplaintAppointmentSelection } from "@/lib/appointments";
+import { createAppNotifications } from "@/lib/app-notifications";
 
 const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning","flex","other"]),blockId:z.coerce.number().int().positive(),room:z.string().trim().min(1,"Room is required."),name:z.string().trim().optional(),contact:z.string().trim().optional(),category:z.string().trim().min(1,"Category is required."),description:z.string().trim().min(1,"Description is required."),priority:z.enum(["low","normal","high","urgent"])});
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
@@ -33,6 +34,12 @@ export async function assignComplaint(id:string,data:FormData){
   if(confirmationError)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(confirmationError.message)}`);
   const {error}=await s.rpc("assign_complaint_with_schedule",{p_complaint_id:id,p_assigned_to:staffId,p_appointment_date:date,p_appointment_time:time,p_remarks:remarks});
   if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
+  const { data: job } = await s.from("maintenance_jobs").select("id,job_no,room_no").eq("complaint_id", id).maybeSingle();
+  if (job) {
+    try {
+      await createAppNotifications({ recipientIds: [staffId], type: "job_assigned", title: "New maintenance job assigned", body: `${job.job_no} — room ${job.room_no}${date ? `, ${date} ${time || ""}` : ""}`, href: `/staff/jobs/${job.id}`, entityId: job.id });
+    } catch (notificationError) { console.error("Unable to notify assigned maintenance staff", notificationError); }
+  }
   revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath("/admin/jobs");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath("/staff/tasks");redirect("/admin/jobs?assigned=1")
 }
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
