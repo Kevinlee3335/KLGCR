@@ -42,21 +42,15 @@ export async function completeJob(id: string, data: FormData) {
   if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
   const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
   if (job && complaint && reporterEmail) {
-    const feedbackToken = crypto.randomUUID();
-    const { error: feedbackError } = await supabase.from("maintenance_job_feedback")
-      .insert({ job_id: job.id, reporter_email: reporterEmail, token: feedbackToken });
-    if (feedbackError) console.error("Unable to create resident feedback request", feedbackError);
-    else {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://klgcr-maintenance-system.vercel.app";
-      await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
-        reporterName: complaint.reporter_name,
-        complaintNo: complaint.complaint_no,
-        roomNo: job.room_no,
-        description: job.description,
-        completedAt: job.completed_at || new Date().toISOString(),
-        ratingUrl: `${appUrl}/feedback/${feedbackToken}`,
-      }));
-    }
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://klgcr-maintenance-system.vercel.app";
+    await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
+      reporterName: complaint.reporter_name,
+      complaintNo: complaint.complaint_no,
+      roomNo: job.room_no,
+      description: job.description,
+      completedAt: job.completed_at || new Date().toISOString(),
+      ratingUrl: `${appUrl}/feedback/${job.id}`,
+    }));
   }
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
