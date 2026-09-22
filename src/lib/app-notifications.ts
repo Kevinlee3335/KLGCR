@@ -8,6 +8,7 @@ export type AppNotificationType =
   | "job_completed"
   | "appointment_updated"
   | "checkout_assigned"
+  | "checkout_completed"
   | "material_request";
 
 type NotificationInput = {
