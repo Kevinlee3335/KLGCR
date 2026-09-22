@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formValue, roomAvailability, type GoogleFormPayload } from "@/lib/google-form";
 import { complaintReceivedEmail, sendTransactionalEmail } from "@/lib/email";
+import { notifyActiveAdmins } from "@/lib/app-notifications";
 
 export const runtime = "nodejs";
 
@@ -114,6 +115,12 @@ export async function POST(request: NextRequest) {
     reporterName, complaintNo: data.complaint_no, roomNo: room, description,
     submittedAt: payload.submitted_at,
   }));
+
+  try {
+    await notifyActiveAdmins({ type: "complaint_created", title: "New maintenance complaint", body: `Room ${room}: ${description.slice(0, 110)}`, href: `/admin/complaints/${data.id}`, entityId: data.id });
+  } catch (notificationError) {
+    console.error("Unable to notify administrators about Google Form complaint", notificationError);
+  }
 
   return NextResponse.json({ ok: true, complaint_id: data.id });
 }
