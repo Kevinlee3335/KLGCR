@@ -25,10 +25,12 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
   const [enableError, setEnableError] = useState("");
   const [isBrowser, setIsBrowser] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
 
   useEffect(() => {
     setIsBrowser(true);
+    setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
     const supabase = createClient();
     let active = true;
     const load = async () => {
@@ -45,7 +47,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         const item = event.new as AppNotification;
         if (!active) return;
         setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)].slice(0, 30));
-        if (Notification.permission === "granted") {
+        if ("Notification" in window && Notification.permission === "granted") {
           void navigator.serviceWorker.ready.then((registration) => registration.showNotification(item.title, {
             body: item.body, icon: "/klg-campus-residence-logo.png", badge: "/klg-campus-residence-logo.png", data: { href: item.href },
           }));
@@ -57,6 +59,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   async function enablePhoneAlerts() {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) { setEnableError("This browser does not support phone alerts."); return; }
     const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
     if (permission !== "granted") { setEnableError("Notification permission was not allowed."); return; }
     const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });
     const keyData = await keyResponse.json();
@@ -92,7 +95,8 @@ export function NotificationBell({ userId }: { userId: string }) {
     {open && <div className="app-notification-panel">
       <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread}><CheckCheck size={16}/> Mark all read</button></div>
       {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <Link key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{formatTime(item.created_at)}</small></Link>)}</div>}
-      {isBrowser && <button type="button" className="app-notification-enable" onClick={() => void enablePhoneAlerts()}>{Notification.permission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}
+      {isBrowser && notificationPermission !== "unsupported" && <button type="button" className="app-notification-enable" onClick={() => void enablePhoneAlerts()}>{notificationPermission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}
+      {isBrowser && notificationPermission === "unsupported" && <p className="app-notification-error">Phone alerts require the KLGCR app to be added to your Home Screen.</p>}
       {enableError && <p className="app-notification-error">{enableError}</p>}
     </div>}
   </div>;
