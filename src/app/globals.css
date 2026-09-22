@@ -1419,6 +1419,15 @@ p {
   .notification-link span {
     display: none;
   }
+  .topbar-actions {
+    /* Keep the notification bell separate from the mobile menu button. */
+    margin-right: 56px;
+  }
+  .app-notification-panel {
+    right: -52px;
+    width: min(380px, calc(100vw - 24px));
+    max-height: min(560px, calc(100dvh - 88px));
+  }
   .notification-link {
     padding: 9px;
   }
