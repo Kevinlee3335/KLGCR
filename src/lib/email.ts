@@ -16,6 +16,47 @@ export type CompletedJobEmail = ComplaintEmail & {
   ratingUrl: string;
 };
 
+type TransactionalMessage = { subject: string; text: string; html?: string };
+
+const malaysiaDateFormatter = new Intl.DateTimeFormat("en-MY", {
+  timeZone: "Asia/Kuala_Lumpur",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+const malaysiaTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Kuala_Lumpur",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+function formatMalaysiaDate(value: string) {
+  // A scheduled date has no time zone. Add noon UTC so the calendar date cannot shift.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00Z`) : new Date(value);
+  return Number.isNaN(date.getTime()) ? value : malaysiaDateFormatter.format(date);
+}
+
+function formatMalaysiaTime(value: string) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!match) return value;
+  const hour = Number(match[1]);
+  const minute = match[2];
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${suffix}`;
+}
+
+function formatMalaysiaDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : `${malaysiaDateFormatter.format(date)}, ${malaysiaTimeFormatter.format(date)} (Malaysia Time)`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
+}
+
 export function complaintReceivedEmail(input: ComplaintEmail & { submittedAt: string }) {
   return {
     subject: "Maintenance Request Received – KLG Campus Residence",
@@ -26,7 +67,7 @@ We have successfully received your maintenance request.
 Complaint No.: ${input.complaintNo}
 Room: ${input.roomNo}
 Issue: ${input.description}
-Submitted Date & Time: ${input.submittedAt}
+Submitted Date & Time: ${formatMalaysiaDateTime(input.submittedAt)}
 
 Our maintenance team will review your request and attend to it as soon as possible.
 
@@ -51,9 +92,9 @@ Our maintenance staff attended your room for the scheduled maintenance visit. Ho
 Complaint No.: ${input.complaintNo}
 Room: ${input.roomNo}
 Issue: ${input.description}
-Scheduled Date: ${input.appointmentDate}
-Scheduled Time: ${input.appointmentTime}
-Maintenance Attendance Time: ${input.attendedAt}
+Scheduled Date: ${formatMalaysiaDate(input.appointmentDate)}
+Scheduled Time: ${formatMalaysiaTime(input.appointmentTime)}
+Maintenance Attendance Time: ${formatMalaysiaDateTime(input.attendedAt)}
 
 Please contact the KLG Campus Residence Management Office to arrange a new maintenance date and time.
 
@@ -67,6 +108,11 @@ ${COMMON_EMAIL_FOOTER}`,
 }
 
 export function jobCompletedEmail(input: CompletedJobEmail) {
+  const completedAt = formatMalaysiaDateTime(input.completedAt);
+  const starLinks = [1, 2, 3, 4, 5].map((rating) => {
+    const href = `${input.ratingUrl}?rating=${rating}`;
+    return `<a href="${escapeHtml(href)}" style="display:inline-block;margin:0 5px 8px 0;padding:10px 13px;border-radius:7px;background:#d4af37;color:#18150d;text-decoration:none;font-size:23px;font-weight:700;line-height:1" aria-label="Rate ${rating} out of 5 stars">${"★".repeat(rating)}<span style="font-size:13px;vertical-align:middle;margin-left:6px">${rating}</span></a>`;
+  }).join("");
   return {
     subject: "Maintenance Request Completed – KLG Campus Residence",
     text: `Dear ${input.reporterName?.trim() || "Resident"},
@@ -76,12 +122,11 @@ Your maintenance request has been completed.
 Complaint No.: ${input.complaintNo}
 Room / Area: ${input.roomNo}
 Issue: ${input.description}
-Completed On: ${input.completedAt}
+Completed On: ${completedAt}
 
 We would appreciate your feedback on the service provided.
 
-Rate our service from 1 to 5 stars:
-${input.ratingUrl}
+Please select a rating from 1 to 5 stars in this email.
 
 Thank you for your feedback and cooperation.
 
@@ -89,11 +134,25 @@ Best regards,
 KLG Campus Residence Management
 
 ${COMMON_EMAIL_FOOTER}`,
+    html: `<div style="font-family:Arial,sans-serif;color:#222;line-height:1.55;max-width:640px">
+<p>Dear ${escapeHtml(input.reporterName?.trim() || "Resident")},</p>
+<p>Your maintenance request has been completed.</p>
+<p><strong>Complaint No.:</strong> ${escapeHtml(input.complaintNo)}<br>
+<strong>Room / Area:</strong> ${escapeHtml(input.roomNo)}<br>
+<strong>Issue:</strong> ${escapeHtml(input.description)}<br>
+<strong>Completed On:</strong> ${escapeHtml(completedAt)}</p>
+<p>We would appreciate your feedback on the service provided. Please select a rating below:</p>
+<p>${starLinks}</p>
+<p style="font-size:13px;color:#666">Clicking a star opens a secure page to confirm and record that rating.</p>
+<p>Thank you for your feedback and cooperation.</p>
+<p>Best regards,<br>KLG Campus Residence Management</p>
+<pre style="font-family:Arial,sans-serif;white-space:pre-wrap;color:#444">${escapeHtml(COMMON_EMAIL_FOOTER)}</pre>
+</div>`,
   };
 }
 
 /** Best-effort server-side delivery. Transactional workflows never depend on email delivery. */
-export async function sendTransactionalEmail(to: string | null | undefined, message: { subject: string; text: string }) {
+export async function sendTransactionalEmail(to: string | null | undefined, message: TransactionalMessage) {
   if (!to?.trim()) return { sent: false as const, reason: "disabled_or_missing_recipient" as const };
   const gmailEndpoint = process.env.KLGCR_GMAIL_WEB_APP_URL;
   const gmailSecret = process.env.KLGCR_GMAIL_WEB_APP_SECRET;
@@ -102,7 +161,7 @@ export async function sendTransactionalEmail(to: string | null | undefined, mess
       const response = await fetch(gmailEndpoint, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ secret: gmailSecret, to: to.trim(), subject: message.subject, text: message.text }),
+        body: JSON.stringify({ secret: gmailSecret, to: to.trim(), subject: message.subject, text: message.text, html: message.html || null }),
       });
       if (!response.ok) throw new Error(`Gmail gateway returned ${response.status}: ${await response.text()}`);
       return { sent: true as const };
@@ -122,7 +181,7 @@ export async function sendTransactionalEmail(to: string | null | undefined, mess
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [to.trim()], subject: message.subject, text: message.text }),
+      body: JSON.stringify({ from, to: [to.trim()], subject: message.subject, text: message.text, html: message.html }),
     });
     if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await response.text()}`);
     return { sent: true as const };
