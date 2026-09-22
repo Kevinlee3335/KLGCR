@@ -4,6 +4,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
+import { notifyActiveAdmins } from "@/lib/app-notifications";
 
 const detailsSchema = z.object({
   blockId: z.coerce.number().int().positive("Choose a block."),
@@ -75,6 +76,11 @@ export async function finalizeCleanerComplaint(complaintId: string, path: string
     if (!complaint || !path.startsWith(`complaints/${complaintId}/`)) return { error: "Complaint verification failed." };
     const { error } = await admin.from("complaints").update({ photo_url: `storage://checkout-evidence/${path}` }).eq("id", complaintId);
     if (error) return { error: error.message };
+    try {
+      await notifyActiveAdmins({ type: "complaint_created", title: "New cleaner report", body: `${actor.full_name} submitted complaint ${complaint.complaint_no}.`, href: `/admin/complaints/${complaintId}`, entityId: complaintId });
+    } catch (notificationError) {
+      console.error("Unable to notify administrators about cleaner report", notificationError);
+    }
     revalidatePath("/admin");
     revalidatePath("/admin/complaints");
     revalidatePath(`/admin/complaints/${complaintId}`);
