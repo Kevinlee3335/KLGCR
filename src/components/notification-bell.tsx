@@ -23,6 +23,7 @@ function formatTime(value: string) {
 export function NotificationBell({ userId }: { userId: string }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
+  const [enableError, setEnableError] = useState("");
   const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
 
   useEffect(() => {
@@ -52,12 +53,25 @@ export function NotificationBell({ userId }: { userId: string }) {
   }, [userId]);
 
   async function enablePhoneAlerts() {
-    if (!("Notification" in window)) return;
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) { setEnableError("This browser does not support phone alerts."); return; }
     const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification("KLGCR notifications enabled", { body: "You will see new alerts while the system is open.", icon: "/klg-campus-residence-logo.png" });
-    }
+    if (permission !== "granted") { setEnableError("Notification permission was not allowed."); return; }
+    const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });
+    const keyData = await keyResponse.json();
+    if (!keyResponse.ok || !keyData.publicKey) { setEnableError(keyData.error || "Push notifications are not ready yet."); return; }
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
+    const saveResponse = await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(subscription) });
+    if (!saveResponse.ok) { const data = await saveResponse.json(); setEnableError(data.error || "Unable to save phone alerts."); return; }
+    setEnableError("");
+    await registration.showNotification("KLGCR phone alerts enabled", { body: "You will receive new KLGCR notifications even when the app is closed.", icon: "/klg-campus-residence-logo.png" });
+  }
+
+  function urlBase64ToUint8Array(value: string) {
+    const padding = "=".repeat((4 - value.length % 4) % 4);
+    const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = window.atob(base64);
+    return Uint8Array.from(raw, (character) => character.charCodeAt(0));
   }
 
   async function markAllRead() {
@@ -77,6 +91,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread}><CheckCheck size={16}/> Mark all read</button></div>
       {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <Link key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{formatTime(item.created_at)}</small></Link>)}</div>}
       {"Notification" in window && Notification.permission !== "granted" && <button type="button" className="app-notification-enable" onClick={() => void enablePhoneAlerts()}>Enable phone alerts</button>}
+      {enableError && <p className="app-notification-error">{enableError}</p>}
     </div>}
   </div>;
 }
