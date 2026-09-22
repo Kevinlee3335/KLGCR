@@ -13,7 +13,6 @@ type ComplaintEmail = { reporterName?: string | null; complaintNo: string; roomN
 
 export type CompletedJobEmail = ComplaintEmail & {
   completedAt: string;
-  ratingUrl: string;
 };
 
 type TransactionalMessage = { subject: string; text: string; html?: string };
@@ -51,10 +50,6 @@ function formatMalaysiaTime(value: string) {
 function formatMalaysiaDateTime(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : `${malaysiaDateFormatter.format(date)}, ${malaysiaTimeFormatter.format(date)} (Malaysia Time)`;
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 }
 
 export function complaintReceivedEmail(input: ComplaintEmail & { submittedAt: string }) {
@@ -109,10 +104,6 @@ ${COMMON_EMAIL_FOOTER}`,
 
 export function jobCompletedEmail(input: CompletedJobEmail) {
   const completedAt = formatMalaysiaDateTime(input.completedAt);
-  const starLinks = [1, 2, 3, 4, 5].map((rating) => {
-    const href = `${input.ratingUrl}?rating=${rating}`;
-    return `<a href="${escapeHtml(href)}" style="display:inline-block;margin:0 5px 8px 0;padding:10px 13px;border-radius:7px;background:#d4af37;color:#18150d;text-decoration:none;font-size:23px;font-weight:700;line-height:1" aria-label="Rate ${rating} out of 5 stars">${"★".repeat(rating)}<span style="font-size:13px;vertical-align:middle;margin-left:6px">${rating}</span></a>`;
-  }).join("");
   return {
     subject: "Maintenance Request Completed – KLG Campus Residence",
     text: `Dear ${input.reporterName?.trim() || "Resident"},
@@ -124,30 +115,12 @@ Room / Area: ${input.roomNo}
 Issue: ${input.description}
 Completed On: ${completedAt}
 
-We would appreciate your feedback on the service provided.
-
-Please select a rating from 1 to 5 stars in this email.
-
-Thank you for your feedback and cooperation.
+Thank you for your cooperation.
 
 Best regards,
 KLG Campus Residence Management
 
 ${COMMON_EMAIL_FOOTER}`,
-    html: `<div style="font-family:Arial,sans-serif;color:#222;line-height:1.55;max-width:640px">
-<p>Dear ${escapeHtml(input.reporterName?.trim() || "Resident")},</p>
-<p>Your maintenance request has been completed.</p>
-<p><strong>Complaint No.:</strong> ${escapeHtml(input.complaintNo)}<br>
-<strong>Room / Area:</strong> ${escapeHtml(input.roomNo)}<br>
-<strong>Issue:</strong> ${escapeHtml(input.description)}<br>
-<strong>Completed On:</strong> ${escapeHtml(completedAt)}</p>
-<p>We would appreciate your feedback on the service provided. Please select a rating below:</p>
-<p>${starLinks}</p>
-<p style="font-size:13px;color:#666">Clicking a star opens a secure page to confirm and record that rating.</p>
-<p>Thank you for your feedback and cooperation.</p>
-<p>Best regards,<br>KLG Campus Residence Management</p>
-<pre style="font-family:Arial,sans-serif;white-space:pre-wrap;color:#444">${escapeHtml(COMMON_EMAIL_FOOTER)}</pre>
-</div>`,
   };
 }
 
