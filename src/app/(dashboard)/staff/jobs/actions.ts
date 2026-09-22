@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
+import { notifyActiveAdmins } from "@/lib/app-notifications";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
 
@@ -50,6 +51,13 @@ export async function completeJob(id: string, data: FormData) {
       completedAt: job.completed_at || new Date().toISOString(),
     }));
   }
+  if (job) {
+    try {
+      await notifyActiveAdmins({ type: "job_completed", title: "Maintenance job completed", body: `${job.job_no} for room ${job.room_no} has been completed.`, href: `/admin/jobs/${job.id}`, entityId: job.id });
+    } catch (notificationError) {
+      console.error("Unable to notify administrators about completed job", notificationError);
+    }
+  }
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=completed`);
@@ -83,6 +91,11 @@ export async function markTenantNotAvailable(id: string, data: FormData) {
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
   const result = Array.isArray(attendance) ? attendance[0] : attendance;
+  try {
+    await notifyActiveAdmins({ type: "tenant_not_available", title: "Tenant not available", body: `Maintenance attended job ${id}, but the tenant was not available.`, href: `/admin/jobs/${id}`, entityId: id });
+  } catch (notificationError) {
+    console.error("Unable to notify administrators about tenant availability", notificationError);
+  }
   if (result?.complaint_id) {
     const { data: complaint } = await supabase.from("complaints")
       .select("complaint_no,room_no,description,reporter_name,reporter_email")
