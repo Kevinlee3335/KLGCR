@@ -6,6 +6,7 @@ import { z } from "zod";
 import { appointmentStatuses, appointmentTimeValues } from "@/lib/appointments";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAppNotifications } from "@/lib/app-notifications";
 
 const appointmentSchema = z.object({
   appointmentDate: z.string().date(),
@@ -34,6 +35,9 @@ export async function saveJobAppointment(jobId: string, appointmentId: string | 
     : await db.from("appointments").insert({ ...values, complaint_id: job.complaint_id, job_id: jobId,
         assigned_staff: job.assigned_to, status: "pending_confirmation", created_by: actor.id });
   if (result.error) redirect(destination(jobId, result.error.message));
+  try {
+    await createAppNotifications({ recipientIds: [job.assigned_to], type: "appointment_updated", title: "Maintenance appointment updated", body: `Your visit is scheduled for ${parsed.data.appointmentDate}, ${parsed.data.appointmentTime}.`, href: `/staff/jobs/${jobId}`, entityId: jobId });
+  } catch (notificationError) { console.error("Unable to notify maintenance staff about appointment", notificationError); }
   revalidatePath(`/admin/jobs/${jobId}`); revalidatePath("/admin/daily-tasks"); revalidatePath("/staff"); revalidatePath("/staff/appointments");
   redirect(destination(jobId));
 }
