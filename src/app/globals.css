@@ -3763,3 +3763,7 @@ button.calendar-item {
 .material-autocomplete-list button { display: grid; grid-template-columns: 110px minmax(0,1fr) auto; gap: 10px; width: 100%; padding: 11px 13px; border: 0; border-bottom: 1px solid #eee7db; background: transparent; text-align: left; font: inherit; cursor: pointer; }
 .material-autocomplete-list button:hover { background: #f8f0dc; }
 .material-autocomplete-list small { color: var(--muted); white-space: nowrap; }
+
+.completion-photo-camera { display: inline-flex; align-items: center; gap: 9px; width: fit-content; margin-top: 8px; padding: 11px 15px; border: 1px solid #c59a3d; border-radius: 10px; background: #fff8e8; color: #6e4c08; font-weight: 800; cursor: pointer; }
+.completion-photo-camera input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.completion-photo-camera span { font-size: 1.3rem; }
