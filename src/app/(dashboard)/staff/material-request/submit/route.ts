@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notifyActiveMaterialApprovers } from "@/lib/app-notifications";
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -22,6 +23,32 @@ export async function POST(request: Request) {
   }
   const supabase = await createClient();
   const { error } = await supabase.rpc("create_material_request", { p_job_id: jobId, p_note: note, p_items: items });
-  if (error) url.searchParams.set("error", error.message); else url.searchParams.set("success", "created");
+  if (error) {
+    url.searchParams.set("error", error.message);
+  } else {
+    try {
+      const { data: userResult } = await supabase.auth.getUser();
+      const { data: materialRequest } = await supabase.from("material_requests")
+        .select("id,request_no,job:maintenance_jobs!job_id(job_no,room_no)")
+        .eq("job_id", jobId)
+        .eq("requested_by", userResult.user?.id || "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (materialRequest) {
+        const job = materialRequest.job as unknown as { job_no: string; room_no: string } | null;
+        await notifyActiveMaterialApprovers({
+          type: "material_request",
+          title: "New material request",
+          body: materialRequest.request_no + " for " + (job?.job_no || "a maintenance job") + " · Room " + (job?.room_no || "—") + " is awaiting review.",
+          href: "/admin/material-requests",
+          entityId: materialRequest.id,
+        });
+      }
+    } catch (notificationError) {
+      console.error("Unable to notify material approvers", notificationError);
+    }
+    url.searchParams.set("success", "created");
+  }
   return NextResponse.redirect(url, 303);
 }
