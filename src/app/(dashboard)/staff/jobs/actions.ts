@@ -69,13 +69,18 @@ export async function completeJob(id: string, data: FormData) {
   if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
   const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
   if (job && complaint && reporterEmail) {
-    await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
-      reporterName: complaint.reporter_name,
-      complaintNo: complaint.complaint_no,
-      roomNo: job.room_no,
-      description: job.description,
-      completedAt: job.completed_at || new Date().toISOString(),
-    }));
+    try {
+      await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
+        reporterName: complaint.reporter_name,
+        complaintNo: complaint.complaint_no,
+        roomNo: job.room_no,
+        description: job.description,
+        completedAt: job.completed_at || new Date().toISOString(),
+      }));
+    } catch (emailError) {
+      // A delivery-provider outage must not stop an already completed job.
+      console.error("Unable to send completed-job email", emailError);
+    }
   }
   if (job) {
     try {
