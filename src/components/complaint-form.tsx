@@ -52,7 +52,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
   const [defects, setDefects] = useState<ConfirmedDefect[]>([initialDefect(1)]);
   const remaining = Math.max(0, 10 - existingCount);
   const update = (id: number, change: Partial<ConfirmedDefect>) =>
-    setDefects((current) => current.map((defect) => defect.id === id ? { ...defect, ...change } : defect);
+    setDefects((current) => current.map((defect) => defect.id === id ? { ...defect, ...change } : defect));
   const add = () => setDefects((current) =>
     current.length >= remaining ? current : [...current, initialDefect(Math.max(...current.map((d) => d.id), 0) + 1)]
   );
