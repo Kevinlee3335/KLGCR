@@ -27,3 +27,53 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 .table-wrap{border:1px solid var(--premium-line);border-radius:14px;background:#fffefa}.table{overflow:hidden}.table th{background:#f5edda!important;color:#67501b!important;font-size:.69rem!important;letter-spacing:.065em!important;text-transform:uppercase!important;border-bottom:1px solid #dfd1ad!important}.table td{border-bottom-color:#eee8da!important}.table tbody tr{transition:background .15s ease}.table tbody tr:hover{background:#fff9ea!important}.status-badge,.priority-badge,.stock-state,.badge{border:1px solid #0000000b;box-shadow:0 2px 5px #2d220c0c;font-weight:800!important;letter-spacing:.015em}.badge{background:#f7efd9!important;color:#765714!important;border-color:#dfc985!important}
 .empty,.dashboard-empty{border:1px dashed #d6c18d!important;background:#fffaf0!important;border-radius:14px!important}.mobile-menu summary{border:1px solid #d8c898!important;border-radius:12px!important;background:#fffdf8!important;box-shadow:0 5px 13px #503d160d}.mobile-nav{background:rgba(20,19,15,.96)!important;border-top:1px solid #c9a14555!important;backdrop-filter:blur(14px)}.mobile-nav a{color:#ebe5d9!important}.mobile-nav a:hover{color:#f0ca70!important}
 @media(max-width:850px){.content{padding:18px 14px 88px!important}.topbar{padding:13px 16px!important}.topbar-actions{gap:9px!important}.topbar-date,.topbar-actions>.badge{display:none!important}.button,.button-link,.secondary-button{min-height:44px}.panel,.dashboard-card,.calendar-event-card,.calendar-settings{border-radius:15px!important}.request-actions .button{width:100%}.assignment-submit{width:100%}.table-wrap{border-radius:12px}.nav a{margin:3px 6px}.mobile-menu{z-index:70!important}.notification-bell{z-index:75!important}}
+
+
+/* Subtle building identity for the Admin complaint review */
+.complaint-review-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.complaint-block-background {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-position: right top;
+  background-repeat: no-repeat;
+  background-size: min(780px, 78vw) auto;
+  opacity: 0.11;
+  filter: saturate(0.82) contrast(0.92);
+  pointer-events: none;
+}
+
+.complaint-block-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #faf8f3 0%, rgba(250, 248, 243, 0.9) 42%, rgba(250, 248, 243, 0.4) 100%);
+}
+
+.complaint-review-content {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 850px) {
+  .complaint-review-page {
+    border-radius: 14px;
+  }
+
+  .complaint-block-background {
+    background-position: 50% top;
+    background-size: 620px auto;
+    opacity: 0.08;
+  }
+
+  .complaint-block-background::after {
+    background: linear-gradient(180deg, #faf8f3 0%, rgba(250, 248, 243, 0.92) 46%, rgba(250, 248, 243, 0.72) 100%);
+  }
+}
