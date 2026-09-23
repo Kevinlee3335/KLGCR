@@ -75,10 +75,11 @@ describe("Complaint Review", () => {
   it("adds distinct defects to one complaint before assignment", async () => {
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
     fireEvent.click(screen.getByRole("button", { name: "+ Add another defect" }));
+    fireEvent.change(screen.getAllByLabelText("Defect Item *")[1], { target: { value: "Door Closer" } });
     expect(screen.getByText("Defect 2")).toBeInTheDocument();
     const payload = document.querySelector<HTMLInputElement>('input[name="defects"]');
     expect(JSON.parse(payload?.value || "[]")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
     expect(JSON.parse(payload?.value || "[]")).toHaveLength(1);
   });
 
@@ -94,7 +95,7 @@ describe("Complaint Review", () => {
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
-      if (table === "appointments") return query({ data: [], error: null }) as never;
+      if (table === "appointments" || table === "maintenance_jobs") return query({ data: [], error: null }) as never;
       const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
         columns.startsWith("preferred_date")
