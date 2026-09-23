@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
@@ -30,13 +31,11 @@ async function uploadCompletionPhotos(supabase: Awaited<ReturnType<typeof create
   }
 }
 
-async function runJobRpc(id: string, rpc: string, parameters: Record<string, unknown>, success: string) {
-  await requireRole(["maintenance_staff"]);
-  const supabase = await createClient();
-  const { error } = await supabase.rpc(rpc, { p_job_id: id, ...parameters });
-  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
-  // Authenticated dashboard pages are dynamic and read Supabase on navigation.
-  // Refresh only the page receiving the redirect instead of invalidating six routes.
+
+async function sendCompletedJobFollowUps(id: string) {
+  try {
+    const supabase = await createClient();
+    // Email and push delivery can be slow. Keep them, but never make staff wait for them.\n  after(() => sendCompletedJobFollowUps(id));\n
   revalidatePath(`/staff/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=${success}`);
 }
@@ -122,25 +121,33 @@ export async function markTenantNotAvailable(id: string, data: FormData) {
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
   const result = Array.isArray(attendance) ? attendance[0] : attendance;
-  try {
-    await notifyActiveAdmins({ type: "tenant_not_available", title: "Tenant not available", body: `Maintenance attended job ${id}, but the tenant was not available.`, href: `/admin/jobs/${id}`, entityId: id });
-  } catch (notificationError) {
-    console.error("Unable to notify administrators about tenant availability", notificationError);
-  }
-  if (result?.complaint_id) {
-    const { data: complaint } = await supabase.from("complaints")
-      .select("complaint_no,room_no,description,reporter_name,reporter_email")
-      .eq("id", result.complaint_id).maybeSingle();
-    if (complaint) {
-      const { tenantNotAvailableEmail, sendTransactionalEmail } = await import("@/lib/email");
-      await sendTransactionalEmail(complaint.reporter_email, tenantNotAvailableEmail({
-        reporterName: complaint.reporter_name, complaintNo: complaint.complaint_no,
-        roomNo: complaint.room_no, description: complaint.description,
-        appointmentDate: result.appointment_date, appointmentTime: result.appointment_time,
-        attendedAt: result.attended_at,
-      }));
+  // These are notifications only; record the attendance and return to staff first.
+  after(async () => {
+    try {
+      await notifyActiveAdmins({ type: "tenant_not_available", title: "Tenant not available", body: `Maintenance attended job ${id}, but the tenant was not available.`, href: `/admin/jobs/${id}`, entityId: id });
+    } catch (notificationError) {
+      console.error("Unable to notify administrators about tenant availability", notificationError);
     }
-  }
+    if (result?.complaint_id) {
+      try {
+        const { data: complaint } = await supabase.from("complaints")
+          .select("complaint_no,room_no,description,reporter_name,reporter_email")
+          .eq("id", result.complaint_id).maybeSingle();
+        if (complaint) {
+          const { tenantNotAvailableEmail, sendTransactionalEmail } = await import("@/lib/email");
+          await sendTransactionalEmail(complaint.reporter_email, tenantNotAvailableEmail({
+            reporterName: complaint.reporter_name, complaintNo: complaint.complaint_no,
+            roomNo: complaint.room_no, description: complaint.description,
+            appointmentDate: result.appointment_date, appointmentTime: result.appointment_time,
+            attendedAt: result.attended_at,
+          }));
+        }
+      } catch (emailError) {
+        console.error("Unable to send tenant-not-available email", emailError);
+      }
+    }
+  });
+
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=tenant-not-available`);
