@@ -9,6 +9,10 @@
 @media(max-width:850px){.admin-kpis{grid-template-columns:repeat(2,1fr)}.jobs-chart-wrap{flex-direction:column;align-items:stretch}.donut{align-self:center}.inventory-kpis,.material-request-kpis{grid-template-columns:1fr 1fr}.inventory-form{grid-template-columns:1fr}.inventory-form .span-2{grid-column:1}.request-card-head{flex-direction:column}.request-staff{text-align:left}.request-actions,.reject-form{flex-direction:column;align-items:stretch;max-width:none}.request-actions .button{width:100%}.inventory-details[open]{min-width:0}}
 @media(max-width:520px){.admin-kpis,.inventory-kpis,.material-request-kpis{grid-template-columns:1fr}.kpi-card{min-height:100px}.request-items-table th,.request-items-table td{padding:10px 12px}}
 
+.assignment-action-bar{position:sticky;top:12px;z-index:12;display:flex;justify-content:flex-end;margin:0!important;padding:10px 12px;background:rgba(255,254,250,.94);border:1px solid #dfcfaa;border-radius:13px;box-shadow:0 8px 22px #4a36151a;backdrop-filter:blur(10px)}
+.assignment-action-bar .assignment-submit{min-width:248px}
+@media(max-width:850px){.assignment-action-bar{top:8px;padding:8px}.assignment-action-bar .assignment-submit{min-width:0;width:100%}}
+
 /* Premium black-and-gold operations system finish — production refresh */
 :root{--premium-ink:#181712;--premium-gold:#c9a145;--premium-gold-deep:#8a671e;--premium-cream:#f7f4ec;--premium-line:#e4dccb;--premium-danger:#a73734}
 body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),linear-gradient(135deg,#faf8f3 0%,#f4f0e7 100%);color:var(--premium-ink)}
