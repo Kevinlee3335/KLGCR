@@ -107,6 +107,35 @@ export async function createUser(
   }
 }
 
+const roleSchema = z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer"]);
+
+export async function updateUserRole(data: FormData) {
+  const actor = await requireRole(["admin"]);
+  const id = String(data.get("id") || "");
+  const parsedRole = roleSchema.safeParse(data.get("role"));
+  if (!id || !parsedRole.success) throw new Error("Choose a valid role.");
+
+  const admin = adminClient();
+  const { data: target, error: targetError } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", id)
+    .single();
+  if (targetError) throw new Error(targetError.message);
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ role: parsedRole.data })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await recordAccessAudit(admin, actor.id, id, "user_role_changed", {
+    previous_role: target.role,
+    role: parsedRole.data,
+  });
+  revalidatePath("/admin/users");
+}
+
 export async function setUserActive(data: FormData) {
   const actor = await requireRole(["admin"]);
   const id = String(data.get("id"));
