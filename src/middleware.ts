@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookieOptions } from "@/lib/supabase/session";
 
 function clearSupabaseCookies(request: NextRequest, response: NextResponse) {
   for (const cookie of request.cookies.getAll()) {
@@ -12,22 +13,26 @@ function clearSupabaseCookies(request: NextRequest, response: NextResponse) {
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+  response.headers.set("Cache-Control", "private, no-store");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return response;
 
   const supabase = createServerClient(url, key, {
+    cookieOptions: authCookieOptions,
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(items) {
         items.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
+        response.headers.set("Cache-Control", "private, no-store");
         items.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
   });
 
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: claimsData, error } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null;
   const invalidRefreshToken = error?.code === "refresh_token_not_found" || error?.message.includes("Refresh Token Not Found");
   if (invalidRefreshToken) clearSupabaseCookies(request, response);
 
