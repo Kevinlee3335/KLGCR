@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appointmentRequired,
+  preferredAppointmentSelection,
   complaintAppointmentRequired,
   appointmentTimeValues,
   normalizeRoomAccessPermission,
@@ -124,5 +125,22 @@ describe("approval appointment validation", () => {
 
   it("creates an appointment selection for access-denied approval when both values are supplied", () => {
     expect(validateAppointmentSelection("2026-09-12", "10:30", true).success).toBe(true);
+  });
+});
+
+describe("preferred availability draft appointment", () => {
+  it("uses the tenant's date and 10.30 AM slot when room access is NO", () => {
+    expect(preferredAppointmentSelection("google_form", "NO", "2026-09-23", "10.30 AM - 11.30 AM")).toEqual({
+      date: "2026-09-23", time: "10:30",
+    });
+  });
+  it("recognizes stored 24-hour ranges", () => {
+    expect(preferredAppointmentSelection("google_form", "no", "2026-09-23", "13:00:00 - 14:00:00")).toEqual({
+      date: "2026-09-23", time: "13:00",
+    });
+  });
+  it("leaves optional or unrecognized availability blank for Admin to choose", () => {
+    expect(preferredAppointmentSelection("google_form", "YES", "2026-09-23", "10.30 AM - 11.30 AM")).toBeNull();
+    expect(preferredAppointmentSelection("google_form", "NO", "2026-09-23", "11:00 AM - 12:00 PM")).toBeNull();
   });
 });
