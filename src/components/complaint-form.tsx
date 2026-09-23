@@ -56,7 +56,7 @@ type DefectArea = keyof typeof defectOptions;
 
 function AssignmentSubmitButton() {
   const { pending } = useFormStatus();
-  return <button className="button assignment-submit" type="submit" disabled={pending} aria-busy={pending}>{pending ? "Assigning…" : "Approve & create job"}</button>;
+  return <button className="button assignment-submit" type="submit" disabled={pending} aria-busy={pending}>{pending ? "Adding defect…" : "+ Add Defect & Assign Job"}</button>;
 }
 
 type AssignmentFormProps = {
@@ -92,8 +92,8 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
   return (
     <form action={action} className="form-grid">
       <div className="field field-wide assignment-confirmation">
-        <h4>Confirmed issue for maintenance</h4>
-        <p className="subtle">Select the verified defect. This is the exact problem Maintenance will receive.</p>
+        <h4>Add Defect {existingCount + 1} for maintenance</h4>
+        <p className="subtle">Select the verified defect. This is the exact problem Maintenance will receive. You can add up to 10 defects for one complaint.</p>
       </div>
       <label className="field"><span>Area *</span><select name="defectArea" value={area} onChange={(event) => chooseArea(event.target.value as DefectArea)}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="field"><span>Defect Item *</span><select name="defectItem" value={item} onChange={(event) => chooseItem(event.target.value)}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
