@@ -59,7 +59,18 @@ function AssignmentSubmitButton() {
   return <button className="button assignment-submit" type="submit" disabled={pending} aria-busy={pending}>{pending ? "Assigning…" : "Approve & create job"}</button>;
 }
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean }) {
+type AssignmentFormProps = {
+  complaintId: string;
+  eligible: { id: string; full_name: string }[];
+  requiresAppointment?: boolean;
+  existingCount?: number;
+  source?: string;
+  roomAccess?: string | null;
+  preferredDate?: string | null;
+  preferredTime?: string | null;
+};
+
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0, source, roomAccess, preferredDate, preferredTime }: AssignmentFormProps) {
   const action = assignComplaint.bind(null, complaintId);
   const [area, setArea] = useState<DefectArea>("Room");
   const items = useMemo(() => Object.keys(defectOptions[area]), [area]);
@@ -77,6 +88,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
     const nextIssue = (defectOptions[area][nextItem as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0];
     setItem(nextItem); setIssue(nextIssue);
   };
+  const preferredVisit = source === "google_form" && roomAccess === "no" ? [preferredDate, preferredTime].filter(Boolean).join(" · ") : "";
   return (
     <form action={action} className="form-grid">
       <div className="field field-wide assignment-confirmation">
@@ -88,8 +100,8 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
       <label className="field"><span>Problem *</span><select name="defectIssue" value={issue} onChange={(event) => setIssue(event.target.value)}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="field field-wide"><span>Location / Other Note</span><input name="defectNote" maxLength={500} placeholder="Example: Near window, beside main door, or describe other defect"/></label>
       <>
-        <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
-        <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
+        <div className="field field-wide"><h4>{existingCount ? "Add another maintenance appointment" : "Maintenance Appointment"}</h4><p className="subtle">Choose the actual visit date and time. {preferredVisit ? `Tenant preferred availability: ${preferredVisit}.` : "The tenant's preferred availability above is read-only."}</p></div>
+        <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment} defaultValue={preferredDate || ""}/></label>
         <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
       </>
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
