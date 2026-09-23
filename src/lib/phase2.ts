@@ -3,7 +3,7 @@ export const priorities = ["low","normal","high","urgent"] as const;
 export const sources = ["google_form","manual","cleaning","flex","other"] as const;
 export const jobStatuses = ["assigned","in_progress","pending_material","under_monitoring","completed","cancelled"] as const;
 export const titleCase = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
-export const formatDate = (value: string) => new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+export const formatDate = (value: string) => new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kuala_Lumpur" }).format(new Date(value));
 
 export type ComplaintRow = {
   id:string; complaint_no:string; source:string; room_no:string; complainant_name:string|null; complainant_contact:string|null;
