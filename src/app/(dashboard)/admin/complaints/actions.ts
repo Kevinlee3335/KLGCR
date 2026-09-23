@@ -11,17 +11,25 @@ const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning"
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
 
 export async function createComplaint(data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/new?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").insert({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority});if(error)redirect(`/admin/complaints/new?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin");revalidatePath("/admin/complaints");redirect("/admin/complaints?created=1")}
-export async function reviewComplaint(id:string,data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").update({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority,status:"under_review"}).eq("id",id);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${id}`);redirect(`/admin/complaints/${id}?saved=1`)}
+export async function reviewComplaint(id:string,data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").update({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority}).eq("id",id);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${id}`);redirect(`/admin/complaints/${id}?saved=1`)}
+const confirmedDefectSchema = z.object({
+  area: z.enum(["Room", "Bathroom", "Common Area"]),
+  item: z.string().trim().min(1).max(100),
+  issue: z.string().trim().min(1).max(100),
+  note: z.string().trim().max(500),
+});
+const confirmedDefectsSchema = z.array(confirmedDefectSchema).min(1).max(10);
+
 export async function assignComplaint(id:string,data:FormData){
-  await requireRole(["admin"]);const staffId=String(data.get("staffId")||"");
-  if(!staffId)redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
-  const defectArea=String(data.get("defectArea")||"").trim();
-  const defectItem=String(data.get("defectItem")||"").trim();
-  const defectIssue=String(data.get("defectIssue")||"").trim();
-  const defectNote=String(data.get("defectNote")||"").trim();
-  if(!defectArea||!defectItem||!defectIssue)redirect(`/admin/complaints/${id}?error=Select%20the%20confirmed%20defect%20before%20assigning.`);
-  const confirmedCategory=defectArea==="Bathroom"?["Water Tap / Sink Tap","Shower Valve","Flexible Hose"].includes(defectItem)?"Plumbing":"Bathroom":defectItem==="Air Conditioning"?"Air Conditioning":["Lighting","Ceiling Fan"].includes(defectItem)?"Electrical":defectArea==="Common Area"?"Common Area":"Room Maintenance";
-  const confirmedDescription=[defectArea, defectItem, defectIssue].join(" — ")+(defectNote?` (${defectNote})`:"");
+  await requireRole(["admin"]);
+  const staffId=String(data.get("staffId")||"");
+  if(!z.string().uuid().safeParse(staffId).success)
+    redirect(`/admin/complaints/${id}?error=Choose%20an%20eligible%20staff%20member.`);
+  let incoming: unknown;
+  try { incoming = JSON.parse(String(data.get("defects") || "[]")); }
+  catch { redirect(`/admin/complaints/${id}?error=Invalid%20defect%20list.`); }
+  const parsed = confirmedDefectsSchema.safeParse(incoming);
+  if(!parsed.success) redirect(`/admin/complaints/${id}?error=Select%201%20to%2010%20confirmed%20defects.`);
   const s=await createClient();
   const {data:complaint,error:complaintError}=await s.from("complaints").select("source,room_access_permission").eq("id",id).maybeSingle();
   if(complaintError||!complaint)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(complaintError?.message||"Complaint not found")}`);
@@ -29,18 +37,23 @@ export async function assignComplaint(id:string,data:FormData){
   if(!appointment.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(appointment.error)}`);
   const date=appointment.appointment?.appointmentDate||null;
   const time=appointment.appointment?.appointmentTime||null;
-  const remarks=String(data.get("remarks")||"").trim()||null;
-  const {error: confirmationError}=await s.from("complaints").update({category:confirmedCategory,description:confirmedDescription,status:"under_review"}).eq("id",id).in("status",["new","under_review"]);
-  if(confirmationError)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(confirmationError.message)}`);
-  const {error}=await s.rpc("assign_complaint_with_schedule",{p_complaint_id:id,p_assigned_to:staffId,p_appointment_date:date,p_appointment_time:time,p_remarks:remarks});
+  const remarks=String(data.get("remarks")||"").trim().slice(0,1000)||null;
+  const {data:jobs,error}=await s.rpc("assign_complaint_defects",{
+    p_complaint_id:id,p_assigned_to:staffId,p_defects:parsed.data,
+    p_appointment_date:date,p_appointment_time:time,p_remarks:remarks
+  });
   if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
-  const { data: job } = await s.from("maintenance_jobs").select("id,job_no,room_no").eq("complaint_id", id).maybeSingle();
-  if (job) {
+  for(const [index,job] of (jobs||[]).entries()) {
     try {
-      await createAppNotifications({ recipientIds: [staffId], type: "job_assigned", title: "New maintenance job assigned", body: `${job.job_no} — room ${job.room_no}${date ? `, ${date} ${time || ""}` : ""}`, href: `/staff/jobs/${job.id}`, entityId: job.id });
+      await createAppNotifications({ recipientIds: [staffId], type: "job_assigned",
+        title: "New maintenance job assigned",
+        body: `${job.job_no} — ${parsed.data[index]?.item || "room defect"}${date ? `, ${date} ${time || ""}` : ""}`,
+        href: `/staff/jobs/${job.job_id}`, entityId: job.job_id });
     } catch (notificationError) { console.error("Unable to notify assigned maintenance staff", notificationError); }
   }
-  revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath("/admin/jobs");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath("/staff/tasks");redirect("/admin/jobs?assigned=1")
+  revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath(`/admin/complaints/${id}`);
+  revalidatePath("/admin/jobs");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath("/staff/tasks");
+  redirect(`/admin/complaints/${id}?assigned=1`);
 }
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
 
