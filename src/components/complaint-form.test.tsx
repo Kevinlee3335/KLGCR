@@ -18,7 +18,8 @@ describe("AssignmentForm", () => {
     expect(screen.getByLabelText("Maintenance Date *")).toBeRequired();
     expect(screen.getByLabelText("Maintenance Time *")).toBeRequired();
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Approve & create job" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add Another Defect/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign 1 Defect to Maintenance" })).toBeInTheDocument();
   });
 
   it("does not require appointment fields when room access is granted", () => {
