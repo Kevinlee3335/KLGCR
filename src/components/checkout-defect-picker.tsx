@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const defectOptions = [
+const defectOptions: { area: string; items: [string, string[]][] }[] = [
   { area: "Room", items: [
     ["Door Handle", ["Loose", "Broken", "Missing", "Rusty"]], ["Door Closer", ["Loose", "Broken", "Missing"]], ["Door Lock / Key", ["Loose", "Broken", "Key Missing", "Rusty"]], ["Ceiling Fan", ["Noisy", "No Power", "Shaking"]], ["Air Conditioning", ["Not Cool", "No Power", "Leaking", "Remote Malfunction"]], ["Lighting", ["Not Working", "Broken"]], ["Divan", ["Broken", "Missing"]], ["Headboard", ["Broken", "Missing"]], ["Mattress", ["Broken", "Missing"]], ["Study Table", ["Broken", "Missing", "Bloated"]], ["Utility Table", ["Broken", "Missing", "Bloated"]], ["Bookshelf", ["Broken", "Missing", "Bloated"]], ["Wardrobe", ["Broken", "Missing", "Bloated"]], ["Chair", ["Broken", "Missing"]], ["Curtain", ["Broken", "Missing", "Dirty"]], ["Curtain Hook / Holder", ["Broken", "Missing"]], ["Floor", ["Water Mark", "Leaking", "Vinyl Tiles Broken"]], ["Wall", ["Water Seepage", "Mouldy", "Near Window", "Near Door", "Near Bathroom"]], ["Other", ["Other"]],
   ] },
@@ -10,7 +10,7 @@ const defectOptions = [
     ["Door Knob", ["Loose", "Broken", "Cannot Open"]], ["Water Tap / Sink Tap", ["Leaking", "Broken", "Slow Pressure"]], ["Shower Valve", ["Leaking", "Broken", "Slow Pressure"]], ["Toilet Seat", ["Dirty", "Broken"]], ["Flexible Hose", ["Leaking", "Broken"]], ["Other", ["Other"]],
   ] },
   { area: "Common Area", items: [["Lighting", ["Not Working", "Broken"]], ["Water Leakage", ["Leaking"]], ["Other", ["Other"]]] },
-] as const;
+];
 
 type Entry = { area: string; item: string; issue: string; other: string };
 const blank = (): Entry => ({ area: "Room", item: "", issue: "", other: "" });
