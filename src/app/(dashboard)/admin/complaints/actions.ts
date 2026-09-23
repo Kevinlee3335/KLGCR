@@ -11,7 +11,7 @@ const complaintSchema=z.object({source:z.enum(["google_form","manual","cleaning"
 const read=(data:FormData)=>complaintSchema.safeParse({source:data.get("source"),blockId:data.get("blockId"),room:data.get("room"),name:data.get("name"),contact:data.get("contact"),category:data.get("category"),description:data.get("description"),priority:data.get("priority")});
 
 export async function createComplaint(data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/new?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").insert({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority});if(error)redirect(`/admin/complaints/new?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin");revalidatePath("/admin/complaints");redirect("/admin/complaints?created=1")}
-export async function reviewComplaint(id:string,data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").update({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority,status:"under_review"}).eq("id",id);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${id}`);redirect(`/admin/complaints/${id}?saved=1`)}
+export async function reviewComplaint(id:string,data:FormData){await requireRole(["admin"]);const parsed=read(data);if(!parsed.success)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid complaint")}`);const s=await createClient();const {error}=await s.from("complaints").update({source:parsed.data.source,block_id:parsed.data.blockId,room_no:parsed.data.room,complainant_name:parsed.data.name||null,complainant_contact:parsed.data.contact||null,category:parsed.data.category,description:parsed.data.description,priority:parsed.data.priority}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/admin/complaints/${id}`);redirect(`/admin/complaints/${id}?saved=1`)}
 const confirmedDefectSchema = z.object({
   area: z.enum(["Room", "Bathroom", "Common Area"]),
   item: z.string().trim().min(1).max(100),
@@ -43,11 +43,11 @@ export async function assignComplaint(id:string,data:FormData){
     p_appointment_date:date,p_appointment_time:time,p_remarks:remarks
   });
   if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
-  for(const job of jobs||[]) {
+  for(const [index,job] of (jobs||[]).entries()) {
     try {
       await createAppNotifications({ recipientIds: [staffId], type: "job_assigned",
         title: "New maintenance job assigned",
-        body: `${job.job_no} — ${parsed.data.find((_, index) => jobs?.[index]?.job_id === job.job_id)?.item || "room defect"}${date ? `, ${date} ${time || ""}` : ""}`,
+        body: `${job.job_no} — ${parsed.data[index]?.item || "room defect"}${date ? `, ${date} ${time || ""}` : ""}`,
         href: `/staff/jobs/${job.job_id}`, entityId: job.job_id });
     } catch (notificationError) { console.error("Unable to notify assigned maintenance staff", notificationError); }
   }
