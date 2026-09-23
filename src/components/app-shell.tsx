@@ -11,7 +11,7 @@ const adminNav = [
   ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays], ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
   ["Check-out Rooms", "/admin/checkouts", DoorOpen],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
-  ["Reports", "/admin/reports", FileBarChart], ["Notifications", "/admin/notifications", Bell],
+  ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
 ] as const;
 const cleanerNav = [["New Complaint", "/staff/complaints/new"], ["Check-out Rooms", "/staff/checkouts"], ["Calendar", "/staff/calendar"]] as const;
