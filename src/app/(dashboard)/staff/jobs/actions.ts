@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
@@ -59,36 +60,39 @@ export async function completeJob(id: string, data: FormData) {
   const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
-  const { data: job, error: jobLookupError } = await supabase.from("maintenance_jobs")
-    .select("id,job_no,room_no,description,completed_at,complaint_id")
-    .eq("id", id).maybeSingle();
-  if (jobLookupError) console.error("Unable to load completed job for resident email", jobLookupError);
-  const { data: complaint, error: complaintLookupError } = job?.complaint_id
-    ? await supabase.from("complaints").select("complaint_no,reporter_name,reporter_email,complainant_contact").eq("id", job.complaint_id).maybeSingle()
-    : { data: null, error: null };
-  if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
-  const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
-  if (job && complaint && reporterEmail) {
-    try {
-      await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
-        reporterName: complaint.reporter_name,
-        complaintNo: complaint.complaint_no,
-        roomNo: job.room_no,
-        description: job.description,
-        completedAt: job.completed_at || new Date().toISOString(),
-      }));
-    } catch (emailError) {
-      // A delivery-provider outage must not stop an already completed job.
-      console.error("Unable to send completed-job email", emailError);
+  // Do not keep staff waiting for email and push delivery after the job is safely completed.
+  after(async () => {
+    const { data: job, error: jobLookupError } = await supabase.from("maintenance_jobs")
+      .select("id,job_no,room_no,description,completed_at,complaint_id")
+      .eq("id", id).maybeSingle();
+    if (jobLookupError) console.error("Unable to load completed job for resident email", jobLookupError);
+    const { data: complaint, error: complaintLookupError } = job?.complaint_id
+      ? await supabase.from("complaints").select("complaint_no,reporter_name,reporter_email,complainant_contact").eq("id", job.complaint_id).maybeSingle()
+      : { data: null, error: null };
+    if (complaintLookupError) console.error("Unable to load complaint recipient for completed job email", complaintLookupError);
+    const reporterEmail = complaint?.reporter_email || (complaint?.complainant_contact?.includes("@") ? complaint.complainant_contact : null);
+    if (job && complaint && reporterEmail) {
+      try {
+        await sendTransactionalEmail(reporterEmail, jobCompletedEmail({
+          reporterName: complaint.reporter_name,
+          complaintNo: complaint.complaint_no,
+          roomNo: job.room_no,
+          description: job.description,
+          completedAt: job.completed_at || new Date().toISOString(),
+        }));
+      } catch (emailError) {
+        // A delivery-provider outage must not stop an already completed job.
+        console.error("Unable to send completed-job email", emailError);
+      }
     }
-  }
-  if (job) {
-    try {
-      await notifyActiveAdmins({ type: "job_completed", title: "Maintenance job completed", body: `${job.job_no} for room ${job.room_no} has been completed.`, href: `/admin/jobs/${job.id}`, entityId: job.id });
-    } catch (notificationError) {
-      console.error("Unable to notify administrators about completed job", notificationError);
+    if (job) {
+      try {
+        await notifyActiveAdmins({ type: "job_completed", title: "Maintenance job completed", body: `${job.job_no} for room ${job.room_no} has been completed.`, href: `/admin/jobs/${job.id}`, entityId: job.id });
+      } catch (notificationError) {
+        console.error("Unable to notify administrators about completed job", notificationError);
+      }
     }
-  }
+  });
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=completed`);
@@ -122,25 +126,28 @@ export async function markTenantNotAvailable(id: string, data: FormData) {
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
   const result = Array.isArray(attendance) ? attendance[0] : attendance;
-  try {
-    await notifyActiveAdmins({ type: "tenant_not_available", title: "Tenant not available", body: `Maintenance attended job ${id}, but the tenant was not available.`, href: `/admin/jobs/${id}`, entityId: id });
-  } catch (notificationError) {
-    console.error("Unable to notify administrators about tenant availability", notificationError);
-  }
-  if (result?.complaint_id) {
-    const { data: complaint } = await supabase.from("complaints")
-      .select("complaint_no,room_no,description,reporter_name,reporter_email")
-      .eq("id", result.complaint_id).maybeSingle();
-    if (complaint) {
-      const { tenantNotAvailableEmail, sendTransactionalEmail } = await import("@/lib/email");
-      await sendTransactionalEmail(complaint.reporter_email, tenantNotAvailableEmail({
-        reporterName: complaint.reporter_name, complaintNo: complaint.complaint_no,
-        roomNo: complaint.room_no, description: complaint.description,
-        appointmentDate: result.appointment_date, appointmentTime: result.appointment_time,
-        attendedAt: result.attended_at,
-      }));
+  // Record attendance first; notification and email are sent after the staff response.
+  after(async () => {
+    try {
+      await notifyActiveAdmins({ type: "tenant_not_available", title: "Tenant not available", body: `Maintenance attended job ${id}, but the tenant was not available.`, href: `/admin/jobs/${id}`, entityId: id });
+    } catch (notificationError) {
+      console.error("Unable to notify administrators about tenant availability", notificationError);
     }
-  }
+    if (result?.complaint_id) {
+      const { data: complaint } = await supabase.from("complaints")
+        .select("complaint_no,room_no,description,reporter_name,reporter_email")
+        .eq("id", result.complaint_id).maybeSingle();
+      if (complaint) {
+        const { tenantNotAvailableEmail, sendTransactionalEmail } = await import("@/lib/email");
+        await sendTransactionalEmail(complaint.reporter_email, tenantNotAvailableEmail({
+          reporterName: complaint.reporter_name, complaintNo: complaint.complaint_no,
+          roomNo: complaint.room_no, description: complaint.description,
+          appointmentDate: result.appointment_date, appointmentTime: result.appointment_time,
+          attendedAt: result.attended_at,
+        }));
+      }
+    }
+  });
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
   redirect(`/staff/jobs/${id}?success=tenant-not-available`);
