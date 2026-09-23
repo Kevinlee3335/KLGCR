@@ -77,3 +77,27 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
     background: linear-gradient(180deg, #faf8f3 0%, rgba(250, 248, 243, 0.6) 46%, rgba(250, 248, 243, 0.28) 100%);
   }
 }
+
+
+/* Let the block photo remain visible through every Complaint Review card. */
+.complaint-review-page {
+  min-height: 100vh;
+}
+
+.complaint-block-background {
+  z-index: 0;
+  opacity: 0.38;
+}
+
+.complaint-review-content {
+  z-index: 1;
+}
+
+.complaint-review-content .panel {
+  background: rgba(255, 253, 249, 0.80) !important;
+  backdrop-filter: blur(2px);
+}
+
+.complaint-review-content .workflow-notice {
+  background-color: rgba(224, 247, 237, 0.82);
+}
