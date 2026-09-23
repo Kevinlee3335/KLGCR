@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formValue, roomAvailability, type GoogleFormPayload } from "@/lib/google-form";
 import { complaintReceivedEmail, sendTransactionalEmail } from "@/lib/email";
-import { notifyActiveAdmins } from "@/lib/app-notifications";
+import { sendPushNotifications } from "@/lib/push";
 
 export const runtime = "nodejs";
 
@@ -117,7 +117,23 @@ export async function POST(request: NextRequest) {
   }));
 
   try {
-    await notifyActiveAdmins({ type: "complaint_created", title: "New maintenance complaint", body: `Room ${room}: ${description.slice(0, 110)}`, href: `/admin/complaints/${data.id}`, entityId: data.id });
+    // This route already has the service-role client needed for the Google Form insert.
+    // Write notification records with that same client so a separate server client
+    // configuration cannot prevent Admin alerts from being created.
+    const { data: admins, error: adminLookupError } = await supabase.from("profiles")
+      .select("id").eq("role", "admin").eq("is_active", true).is("deleted_at", null);
+    if (adminLookupError) throw adminLookupError;
+    const recipientIds = (admins || []).map((admin) => admin.id);
+    if (recipientIds.length) {
+      const title = "New maintenance complaint";
+      const body = `Room ${room}: ${description.slice(0, 110)}`;
+      const href = `/admin/complaints/${data.id}`;
+      const { error: notificationError } = await supabase.from("app_notifications").insert(recipientIds.map((recipient_id) => ({
+        recipient_id, type: "complaint_created", title, body, href, entity_id: data.id,
+      })));
+      if (notificationError) throw notificationError;
+      await sendPushNotifications({ recipientIds, title, body, href });
+    }
   } catch (notificationError) {
     console.error("Unable to notify administrators about Google Form complaint", notificationError);
   }
