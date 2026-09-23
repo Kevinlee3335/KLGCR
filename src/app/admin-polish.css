@@ -11,6 +11,8 @@
 
 .assignment-action-bar{position:sticky;top:12px;z-index:12;display:flex;justify-content:flex-end;margin:0!important;padding:10px 12px;background:rgba(255,254,250,.94);border:1px solid #dfcfaa;border-radius:13px;box-shadow:0 8px 22px #4a36151a;backdrop-filter:blur(10px)}
 .assignment-action-bar .assignment-submit{min-width:248px}
+.confirmed-defect-card{padding:18px;border:1px solid #e3d4b6;border-radius:15px;background:linear-gradient(135deg,#fffefb,#fbf7ed);box-shadow:0 5px 16px #3c2c0d0a}
+.confirmed-defect-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.confirmed-defect-heading h4{margin:0;color:#2c220f}.confirmed-defect-heading .button{margin:0}.assignment-final-action{display:flex;justify-content:flex-end;margin-top:4px}.assignment-final-action .assignment-submit{min-width:280px}
 @media(max-width:850px){.assignment-action-bar{top:8px;padding:8px}.assignment-action-bar .assignment-submit{min-width:0;width:100%}}
 
 /* Premium black-and-gold operations system finish — production refresh */
