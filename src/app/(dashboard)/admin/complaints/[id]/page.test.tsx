@@ -117,7 +117,7 @@ describe("Complaint Review", () => {
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
-      if (table === "appointments") return query({ data: [], error: null }) as never;
+      if (table === "appointments" || table === "maintenance_jobs") return query({ data: [], error: null }) as never;
       const complaintQuery = query({ data: googleFormComplaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
         columns.startsWith("preferred_date")
@@ -138,7 +138,7 @@ describe("Complaint Review", () => {
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
-      if (table === "appointments") return query({ data: [], error: null }) as never;
+      if (table === "appointments" || table === "maintenance_jobs") return query({ data: [], error: null }) as never;
 
       const complaintQuery = query({ data: complaint, error: null });
       complaintQuery.select.mockImplementation((columns: string) =>
