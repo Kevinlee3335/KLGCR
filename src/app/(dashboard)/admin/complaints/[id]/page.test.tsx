@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -62,7 +62,7 @@ vi.mock("@/lib/supabase/server", () => ({
     from: vi.fn((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] });
       if (table === "profiles") return query({ data: [] });
-      if (table === "appointments") return query({ data: [], error: null });
+      if (table === "appointments" || table === "maintenance_jobs") return query({ data: [], error: null });
       return query({ data: complaint, error: null });
     }),
   }),
@@ -72,6 +72,16 @@ import ComplaintDetail from "./page";
 import { createClient } from "@/lib/supabase/server";
 
 describe("Complaint Review", () => {
+  it("adds distinct defects to one complaint before assignment", async () => {
+    render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add another defect" }));
+    expect(screen.getByText("Defect 2")).toBeInTheDocument();
+    const payload = document.querySelector<HTMLInputElement>('input[name="defects"]');
+    expect(JSON.parse(payload?.value || "[]")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(JSON.parse(payload?.value || "[]")).toHaveLength(1);
+  });
+
   it("renders optional appointment inputs for a manual complaint without room access", async () => {
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
     expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
