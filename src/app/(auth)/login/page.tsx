@@ -19,8 +19,9 @@ function malaysiaDate() {
   return { weekday, date };
 }
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ logout?: string }> }) {
   const today = malaysiaDate();
+  const params = await searchParams;
 
   return (
     <main className="enterprise-login">
@@ -60,7 +61,7 @@ export default function LoginPage() {
             <p>Please sign in using your company account.</p>
           </div>
 
-          <LoginForm />
+          <LoginForm logoutRequested={params.logout === "1"} />
 
           <footer className="login-date" aria-label="Today in Malaysia">
             <span>{today.weekday}</span>
