@@ -86,7 +86,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 
 .complaint-block-background {
   z-index: 0;
-  opacity: 0.38;
+  opacity: 0.57;
 }
 
 .complaint-review-content {
@@ -94,7 +94,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 }
 
 .complaint-review-content .panel {
-  background: rgba(255, 253, 249, 0.80) !important;
+  background: rgba(255, 253, 249, 0.64) !important;
   backdrop-filter: blur(2px);
 }
 
