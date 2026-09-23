@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { MaterialItemPicker } from "@/components/material-item-picker";
 
 const statusLabel = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -15,7 +16,6 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
     supabase.from("inventory_items").select("id,item_code,description,balance_qty,unit").eq("is_active", true).order("description"),
     supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,issued_at,job:maintenance_jobs!job_id(id,job_no,room_no,status),items:material_request_items(requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,unit))").order("created_at", { ascending: false }).limit(20),
   ]);
-  const materialOptions = (items || []).map((item: any) => <option key={item.id} value={item.id}>{item.item_code} · {item.description} · Balance {item.balance_qty} {item.unit || ""}</option>);
 
   return <AppShell profile={profile} title="Material Request">
     <div className="section-head material-page-heading">
@@ -32,7 +32,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
         <div className="material-rows">
           {[1, 2, 3].map((slot) => <fieldset className="material-row" key={slot}>
             <legend>Material {slot}{slot > 1 && <span>Optional</span>}</legend>
-            <label className="material-field material-select-field"><span>Material</span><select name="itemId" required={slot === 1}><option value="">Select material</option>{materialOptions}</select></label>
+            <label className="material-field material-select-field"><span>Material</span><MaterialItemPicker name="itemId" required={slot === 1} items={(items || []).map((item: any) => ({ id: item.id, item_code: item.item_code, description: item.description, balance_qty: item.balance_qty, unit: item.unit }))}/></label>
             <label className="material-field material-quantity-field"><span>Quantity</span><input name="qty" type="number" inputMode="decimal" min="0.01" step="0.01" required={slot === 1}/></label>
           </fieldset>)}
         </div>
