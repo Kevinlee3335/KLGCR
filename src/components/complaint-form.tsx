@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { assignComplaint, createComplaint, reviewComplaint } from "@/app/(dashboard)/admin/complaints/actions";
-import { appointmentTimeSlots } from "@/lib/appointments";
+import { appointmentTimeSlots, preferredAppointmentSelection } from "@/lib/appointments";
 import { priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
 
 type ComplaintFormProps = {
@@ -42,11 +42,13 @@ const initialDefect = (id: number): ConfirmedDefect => ({
   id, area: "Room", item: "Door Handle", issue: "Loose", note: "",
 });
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0 }: {
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0, source, roomAccess, preferredDate, preferredTime }: {
   complaintId: string; eligible: { id: string; full_name: string }[];
-  requiresAppointment?: boolean; existingCount?: number;
+  requiresAppointment?: boolean; existingCount?: number; source?: string; roomAccess?: string | null;
+  preferredDate?: string | null; preferredTime?: string | null;
 }) {
   const action = assignComplaint.bind(null, complaintId);
+  const preferred = preferredAppointmentSelection(source, roomAccess, preferredDate, preferredTime);
   const [defects, setDefects] = useState<ConfirmedDefect[]>([initialDefect(1)]);
   const remaining = Math.max(0, 10 - existingCount);
   const update = (id: number, change: Partial<ConfirmedDefect>) =>
@@ -85,9 +87,9 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         </div>;
       })}
       {defects.length < remaining && <div className="field field-wide"><button type="button" className="button button-secondary" onClick={add}>+ Add another defect</button></div>}
-      <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
-      <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
-      <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
+      <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">The tenant&apos;s preferred date and time are filled in when an appointment is required. Change them here if the student arranges another time.</p></div>
+      <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" defaultValue={preferred?.date || ""} required={requiresAppointment}/></label>
+      <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue={preferred?.time || ""} required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
       <label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000}/></label>
       <div className="field field-wide"><button className="button" type="submit">Approve &amp; create {defects.length} {defects.length === 1 ? "job" : "jobs"}</button></div>
