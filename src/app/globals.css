@@ -2033,9 +2033,9 @@ p {
   color: #17603d;
 }
 .workflow-warning {
-  background: #fff4d6;
-  border-color: #e9ce84;
-  color: #70530c;
+  background: #fff0f0;
+  border-color: #e79c9c;
+  color: #ad2424;
 }
 .maintenance-settings-panel {
   max-width: 920px;
