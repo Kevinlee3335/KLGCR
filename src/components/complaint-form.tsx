@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { assignComplaint, createComplaint, reviewComplaint } from "@/app/(dashboard)/admin/complaints/actions";
-import { appointmentTimeSlots } from "@/lib/appointments";
+import { appointmentTimeSlots, preferredAppointmentSelection } from "@/lib/appointments";
 import { priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
 
 type ComplaintFormProps = {
@@ -101,6 +101,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
     return next;
   }));
   const preferredVisit = source === "google_form" && roomAccess === "no" ? [preferredDate, preferredTime].filter(Boolean).join(" · ") : "";
+  const preferredAppointment = preferredAppointmentSelection(source, roomAccess, preferredDate, preferredTime);
   return (
     <form action={action} className="form-grid">
       <div className="field field-wide assignment-confirmation">
@@ -122,11 +123,11 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
           </div>
         </div>;
       })}
-      <>
-        <div className="field field-wide"><h4>{existingCount ? "Add another maintenance appointment" : "Maintenance Appointment"}</h4><p className="subtle">Choose the actual visit date and time. {preferredVisit ? `Tenant preferred availability: ${preferredVisit}.` : "The tenant's preferred availability above is read-only."}</p></div>
-        <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment} defaultValue={preferredDate || ""}/></label>
-        <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
-      </>
+      {requiresAppointment && <>
+        <div className="field field-wide"><h4>{existingCount ? "Add another maintenance appointment" : "Maintenance Appointment"}</h4><p className="subtle">The tenant&apos;s preferred availability is prefilled. Change it only when the tenant confirms a different visit time.</p></div>
+        <label className="field"><span>Maintenance Date *</span><input name="appointmentDate" type="date" required defaultValue={preferredAppointment?.date || preferredDate || ""}/></label>
+        <label className="field"><span>Maintenance Time *</span><select name="appointmentTime" defaultValue={preferredAppointment?.time || ""} required><option value="">Choose a time slot</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
+      </>}
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
       <label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000}/></label>
       <div className="field field-wide assignment-final-action"><AssignmentSubmitButton defectCount={defects.length}/></div>
