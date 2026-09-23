@@ -45,7 +45,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
   background-position: right top;
   background-repeat: no-repeat;
   background-size: min(780px, 78vw) auto;
-  opacity: 0.11;
+  opacity: 0.22;
   filter: saturate(0.82) contrast(0.92);
   pointer-events: none;
 }
@@ -54,7 +54,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #faf8f3 0%, rgba(250, 248, 243, 0.9) 42%, rgba(250, 248, 243, 0.4) 100%);
+  background: linear-gradient(90deg, #faf8f3 0%, rgba(250, 248, 243, 0.76) 42%, rgba(250, 248, 243, 0.18) 100%);
 }
 
 .complaint-review-content {
@@ -70,10 +70,10 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
   .complaint-block-background {
     background-position: 50% top;
     background-size: 620px auto;
-    opacity: 0.08;
+    opacity: 0.16;
   }
 
   .complaint-block-background::after {
-    background: linear-gradient(180deg, #faf8f3 0%, rgba(250, 248, 243, 0.92) 46%, rgba(250, 248, 243, 0.72) 100%);
+    background: linear-gradient(180deg, #faf8f3 0%, rgba(250, 248, 243, 0.78) 46%, rgba(250, 248, 243, 0.48) 100%);
   }
 }
