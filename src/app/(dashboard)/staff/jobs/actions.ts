@@ -9,6 +9,26 @@ import { createClient } from "@/lib/supabase/server";
 import { notifyActiveAdmins } from "@/lib/app-notifications";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
+const completionPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maxCompletionPhotoBytes = 10 * 1024 * 1024;
+
+async function uploadCompletionPhotos(supabase: Awaited<ReturnType<typeof createClient>>, jobId: string, staffId: string, data: FormData) {
+  const files = data.getAll("completionPhotos").filter((value): value is File => value instanceof File && value.size > 0);
+  for (const file of files) {
+    if (!completionPhotoTypes.has(file.type) || file.size > maxCompletionPhotoBytes) {
+      throw new Error("Completion photos must be JPG, PNG, or WEBP files up to 10 MB.");
+    }
+    const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const storagePath = `${jobId}/completion/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("maintenance-evidence").upload(storagePath, file, { contentType: file.type, upsert: false });
+    if (uploadError) throw new Error(`Unable to upload completion photo: ${uploadError.message}`);
+    const { error: recordError } = await supabase.from("maintenance_job_photos").insert({ job_id: jobId, storage_path: storagePath, uploaded_by: staffId });
+    if (recordError) {
+      await supabase.storage.from("maintenance-evidence").remove([storagePath]);
+      throw new Error(`Unable to save completion photo: ${recordError.message}`);
+    }
+  }
+}
 
 async function runJobRpc(id: string, rpc: string, parameters: Record<string, unknown>, success: string) {
   await requireRole(["maintenance_staff"]);
@@ -28,8 +48,14 @@ export async function startJob(id: string) {
 export async function completeJob(id: string, data: FormData) {
   const result = requiredNote.safeParse(data.get("actionTaken"));
   if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Action taken is required.")}`);
-  await requireRole(["maintenance_staff"]);
+  const staff = await requireRole(["maintenance_staff"]);
   const supabase = await createClient();
+  try {
+    await uploadCompletionPhotos(supabase, id, staff.id, data);
+  } catch (photoError) {
+    const message = photoError instanceof Error ? photoError.message : "Unable to save completion photo.";
+    redirect(`/staff/jobs/${id}?error=${encodeURIComponent(message)}`);
+  }
   const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
   if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
 
