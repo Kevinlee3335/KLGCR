@@ -92,3 +92,27 @@ export function validateComplaintAppointmentSelection(
     complaintAppointmentRequired(source, roomAccess),
   );
 }
+
+/** Use the tenant's selected slot as a draft appointment when access is denied. */
+export function preferredAppointmentSelection(
+  source: string | null | undefined,
+  roomAccess: string | null | undefined,
+  preferredDate: string | null | undefined,
+  preferredTime: string | null | undefined,
+) {
+  if (!complaintAppointmentRequired(source, roomAccess) || !preferredDate || !preferredTime) return null;
+  const date = preferredDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const match = preferredTime.trim().match(/^(\d{1,2})[.:](\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = hour % 12 + (meridiem === "PM" ? 12 : 0);
+  }
+  const time = `${String(hour).padStart(2, "0")}:${minute}`;
+  if (!appointmentTimeValues.includes(time as (typeof appointmentTimeValues)[number])) return null;
+  return { date, time };
+}
