@@ -95,6 +95,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         <h4>Add Defect {existingCount + 1} for maintenance</h4>
         <p className="subtle">Select the verified defect. This is the exact problem Maintenance will receive. You can add up to 10 defects for one complaint.</p>
       </div>
+      <div className="field field-wide assignment-action-bar"><AssignmentSubmitButton/></div>
       <label className="field"><span>Area *</span><select name="defectArea" value={area} onChange={(event) => chooseArea(event.target.value as DefectArea)}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="field"><span>Defect Item *</span><select name="defectItem" value={item} onChange={(event) => chooseItem(event.target.value)}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="field"><span>Problem *</span><select name="defectIssue" value={issue} onChange={(event) => setIssue(event.target.value)}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -106,7 +107,6 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
       </>
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
       <label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000}/></label>
-      <div className="field field-wide"><AssignmentSubmitButton/></div>
     </form>
   );
 }
