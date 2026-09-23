@@ -117,25 +117,23 @@ export async function POST(request: NextRequest) {
   }));
 
   try {
-    // This route already has the service-role client needed for the Google Form insert.
-    // Write notification records with that same client so a separate server client
-    // configuration cannot prevent Admin alerts from being created.
+    // Database trigger creates the bell notification for every complaint.
+    // This request only sends the matching phone push after that durable record exists.
     const { data: admins, error: adminLookupError } = await supabase.from("profiles")
       .select("id").eq("role", "admin").eq("is_active", true).is("deleted_at", null);
     if (adminLookupError) throw adminLookupError;
     const recipientIds = (admins || []).map((admin) => admin.id);
     if (recipientIds.length) {
-      const title = "New maintenance complaint";
-      const body = `Room ${room}: ${description.slice(0, 110)}`;
-      const href = `/admin/complaints/${data.id}`;
-      const { error: notificationError } = await supabase.from("app_notifications").insert(recipientIds.map((recipient_id) => ({
-        recipient_id, type: "complaint_created", title, body, href, entity_id: data.id,
-      })));
-      if (notificationError) throw notificationError;
-      await sendPushNotifications({ recipientIds, title, body, href });
+      await sendPushNotifications({
+        recipientIds,
+        title: "New maintenance complaint",
+        body: `Room ${room}: ${description.slice(0, 110)}`,
+        href: `/admin/complaints/${data.id}`,
+      });
     }
   } catch (notificationError) {
-    console.error("Unable to notify administrators about Google Form complaint", notificationError);
+    // The bell notification was already created by the database trigger.
+    console.error("Unable to send phone push for Google Form complaint", notificationError);
   }
 
   return NextResponse.json({ ok: true, complaint_id: data.id });
