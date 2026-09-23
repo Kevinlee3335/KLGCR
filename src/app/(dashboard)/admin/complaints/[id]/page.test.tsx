@@ -113,7 +113,7 @@ describe("Complaint Review", () => {
 
   it("renders required appointment inputs for a Google Form NO", async () => {
     const client = await createClient();
-    const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "NO" };
+    const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "NO", availability_date: "2026-09-23", availability_time: "10.30 AM - 11.30 AM" };
     vi.mocked(client.from).mockImplementation((table: string) => {
       if (table === "blocks") return query({ data: [{ id: 1, code: "A" }] }) as never;
       if (table === "profiles") return query({ data: [] }) as never;
@@ -129,6 +129,8 @@ describe("Complaint Review", () => {
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
     expect(screen.getByLabelText("Maintenance Date *")).toBeRequired();
     expect(screen.getByLabelText("Maintenance Time *")).toBeRequired();
+    expect(screen.getByLabelText("Maintenance Date *")).toHaveValue("2026-09-23");
+    expect(screen.getByLabelText("Maintenance Time *")).toHaveValue("10:30");
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
     expect(screen.getByText("Appointment Required.")).toBeInTheDocument();
   });
