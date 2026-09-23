@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { assignComplaint, createComplaint, reviewComplaint } from "@/app/(dashboard)/admin/complaints/actions";
 import { appointmentTimeSlots } from "@/lib/appointments";
 import { priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
@@ -37,33 +37,60 @@ const defectOptions = {
 } as const;
 type DefectArea = keyof typeof defectOptions;
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false }: { complaintId: string; eligible: { id: string; full_name: string }[]; requiresAppointment?: boolean }) {
+type ConfirmedDefect = { id: number; area: DefectArea; item: string; issue: string; note: string };
+const initialDefect = (id: number): ConfirmedDefect => ({
+  id, area: "Room", item: "Door Handle", issue: "Loose", note: "",
+});
+
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0 }: {
+  complaintId: string; eligible: { id: string; full_name: string }[];
+  requiresAppointment?: boolean; existingCount?: number;
+}) {
   const action = assignComplaint.bind(null, complaintId);
-  const [area, setArea] = useState<DefectArea>("Room");
-  const items = useMemo(() => Object.keys(defectOptions[area]), [area]);
-  const [item, setItem] = useState(items[0]);
-  const issues = defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[];
-  const [issue, setIssue] = useState(issues[0]);
-  const chooseArea = (nextArea: DefectArea) => { const nextItem = Object.keys(defectOptions[nextArea])[0]; const nextIssue = (defectOptions[nextArea][nextItem as keyof (typeof defectOptions)[typeof nextArea]] as readonly string[])[0]; setArea(nextArea); setItem(nextItem); setIssue(nextIssue); };
-  const chooseItem = (nextItem: string) => { const nextIssue = (defectOptions[area][nextItem as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0]; setItem(nextItem); setIssue(nextIssue); };
+  const [defects, setDefects] = useState<ConfirmedDefect[]>([initialDefect(1)]);
+  const remaining = Math.max(0, 10 - existingCount);
+  const update = (id: number, change: Partial<ConfirmedDefect>) =>
+    setDefects((current) => current.map((defect) => defect.id === id ? { ...defect, ...change } : defect);
+  const add = () => setDefects((current) =>
+    current.length >= remaining ? current : [...current, initialDefect(Math.max(...current.map((d) => d.id), 0) + 1)]
+  );
   return (
     <form action={action} className="form-grid">
       <div className="field field-wide assignment-confirmation">
-        <h4>Confirmed issue for maintenance</h4>
-        <p className="subtle">Select the verified defect. This is the exact problem Maintenance will receive.</p>
+        <h4>Confirmed defects for maintenance</h4>
+        <p className="subtle">Add each verified defect separately. Maintenance receives one job per defect ({existingCount + defects.length}/10).</p>
       </div>
-      <label className="field"><span>Area *</span><select name="defectArea" value={area} onChange={(event) => chooseArea(event.target.value as DefectArea)}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label className="field"><span>Defect Item *</span><select name="defectItem" value={item} onChange={(event) => chooseItem(event.target.value)}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label className="field"><span>Problem *</span><select name="defectIssue" value={issue} onChange={(event) => setIssue(event.target.value)}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label className="field field-wide"><span>Location / Other Note</span><input name="defectNote" maxLength={500} placeholder="Example: Near window, beside main door, or describe other defect"/></label>
-      <>
-        <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
-        <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
-        <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
-      </>
+      <input type="hidden" name="defects" value={JSON.stringify(defects.map(({area,item,issue,note}) => ({area,item,issue,note})))}/>
+      {defects.map((defect, index) => {
+        const items = Object.keys(defectOptions[defect.area]);
+        const issues = defectOptions[defect.area][defect.item as keyof (typeof defectOptions)[typeof defect.area]] as readonly string[];
+        return <div key={defect.id} className="field field-wide panel" style={{padding:16}}>
+          <div className="section-head"><h4>Defect {index + 1}</h4>{defects.length > 1 &&
+            <button type="button" className="button button-secondary" onClick={() => setDefects((current) => current.filter((row) => row.id !== defect.id))}>Remove</button>}</div>
+          <div className="form-grid">
+            <label className="field"><span>Area *</span><select value={defect.area} onChange={(event) => {
+              const area = event.target.value as DefectArea;
+              const item = Object.keys(defectOptions[area])[0];
+              const issue = (defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0];
+              update(defect.id, { area, item, issue });
+            }}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => {
+              const item = event.target.value;
+              const issue = (defectOptions[defect.area][item as keyof (typeof defectOptions)[typeof defect.area]] as readonly string[])[0];
+              update(defect.id, { item, issue });
+            }}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => update(defect.id, {issue:event.target.value})}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="field field-wide"><span>Location / Other Note</span><input value={defect.note} onChange={(event) => update(defect.id, {note:event.target.value})} maxLength={500} placeholder="Near window, beside main door, or describe other defect"/></label>
+          </div>
+        </div>;
+      })}
+      {defects.length < remaining && <div className="field field-wide"><button type="button" className="button button-secondary" onClick={add}>+ Add another defect</button></div>}
+      <div className="field field-wide"><h4>Maintenance Appointment</h4><p className="subtle">Choose the actual visit date and time. The tenant&apos;s preferred availability above is read-only and is not copied automatically.</p></div>
+      <label className="field"><span>Maintenance Date{requiresAppointment ? " *" : ""}</span><input name="appointmentDate" type="date" required={requiresAppointment}/></label>
+      <label className="field"><span>Maintenance Time{requiresAppointment ? " *" : ""}</span><select name="appointmentTime" defaultValue="" required={requiresAppointment}><option value="">{requiresAppointment ? "Choose a time slot" : "No appointment"}</option>{appointmentTimeSlots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>
       <label className="field"><span>Assigned Staff *</span><select name="staffId" required><option value="">Choose eligible staff</option>{eligible.map((staff) => <option key={staff.id} value={staff.id}>{staff.full_name}</option>)}</select></label>
       <label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000}/></label>
-      <div className="field field-wide"><button className="button" type="submit">Approve &amp; create job</button></div>
+      <div className="field field-wide"><button className="button" type="submit">Approve &amp; create {defects.length} {defects.length === 1 ? "job" : "jobs"}</button></div>
     </form>
   );
 }
