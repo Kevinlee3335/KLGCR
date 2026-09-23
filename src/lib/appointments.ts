@@ -102,8 +102,8 @@ export function preferredAppointmentSelection(
 ) {
   if (!complaintAppointmentRequired(source, roomAccess) || !preferredDate || !preferredTime) return null;
   const date = preferredDate.trim();
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
-  const match = preferredTime.trim().match(/^(\\d{1,2})[.:](\\d{2})(?::\\d{2})?\\s*(AM|PM)?/i);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const match = preferredTime.trim().match(/^(\d{1,2})[.:](\d{2})(?::\d{2})?\s*(AM|PM)?/i);
   if (!match) return null;
   let hour = Number(match[1]);
   const minute = match[2];
