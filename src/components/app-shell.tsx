@@ -36,7 +36,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <aside className="sidebar">
       <Brand/>
       {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <nav className="nav admin-nav" aria-label="Main navigation">{adminNav.map(([item, href, Icon]) => <Link key={item} href={href} aria-current={current(item)}><Icon size={18}/><span>{item}</span></Link>)}</nav>}
-      <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{roleLabel[profile.role]}</small></div><LogoutForm/></div>
+      <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{roleLabel[profile.role]}</small></div><Link className="change-password-link" href="/account">Change Password</Link><LogoutForm/></div>
     </aside>
 
     <main className="main">
