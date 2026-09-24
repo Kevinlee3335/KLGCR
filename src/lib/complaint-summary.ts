@@ -10,13 +10,16 @@ export function summarize(complaints: Complaint[], jobs: Job[], appointments: Ap
     const old = latest.get(appointment.job_id);
     if (!old || appointment.created_at > old.created_at) latest.set(appointment.job_id, appointment);
   }
-  const counts = { total: complaints.length, rooms: new Set<string>(), completed: 0, completedRooms: new Set<string>(), inProgress: 0, pendingMaterial: 0, monitoring: 0, tenantUnavailable: 0, assigned: 0, pending: 0, rejected: 0 };
+  const counts = { total: complaints.length, rooms: new Set<string>(), completed: 0, inProgress: 0, pendingMaterial: 0, monitoring: 0, tenantUnavailable: 0, assigned: 0, pending: 0, rejected: 0 };
+  const roomFullyCompleted = new Map<string, boolean>();
   for (const complaint of complaints) {
     const room = `${complaint.block_id}:${complaint.room_no.trim().toUpperCase()}`;
     counts.rooms.add(room);
     const items = byComplaint.get(complaint.id) ?? [];
+    const fullyCompleted = complaint.status !== "rejected" && items.length > 0 && items.every(job => job.status === "completed");
+    roomFullyCompleted.set(room, (roomFullyCompleted.get(room) ?? true) && fullyCompleted);
     if (complaint.status === "rejected") counts.rejected++;
-    else if (items.length && items.every(job => job.status === "completed")) { counts.completed++; counts.completedRooms.add(room); }
+    else if (fullyCompleted) counts.completed++;
     else if (items.some(job => job.status === "pending_material")) counts.pendingMaterial++;
     else if (items.some(job => job.status === "under_monitoring")) counts.monitoring++;
     else if (items.some(job => latest.get(job.id)?.status === "no_show" && job.status !== "completed")) counts.tenantUnavailable++;
@@ -24,7 +27,7 @@ export function summarize(complaints: Complaint[], jobs: Job[], appointments: Ap
     else if (items.some(job => job.status === "assigned")) counts.assigned++;
     else counts.pending++;
   }
-  return { ...counts, rooms: counts.rooms.size, completedRooms: counts.completedRooms.size, completionRate: counts.total ? Math.round(counts.completed / counts.total * 1000) / 10 : 0 };
+  return { ...counts, rooms: counts.rooms.size, completedRooms: [...roomFullyCompleted.values()].filter(Boolean).length, completionRate: counts.total ? Math.round(counts.completed / counts.total * 1000) / 10 : 0 };
 }
 
 export function malaysiaDate(value: Date) {
