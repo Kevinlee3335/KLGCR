@@ -170,3 +170,32 @@ export async function sendReset(data: FormData) {
   if (resetError) throw new Error(resetError.message);
   await recordAccessAudit(admin, actor.id, target.id, "password_reset_requested");
 }
+
+
+const passwordSchema = z.string().min(10, "Password must have at least 10 characters.");
+
+export async function setUserPassword(data: FormData) {
+  const actor = await requireRole(["admin"]);
+  const id = String(data.get("id") || "");
+  const password = passwordSchema.safeParse(data.get("password"));
+  if (!id || !password.success) throw new Error(password.error?.issues[0]?.message || "Enter a valid password.");
+  if (id === actor.id) throw new Error("Use Change Password in your own account to change your password.");
+
+  const admin = adminClient();
+  const { error } = await admin.auth.admin.updateUserById(id, { password: password.data });
+  if (error) throw new Error(error.message);
+  await recordAccessAudit(admin, actor.id, id, "password_changed_by_admin");
+  revalidatePath("/admin/users");
+}
+
+export async function deleteUser(data: FormData) {
+  const actor = await requireRole(["admin"]);
+  const id = String(data.get("id") || "");
+  if (!id) throw new Error("Choose a user to delete.");
+  if (id === actor.id) throw new Error("You cannot delete your own account.");
+
+  const admin = adminClient();
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/users");
+}
