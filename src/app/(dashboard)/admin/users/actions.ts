@@ -195,13 +195,6 @@ export async function deleteUser(data: FormData) {
   if (id === actor.id) throw new Error("You cannot delete your own account.");
 
   const admin = adminClient();
-  const { data: target, error: targetError } = await admin
-    .from("profiles")
-    .select("full_name")
-    .eq("id", id)
-    .single();
-  if (targetError) throw new Error(targetError.message);
-
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/users");
