@@ -41,9 +41,10 @@ export async function ComplaintSummary({ from, to, block, blocks, filters }: { f
     data = { ...summarize(complaints, jobs, appointments), completedJobs: completed.length, completedDuringPeriod: new Set(completed.map(j => j.complaint_id)).size, roomsCompletedDuringPeriod: new Set(completed.map(j => `${j.block_id}:${j.room_no.trim().toUpperCase()}`)).size };
   } catch (caught) { error = caught instanceof Error ? caught.message : "Unable to load summary."; }
 
-  return <section className="panel" aria-label="Complaint date range summary" style={{ padding: 20, marginBottom: 20 }}>
-    <h2 style={{ marginTop: 0 }}>Report Summary</h2>
-    <form method="get" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "end", marginBottom: 18 }}>
+  return <details className="panel complaint-summary" open={Boolean(from || to)}>
+    <summary><strong>Report Summary</strong><span className="complaint-summary-toggle">View date summary <span aria-hidden="true">⌄</span></span></summary>
+    <div className="complaint-summary-content">
+    <form method="get" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end", marginBottom: 12 }}>
       {(["search", "status", "priority", "source", "date", "needAppointment"] as const).map(key => filters[key] && <input key={key} type="hidden" name={key} value={filters[key]} />)}
       <label>From<br /><input aria-label="Summary from" type="date" name="summaryFrom" defaultValue={dates.from} required /></label>
       <label>To<br /><input aria-label="Summary to" type="date" name="summaryTo" defaultValue={dates.to} required /></label>
@@ -54,5 +55,6 @@ export async function ComplaintSummary({ from, to, block, blocks, filters }: { f
       <div className="metrics compact">{[["New reports received", data.total], ["Rooms reported", data.rooms], ["Completed reports (current)", data.completed], ["Completed rooms (current)", data.completedRooms], ["In progress", data.inProgress], ["Pending material", data.pendingMaterial], ["Under monitoring", data.monitoring], ["Tenant not available", data.tenantUnavailable], ["Assigned / not started", data.assigned], ["Pending / not assigned", data.pending], ["Rejected", data.rejected]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value}</div></article>)}</div>
       <p style={{ marginBottom: 0 }}><strong>Completion rate:</strong> {data.completionRate}% of reports received in this range are fully completed. <strong>Completed during this range:</strong> {data.completedJobs} jobs across {data.completedDuringPeriod} reports and {data.roomsCompletedDuringPeriod} rooms (including reports received earlier).</p>
     </>}
-  </section>;
+    </div>
+  </details>;
 }

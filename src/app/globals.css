@@ -3767,3 +3767,25 @@ button.calendar-item {
 .completion-photo-camera { display: inline-flex; align-items: center; gap: 9px; width: fit-content; margin-top: 8px; padding: 11px 15px; border: 1px solid #c59a3d; border-radius: 10px; background: #fff8e8; color: #6e4c08; font-weight: 800; cursor: pointer; }
 .completion-photo-camera input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .completion-photo-camera span { font-size: 1.3rem; }
+
+/* Compact, on-demand summary above the complaint intake table. */
+.complaint-summary { padding: 0; margin: 0 0 14px; overflow: hidden; }
+.complaint-summary > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 54px; padding: 10px 16px; cursor: pointer; list-style: none; }
+.complaint-summary > summary::-webkit-details-marker { display: none; }
+.complaint-summary > summary strong { font-size: 1rem; }
+.complaint-summary > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+.complaint-summary-toggle { display: inline-flex; align-items: center; gap: 9px; color: var(--gold-dark); font-size: .78rem; font-weight: 700; }
+.complaint-summary-toggle span { font-size: 1.3rem; line-height: 1; transition: transform .15s ease; }
+.complaint-summary[open] .complaint-summary-toggle span { transform: rotate(180deg); }
+.complaint-summary[open] > summary { border-bottom: 1px solid var(--line); }
+.complaint-summary-content { padding: 12px 16px 14px; }
+.complaint-summary form label { font-size: .78rem; }
+.complaint-summary form input, .complaint-summary form select { max-width: 150px; min-height: 32px; padding: 3px 5px; border: 1px solid #d9d5ca; border-radius: 7px; background: white; }
+.complaint-summary form .button { min-height: 34px; padding: 0 12px; font-size: .82rem; }
+.complaint-summary .metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.complaint-summary .metric { min-height: 74px; padding: 10px 12px; border-radius: 11px; }
+.complaint-summary .metric .subtle { display: block; font-size: .73rem; line-height: 1.2; }
+.complaint-summary .metric .value { margin: 8px 0 0; font-size: 1.45rem; line-height: 1; }
+.complaint-summary-content > p { margin: 10px 0 0; font-size: .78rem; line-height: 1.4; }
+@media (max-width: 1100px) { .complaint-summary .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .complaint-summary .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .complaint-summary .metric { min-height: 70px; } .complaint-summary-toggle { font-size: .72rem; } }
