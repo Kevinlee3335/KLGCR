@@ -14,6 +14,10 @@ type AppNotification = {
   read_at: string | null;
 };
 
+// AppShell can mount again during navigation. A recent save for the same
+// account and browser subscription does not need another server request.
+let lastPushSave: { userId: string; endpoint: string; at: number } | null = null;
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
@@ -64,7 +68,10 @@ export function NotificationBell({ userId }: { userId: string }) {
           return;
         }
         const subscription = await registration.pushManager.getSubscription();
-        if (subscription) await savePhoneSubscription(subscription);
+        if (subscription && (!lastPushSave || lastPushSave.userId !== userId || lastPushSave.endpoint !== subscription.endpoint || Date.now() - lastPushSave.at > 60_000)) {
+          await savePhoneSubscription(subscription);
+          lastPushSave = { userId, endpoint: subscription.endpoint, at: Date.now() };
+        }
         if (active) setPhoneAlerts(subscription ? "active" : "inactive");
       } catch {
         if (active) setPhoneAlerts("inactive");
@@ -103,6 +110,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
       }
       await savePhoneSubscription(subscription);
+      lastPushSave = { userId, endpoint: subscription.endpoint, at: Date.now() };
       setPhoneAlerts("active");
       void registration.showNotification("KLGCR phone alerts enabled", { body: "You will receive new KLGCR notifications even when the app is closed.", icon: "/klg-campus-residence-logo.png" }).catch(() => {});
     } catch (error) {
