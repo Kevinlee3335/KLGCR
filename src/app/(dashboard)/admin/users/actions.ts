@@ -204,6 +204,5 @@ export async function deleteUser(data: FormData) {
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) throw new Error(error.message);
-  await recordAccessAudit(admin, actor.id, id, "user_deleted", { full_name: target.full_name });
   revalidatePath("/admin/users");
 }
