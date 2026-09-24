@@ -20,12 +20,21 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+async function savePhoneSubscription(subscription: PushSubscription) {
+  const response = await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(subscription) });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "Unable to save phone alerts.");
+  }
+}
+
 export function NotificationBell({ userId }: { userId: string }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [enableError, setEnableError] = useState("");
   const [isBrowser, setIsBrowser] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [phoneAlerts, setPhoneAlerts] = useState<"checking" | "active" | "inactive">("checking");
   const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
 
   useEffect(() => {
@@ -41,7 +50,28 @@ export function NotificationBell({ userId }: { userId: string }) {
     };
     void load();
 
-    if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js");
+    // Permission and subscriptions belong to this browser, but the server-side
+    // subscription must be attached to the account that just signed in.
+    const restorePhoneAlerts = async () => {
+      if (!("serviceWorker" in navigator)) {
+        if (active) setPhoneAlerts("inactive");
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        if (!("Notification" in window) || Notification.permission !== "granted") {
+          if (active) setPhoneAlerts("inactive");
+          return;
+        }
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) await savePhoneSubscription(subscription);
+        if (active) setPhoneAlerts(subscription ? "active" : "inactive");
+      } catch {
+        if (active) setPhoneAlerts("inactive");
+      }
+    };
+    setPhoneAlerts("checking");
+    void restorePhoneAlerts();
     const channel = supabase.channel(`notifications-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_notifications", filter: `recipient_id=eq.${userId}` }, (event) => {
         const item = event.new as AppNotification;
@@ -58,18 +88,27 @@ export function NotificationBell({ userId }: { userId: string }) {
 
   async function enablePhoneAlerts() {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) { setEnableError("This browser does not support phone alerts."); return; }
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    if (permission !== "granted") { setEnableError("Notification permission was not allowed."); return; }
-    const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });
-    const keyData = await keyResponse.json();
-    if (!keyResponse.ok || !keyData.publicKey) { setEnableError(keyData.error || "Push notifications are not ready yet."); return; }
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
-    const saveResponse = await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(subscription) });
-    if (!saveResponse.ok) { const data = await saveResponse.json(); setEnableError(data.error || "Unable to save phone alerts."); return; }
+    setPhoneAlerts("checking");
     setEnableError("");
-    await registration.showNotification("KLGCR phone alerts enabled", { body: "You will receive new KLGCR notifications even when the app is closed.", icon: "/klg-campus-residence-logo.png" });
+    try {
+      const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission !== "granted") { setEnableError("Notification permission was not allowed."); setPhoneAlerts("inactive"); return; }
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });
+        const keyData = await keyResponse.json();
+        if (!keyResponse.ok || !keyData.publicKey) throw new Error(keyData.error || "Push notifications are not ready yet.");
+        subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
+      }
+      await savePhoneSubscription(subscription);
+      setPhoneAlerts("active");
+      void registration.showNotification("KLGCR phone alerts enabled", { body: "You will receive new KLGCR notifications even when the app is closed.", icon: "/klg-campus-residence-logo.png" }).catch(() => {});
+    } catch (error) {
+      setPhoneAlerts("inactive");
+      setEnableError(error instanceof Error ? error.message : "Unable to set up phone alerts.");
+    }
   }
 
   function urlBase64ToUint8Array(value: string) {
@@ -95,7 +134,8 @@ export function NotificationBell({ userId }: { userId: string }) {
     {open && <div className="app-notification-panel">
       <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread}><CheckCheck size={16}/> Mark all read</button></div>
       {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <Link key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{formatTime(item.created_at)}</small></Link>)}</div>}
-      {isBrowser && notificationPermission !== "unsupported" && <button type="button" className="app-notification-enable" onClick={() => void enablePhoneAlerts()}>{notificationPermission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}
+      {isBrowser && notificationPermission !== "unsupported" && phoneAlerts === "active" && <p className="app-notification-empty" role="status">Phone alerts active on this device.</p>}
+      {isBrowser && notificationPermission !== "unsupported" && phoneAlerts !== "active" && <button type="button" className="app-notification-enable" disabled={phoneAlerts === "checking"} onClick={() => void enablePhoneAlerts()}>{phoneAlerts === "checking" ? "Checking phone alerts…" : notificationPermission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}
       {isBrowser && notificationPermission === "unsupported" && <p className="app-notification-error">Phone alerts require the KLGCR app to be added to your Home Screen.</p>}
       {enableError && <p className="app-notification-error">{enableError}</p>}
     </div>}
