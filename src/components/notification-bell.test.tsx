@@ -27,7 +27,7 @@ describe("phone alert restoration", () => {
     vi.stubGlobal("fetch", fetchMock);
     Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register } });
 
-    render(<NotificationBell userId="staff-1"/>);
+    const view = render(<NotificationBell userId="staff-1"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     await waitFor(() => expect(screen.getByText("Phone alerts active on this device.")).toBeInTheDocument());
@@ -36,6 +36,10 @@ describe("phone alert restoration", () => {
     });
     expect(requestPermission).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Enable phone alerts|Set up phone alerts/ })).not.toBeInTheDocument();
+    view.unmount();
+    render(<NotificationBell userId="staff-1"/>);
+    await waitFor(() => expect(getSubscription).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("offers setup when permission exists but the browser subscription is gone", async () => {
@@ -46,7 +50,7 @@ describe("phone alert restoration", () => {
       configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null) } }) },
     });
 
-    render(<NotificationBell userId="staff-1"/>);
+    render(<NotificationBell userId="staff-2"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Set up phone alerts" })).toBeInTheDocument());
