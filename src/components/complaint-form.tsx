@@ -113,13 +113,14 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
       {defects.map((defect, index) => {
         const items = Object.keys(defectOptions[defect.area]);
         const issues = defectOptions[defect.area][defect.item as keyof (typeof defectOptions)[typeof defect.area]] as readonly string[];
+        const needsOtherDetails = defect.item === "Other" || defect.issue === "Other";
         return <div className="field-wide confirmed-defect-card" key={defect.key}>
           <div className="confirmed-defect-heading"><h4>Defect {existingCount + index + 1}</h4>{defects.length > 1 && <button className="button secondary button-compact" type="button" onClick={() => setDefects((current) => current.filter((entry) => entry.key !== defect.key))}>Remove</button>}</div>
           <div className="form-grid">
             <label className="field"><span>Area *</span><select value={defect.area} onChange={(event) => updateDefect(defect.key, { area: event.target.value as DefectArea })}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => updateDefect(defect.key, { item: event.target.value })}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => updateDefect(defect.key, { issue: event.target.value })}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
-            <label className="field field-wide"><span>Location / Other Note</span><input value={defect.note} onChange={(event) => updateDefect(defect.key, { note: event.target.value })} maxLength={500} placeholder="Example: Near window, beside main door, or describe other defect"/></label>
+            <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Location / Note"}</span><input value={defect.note} onChange={(event) => updateDefect(defect.key, { note: event.target.value })} maxLength={500} required={needsOtherDetails} placeholder={needsOtherDetails ? "Write the problem clearly, for example: broken door stopper" : "Example: Near window, beside main door"}/></label>
           </div>
         </div>;
       })}
