@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/auth";
 import { jobCompletedEmail, sendTransactionalEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
 import { notifyActiveAdmins } from "@/lib/app-notifications";
+import { staffJobReturnTo } from "@/lib/staff-job-return";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
 const completionPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -31,34 +32,37 @@ async function uploadCompletionPhotos(supabase: Awaited<ReturnType<typeof create
   }
 }
 
-async function runJobRpc(id: string, rpc: string, parameters: Record<string, unknown>, success: string) {
+async function runJobRpc(id: string, rpc: string, parameters: Record<string, unknown>, success: string, returnValue: unknown) {
   await requireRole(["maintenance_staff"]);
+  const from = encodeURIComponent(staffJobReturnTo(returnValue));
   const supabase = await createClient();
   const { error } = await supabase.rpc(rpc, { p_job_id: id, ...parameters });
-  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/staff/jobs/${id}?from=${from}&error=${encodeURIComponent(error.message)}`);
   // Authenticated dashboard pages are dynamic and read Supabase on navigation.
   // Refresh only the page receiving the redirect instead of invalidating six routes.
   revalidatePath(`/staff/jobs/${id}`);
-  redirect(`/staff/jobs/${id}?success=${success}`);
+  redirect(`/staff/jobs/${id}?from=${from}&success=${success}`);
 }
 
-export async function startJob(id: string) {
-  await runJobRpc(id, "start_assigned_job", {}, "started");
+export async function startJob(id: string, data: FormData) {
+  await runJobRpc(id, "start_assigned_job", {}, "started", data.get("returnTo"));
 }
 
 export async function completeJob(id: string, data: FormData) {
+  const returnTo = staffJobReturnTo(data.get("returnTo"));
+  const detailUrl = `/staff/jobs/${id}?from=${encodeURIComponent(returnTo)}`;
   const result = requiredNote.safeParse(data.get("actionTaken"));
-  if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Action taken is required.")}`);
+  if (!result.success) redirect(`${detailUrl}&error=${encodeURIComponent(result.error.issues[0]?.message || "Action taken is required.")}`);
   const staff = await requireRole(["maintenance_staff"]);
   const supabase = await createClient();
   try {
     await uploadCompletionPhotos(supabase, id, staff.id, data);
   } catch (photoError) {
     const message = photoError instanceof Error ? photoError.message : "Unable to save completion photo.";
-    redirect(`/staff/jobs/${id}?error=${encodeURIComponent(message)}`);
+    redirect(`${detailUrl}&error=${encodeURIComponent(message)}`);
   }
   const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
-  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${detailUrl}&error=${encodeURIComponent(error.message)}`);
 
   // Do not keep staff waiting for email and push delivery after the job is safely completed.
   after(async () => {
@@ -95,35 +99,36 @@ export async function completeJob(id: string, data: FormData) {
   });
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
-  redirect(`/staff/jobs/${id}?success=completed`);
+  redirect(returnTo);
 }
 
 export async function monitorJob(id: string, data: FormData) {
   const result = requiredNote.safeParse(data.get("monitoringNote"));
-  if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Monitoring note is required.")}`);
+  if (!result.success) redirect(`/staff/jobs/${id}?from=${encodeURIComponent(staffJobReturnTo(data.get("returnTo")))}&error=${encodeURIComponent(result.error.issues[0]?.message || "Monitoring note is required.")}`);
   const reviewValue = String(data.get("reviewAt") || "");
   const reviewAt = reviewValue ? new Date(reviewValue) : null;
-  if (reviewAt && Number.isNaN(reviewAt.getTime())) redirect(`/staff/jobs/${id}?error=Enter%20a%20valid%20review%20date.`);
-  await runJobRpc(id, "monitor_assigned_job", { p_note: result.data, p_review_at: reviewAt?.toISOString() || null }, "monitoring");
+  if (reviewAt && Number.isNaN(reviewAt.getTime())) redirect(`/staff/jobs/${id}?from=${encodeURIComponent(staffJobReturnTo(data.get("returnTo")))}&error=Enter%20a%20valid%20review%20date.`);
+  await runJobRpc(id, "monitor_assigned_job", { p_note: result.data, p_review_at: reviewAt?.toISOString() || null }, "monitoring", data.get("returnTo"));
 }
 
 export async function setPendingMaterial(id: string, data: FormData) {
   const result = requiredNote.safeParse(data.get("materialNote"));
-  if (!result.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(result.error.issues[0]?.message || "Material note is required.")}`);
-  await runJobRpc(id, "set_job_pending_material", { p_note: result.data }, "pending-material");
+  if (!result.success) redirect(`/staff/jobs/${id}?from=${encodeURIComponent(staffJobReturnTo(data.get("returnTo")))}&error=${encodeURIComponent(result.error.issues[0]?.message || "Material note is required.")}`);
+  await runJobRpc(id, "set_job_pending_material", { p_note: result.data }, "pending-material", data.get("returnTo"));
 }
 
-export async function resumeJob(id: string) {
-  await runJobRpc(id, "resume_assigned_job", {}, "resumed");
+export async function resumeJob(id: string, data: FormData) {
+  await runJobRpc(id, "resume_assigned_job", {}, "resumed", data.get("returnTo"));
 }
 
 export async function markTenantNotAvailable(id: string, data: FormData) {
   await requireRole(["maintenance_staff"]);
+  const from = encodeURIComponent(staffJobReturnTo(data.get("returnTo")));
   const remarks = z.string().trim().max(1000, "Remarks are too long.").safeParse(data.get("remarks") || "");
-  if (!remarks.success) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(remarks.error.issues[0]?.message || "Invalid remarks")}`);
+  if (!remarks.success) redirect(`/staff/jobs/${id}?from=${from}&error=${encodeURIComponent(remarks.error.issues[0]?.message || "Invalid remarks")}`);
   const supabase = await createClient();
   const { data: attendance, error } = await supabase.rpc("mark_tenant_not_available", { p_job_id: id, p_remarks: remarks.data || null });
-  if (error) redirect(`/staff/jobs/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/staff/jobs/${id}?from=${from}&error=${encodeURIComponent(error.message)}`);
 
   const result = Array.isArray(attendance) ? attendance[0] : attendance;
   // Record attendance first; notification and email are sent after the staff response.
@@ -150,5 +155,5 @@ export async function markTenantNotAvailable(id: string, data: FormData) {
   });
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
-  redirect(`/staff/jobs/${id}?success=tenant-not-available`);
+  redirect(`/staff/jobs/${id}?from=${from}&success=tenant-not-available`);
 }
