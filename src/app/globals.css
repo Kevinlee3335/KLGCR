@@ -290,6 +290,9 @@ p {
   text-transform: uppercase;
   color: var(--muted);
 }
+.job-link-row { position: relative; cursor: pointer; }
+.job-row-link::after { content: ""; position: absolute; inset: 0; }
+.job-row-link:focus-visible::after { outline: 2px solid var(--gold-dark); outline-offset: -2px; }
 .badge {
   padding: 5px 9px;
   border-radius: 999px;
