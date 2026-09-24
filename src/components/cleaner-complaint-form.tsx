@@ -41,6 +41,9 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
   const [photoSource, setPhotoSource] = useState<"camera" | "upload" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [area, setArea] = useState("Corridor");
+  const [defectType, setDefectType] = useState("Lighting");
+  const needsOtherDetails = area === "Other" || defectType === "Other";
 
   function choosePhoto(file: File | undefined, source: "camera" | "upload") {
     if (!file) return;
@@ -98,11 +101,11 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
     {error && <p className="error cleaner-report-error">{error}</p>}
     <div className="cleaner-report-grid">
       <label className="field"><span>Block *</span><select name="blockId" required defaultValue=""><option value="" disabled>Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>
-      <label className="field"><span>Area *</span><select name="area" required defaultValue="Corridor">{["Corridor","Balcony","Lobby","Common Bathroom","Staircase","Drying Area","Visitor Room","Utility Room","Pantry","Room","Other"].map((area) => <option key={area}>{area}</option>)}</select></label>
+      <label className="field"><span>Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{["Corridor","Balcony","Lobby","Common Bathroom","Staircase","Drying Area","Visitor Room","Utility Room","Pantry","Room","Other"].map((option) => <option key={option}>{option}</option>)}</select></label>
       <label className="field field-wide"><span>Room / Exact Location</span><input name="location" maxLength={120} placeholder="e.g. Block C Level 3 corridor, near lift"/></label>
-      <label className="field"><span>Defect Type *</span><select name="defectType" required defaultValue="Lighting">{["Lighting","Water Leakage","Door / Lock","Plumbing","Furniture","Air Conditioning","Cleaning Issue","Other"].map((type) => <option key={type}>{type}</option>)}</select></label>
+      <label className="field"><span>Defect Type *</span><select name="defectType" required value={defectType} onChange={(event) => setDefectType(event.target.value)}>{["Lighting","Water Leakage","Door / Lock","Plumbing","Furniture","Air Conditioning","Cleaning Issue","Other"].map((option) => <option key={option}>{option}</option>)}</select></label>
       <label className="field"><span>Priority *</span><select name="priority" required defaultValue="normal"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
-      <label className="field field-wide"><span>Description</span><textarea name="description" maxLength={3000} rows={5} placeholder="Explain what is broken and where it is."/></label>
+      <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Description"}</span><textarea name="description" required={needsOtherDetails} maxLength={3000} rows={5} placeholder={needsOtherDetails ? "Write the problem clearly." : "Explain what is broken and where it is."}/></label>
     </div>
     <section className="cleaner-photo-section">
       <div><span>Evidence Photo *</span><small>Choose one option. The photo is private and visible to authorized staff only.</small></div>
