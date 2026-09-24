@@ -13,6 +13,10 @@ const detailsSchema = z.object({
   defectType: z.enum(["Lighting", "Water Leakage", "Door / Lock", "Plumbing", "Furniture", "Air Conditioning", "Cleaning Issue", "Other"]),
   description: z.string().trim().max(3000),
   priority: z.enum(["low", "normal", "high", "urgent"]),
+}).superRefine((details, context) => {
+  if ((details.area === "Other" || details.defectType === "Other") && !details.description) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["description"], message: "Describe the Other problem." });
+  }
 });
 
 function adminClient() {
