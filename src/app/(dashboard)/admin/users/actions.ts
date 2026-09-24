@@ -174,28 +174,46 @@ export async function sendReset(data: FormData) {
 
 const passwordSchema = z.string().min(10, "Password must have at least 10 characters.");
 
-export async function setUserPassword(data: FormData) {
-  const actor = await requireRole(["admin"]);
-  const id = String(data.get("id") || "");
-  const password = passwordSchema.safeParse(data.get("password"));
-  if (!id || !password.success) throw new Error(password.error?.issues[0]?.message || "Enter a valid password.");
-  if (id === actor.id) throw new Error("Use Change Password in your own account to change your password.");
+export async function setUserPassword(data: FormData): Promise<UserActionState> {
+  try {
+    const actor = await requireRole(["admin"]);
+    const id = String(data.get("id") || "");
+    const password = passwordSchema.safeParse(data.get("password"));
+    if (!id || !password.success) return { error: password.error?.issues[0]?.message || "Enter a valid password." };
+    if (id === actor.id) return { error: "Use Change Password in your own account to change your password." };
 
-  const admin = adminClient();
-  const { error } = await admin.auth.admin.updateUserById(id, { password: password.data });
-  if (error) throw new Error(error.message);
-  await recordAccessAudit(admin, actor.id, id, "password_changed_by_admin");
-  revalidatePath("/admin/users");
+    const admin = adminClient();
+    const { error } = await admin.auth.admin.updateUserById(id, { password: password.data });
+    if (error) return { error: error.message };
+    await recordAccessAudit(admin, actor.id, id, "password_changed_by_admin");
+    revalidatePath("/admin/users");
+    return { ok: "Password updated." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to update password." };
+  }
 }
 
-export async function deleteUser(data: FormData) {
-  const actor = await requireRole(["admin"]);
-  const id = String(data.get("id") || "");
-  if (!id) throw new Error("Choose a user to delete.");
-  if (id === actor.id) throw new Error("You cannot delete your own account.");
+export async function deleteUser(data: FormData): Promise<UserActionState> {
+  try {
+    const actor = await requireRole(["admin"]);
+    const id = String(data.get("id") || "");
+    if (!id) return { error: "Choose a user to delete." };
+    if (id === actor.id) return { error: "You cannot delete your own account." };
 
-  const admin = adminClient();
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/admin/users");
+    const admin = adminClient();
+    const { error: profileError } = await admin
+      .from("profiles")
+      .update({ is_active: false, deleted_at: new Date().toISOString() })
+      .eq("id", id);
+    if (profileError) return { error: profileError.message };
+
+    const { error: authError } = await admin.auth.admin.updateUserById(id, { ban_duration: "876000h" });
+    if (authError) return { error: authError.message };
+
+    await recordAccessAudit(admin, actor.id, id, "user_deleted");
+    revalidatePath("/admin/users");
+    return { ok: "User deleted." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to delete user." };
+  }
 }
