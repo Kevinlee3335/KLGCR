@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { AppShell } from "@/components/app-shell";
+import { ItemsToOrder } from "@/components/items-to-order";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Fragment } from "react";
@@ -54,7 +55,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
     <section className="panel inventory-order-panel">
       <div className="section-head compact-head"><div><h3>Items to Order</h3><p className="subtle">Current items that have reached their reorder point.</p></div></div>
-      {orderRows.length === 0 ? <p className="dashboard-empty">No items currently require ordering.</p> : <div className="table-wrap"><table className="table inventory-table"><thead><tr><th>Item Code</th><th>Description</th><th>Balance</th><th>Reorder Level</th><th>Qty to Order</th><th>Status</th></tr></thead><tbody>{orderRows.map((item: any) => { const balance=Number(item.balance_qty); const reorder=Number(item.reorder_level); return <tr key={item.id}><td><strong>{item.item_code}</strong></td><td>{item.description}</td><td>{balance} {item.unit || ""}</td><td>{reorder} {item.unit || ""}</td><td><strong>{qtyToOrder(balance,reorder)} {item.unit || ""}</strong></td><td><span className={`stock-state ${balance<=0?"out":"near"}`}>{stockState(balance,reorder)}</span></td></tr>; })}</tbody></table></div>}
+      <ItemsToOrder rows={orderRows}/>
     </section>
 
     {profile.role === "admin" && <section className="panel inventory-form-card"><div className="section-head compact-head"><div><h3>Add Inventory Item</h3><p className="subtle">Create a new stock item and define its reorder point.</p></div></div><form action="/admin/inventory/action" method="post" className="inventory-form"><input type="hidden" name="action" value="create"/><label><span>Item Code</span><input name="itemCode" required/></label><label className="span-2"><span>Description</span><input name="description" required/></label><label><span>Category</span><select name="category" required><option value="Building">Building</option><option value="Electrical">Electrical</option><option value="Painting">Painting</option><option value="Piping">Piping</option></select></label><label><span>Movement</span><select name="movement"><option value="fast">Fast Moving</option><option value="slow">Slow Moving</option><option value="once_in_a_while">Once in a while</option></select></label><label><span>Opening Balance</span><input name="balance" type="number" min="0" step="0.01" defaultValue="0" required/></label><label><span>Reorder Level</span><input name="reorder" type="number" min="0" step="0.01" defaultValue="0" required/></label><label><span>Unit</span><input name="unit" placeholder="pcs / box / tube"/></label><label><span>Cost (RM)</span><input name="cost" type="number" min="0" step="0.01"/></label><div className="span-2"><button className="button" type="submit">Add Inventory Item</button></div></form></section>}
