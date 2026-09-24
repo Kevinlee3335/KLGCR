@@ -17,6 +17,10 @@ const confirmedDefectSchema = z.object({
   item: z.string().trim().min(1).max(100),
   issue: z.string().trim().min(1).max(100),
   note: z.string().trim().max(500),
+}).superRefine((defect, context) => {
+  if ((defect.item === "Other" || defect.issue === "Other") && !defect.note) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["note"], message: "Describe the Other problem." });
+  }
 });
 const confirmedDefectsSchema = z.array(confirmedDefectSchema).min(1).max(10);
 
