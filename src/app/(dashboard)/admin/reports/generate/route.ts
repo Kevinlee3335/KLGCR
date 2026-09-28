@@ -13,7 +13,12 @@ export async function POST(request: Request) {
   const blockGroup = String(form.get("blockGroup") ?? "AB") as BlockGroup;
   if (!kinds.has(reportType) || !groups.has(blockGroup)) return NextResponse.redirect(new URL("/admin/reports?error=invalid", request.url), 303);
   const supabase = await createClient();
-  const built = await buildReport(supabase, reportType, blockGroup);
+  let built: Awaited<ReturnType<typeof buildReport>>;
+  try { built = await buildReport(supabase, reportType, blockGroup); }
+  catch (error) {
+    console.error("Report generation failed",error);
+    return NextResponse.redirect(new URL("/admin/reports?error=Report+could+not+load+all+required+data.+Please+try+again.",request.url),303);
+  }
   const { error } = await supabase.from("report_snapshots").insert({ report_type:reportType, report_date:built.reportDate, block_group:blockGroup, payload:built.payload, whatsapp_text:built.whatsappText, source:"manual", created_by:profile.id });
   if (error) return NextResponse.redirect(new URL(`/admin/reports?error=${encodeURIComponent(error.message)}`, request.url), 303);
   return NextResponse.redirect(new URL("/admin/reports", request.url), 303);

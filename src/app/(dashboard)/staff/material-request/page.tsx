@@ -14,7 +14,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
   const [{ data: jobs }, { data: items }, { data: requests }] = await Promise.all([
     supabase.from("maintenance_jobs").select("id,job_no,room_no,status,block:blocks!block_id(code)").in("status", ["in_progress", "pending_material"]).order("assigned_at", { ascending: false }),
     supabase.from("inventory_items").select("id,item_code,description,balance_qty,unit").eq("is_active", true).order("description"),
-    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,issued_at,job:maintenance_jobs!job_id(id,job_no,room_no,status),items:material_request_items(requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,unit))").order("created_at", { ascending: false }).limit(20),
+    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,issued_at,job:maintenance_jobs!job_id(id,job_no,room_no,status),items:material_request_items(other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,unit))").order("created_at", { ascending: false }).limit(20),
   ]);
 
   return <AppShell profile={profile} title="Material Request">
@@ -32,7 +32,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
         <div className="material-rows">
           {[1, 2, 3].map((slot) => <fieldset className="material-row" key={slot}>
             <legend>Material {slot}{slot > 1 && <span>Optional</span>}</legend>
-            <label className="material-field material-select-field"><span>Material</span><MaterialItemPicker name="itemId" required={slot === 1} items={(items || []).map((item: any) => ({ id: item.id, item_code: item.item_code, description: item.description, balance_qty: item.balance_qty, unit: item.unit }))}/></label>
+            <div className="material-field material-select-field"><span>Material</span><MaterialItemPicker name="itemId" required={slot === 1} items={(items || []).map((item: any) => ({ id: item.id, item_code: item.item_code, description: item.description, balance_qty: item.balance_qty, unit: item.unit }))}/></div>
             <label className="material-field material-quantity-field"><span>Quantity</span><input name="qty" type="number" inputMode="decimal" min="0.01" step="0.01" required={slot === 1}/></label>
           </fieldset>)}
         </div>
@@ -47,7 +47,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
       <div className="material-request-list staff-material-request-list">
         {(requests || []).length === 0 ? <div className="panel material-empty"><strong>No recent material requests yet.</strong><p>Submitted requests will appear here.</p></div> : (requests || []).map((request: any) => <article className={`panel staff-request-card request-${request.status}`} key={request.id}>
           <header className="staff-request-head"><div><div className="request-title-row"><strong>{request.request_no}</strong><span className={`status-badge status-${request.status}`}>{statusLabel(request.status)}</span></div><p><strong>{request.job?.job_no || "No job"}</strong><span>Room {request.job?.room_no || "–"}</span></p></div></header>
-          <div className="staff-request-items">{(request.items || []).map((row: any, index: number) => <div className="staff-request-item" key={`${request.id}-${index}`}><div><strong>{row.item?.item_code || "—"}</strong><span>{row.item?.description || "Material description unavailable"}</span></div><dl><div><dt>Requested</dt><dd>{row.requested_qty} {row.item?.unit || ""}</dd></div>{row.issued_qty != null && <div><dt>Issued</dt><dd>{row.issued_qty} {row.item?.unit || ""}</dd></div>}</dl></div>)}</div>
+          <div className="staff-request-items">{(request.items || []).map((row: any, index: number) => <div className="staff-request-item" key={`${request.id}-${index}`}><div><strong>{row.item?.item_code || "—"}</strong><span>{row.item?.description || row.other_item_name || "Material description unavailable"}</span></div><dl><div><dt>Requested</dt><dd>{row.requested_qty} {row.item?.unit || ""}</dd></div>{row.issued_qty != null && <div><dt>Issued</dt><dd>{row.issued_qty} {row.item?.unit || ""}</dd></div>}</dl></div>)}</div>
           {request.note && <div className="staff-request-note"><span>Reason / Note</span><p>{request.note}</p></div>}
           {request.rejection_reason && <p className="error staff-request-error">Rejected: {request.rejection_reason}</p>}
           {request.status === "issued" && request.job?.status === "pending_material" && <div className="staff-resume-action"><div><strong>Materials issued</strong><span>The job is ready to continue.</span></div><Link className="button button-link" href={`/staff/jobs/${request.job.id}`}>Open Job to Resume</Link></div>}

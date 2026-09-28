@@ -39,7 +39,6 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
     { title: "Under Monitoring", value: data.kpis.underMonitoring, subtitle: "Follow-up required", href: "/admin/jobs?status=under_monitoring", icon: Clock3, tone: "purple" },
     { title: "Completed Today", value: data.kpis.completedToday, subtitle: "Completed today", href: "/admin/jobs?scope=completed-today", icon: CheckCircle2, tone: "green" },
     { title: "Today's Appointments", value: data.kpis.todayAppointments, subtitle: "Scheduled visits", href: "/admin/daily-tasks", icon: Clock3, tone: "gold" },
-    { title: "Pending Confirmation", value: data.kpis.pendingAppointments, subtitle: "Awaiting confirmation", href: "/admin/reports?appointmentStatus=pending_confirmation", icon: ClipboardCheck, tone: "amber" },
   ];
   const quickActions = [
     ["Review Complaints", "/admin/complaints", ShieldAlert], ["Schedule Tasks", "/admin/daily-tasks", ClipboardCheck],

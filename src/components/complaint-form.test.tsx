@@ -27,8 +27,8 @@ describe("AssignmentForm", () => {
 
     expect(screen.queryByLabelText("Maintenance Date *")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Maintenance Time *")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
-    expect(screen.getByLabelText("Maintenance Time")).not.toBeRequired();
+    expect(screen.queryByLabelText("Maintenance Date")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Maintenance Time")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
   });
 });

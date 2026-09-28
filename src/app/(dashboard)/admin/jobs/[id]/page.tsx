@@ -9,7 +9,7 @@ import { buildJobActivity, type AppointmentActivityRow, type JobHistoryRow, type
 import { formatDate, type JobRow } from "@/lib/phase2";
 import { createClient } from "@/lib/supabase/server";
 import { appointmentStatuses, appointmentTimeSlots, titleCase } from "@/lib/appointments";
-import { saveJobAppointment } from "../actions";
+import { saveJobAppointment, transferJob } from "../actions";
 
 export default async function AdminJobDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{error?:string;appointment?:string}> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
@@ -25,20 +25,39 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
   const [{ data: appointmentRows }, { data: historyRows }, { data: materialRows }] = await Promise.all([
     supabase.from("appointments").select("id,appointment_date,appointment_time,status,remarks,no_show_remarks,created_at,attended_at,attendee:profiles!appointments_attended_by_fkey(full_name),staff:profiles!appointments_assigned_staff_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
     supabase.from("job_status_history").select("id,previous_status,new_status,note,created_at,actor:profiles!job_status_history_changed_by_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
-    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,reviewed_at,issued_at,requester:profiles!material_requests_requested_by_fkey(full_name),reviewer:profiles!material_requests_reviewed_by_fkey(full_name),issuer:profiles!material_requests_issued_by_fkey(full_name),items:material_request_items!material_request_items_request_id_fkey(requested_qty,approved_qty,issued_qty,item:inventory_items!material_request_items_inventory_item_id_fkey(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: true }),
+    supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,reviewed_at,issued_at,requester:profiles!material_requests_requested_by_fkey(full_name),reviewer:profiles!material_requests_reviewed_by_fkey(full_name),issuer:profiles!material_requests_issued_by_fkey(full_name),items:material_request_items!material_request_items_request_id_fkey(other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items!material_request_items_inventory_item_id_fkey(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: true }),
   ]);
   const appointments = (appointmentRows || []) as unknown as AppointmentActivityRow[];
   const appointment = appointments.filter(({ status }) => !["cancelled", "no_show"].includes(status)).at(-1) ?? null;
   const events = buildJobActivity({ job, history: (historyRows || []) as unknown as JobHistoryRow[], materials: (materialRows || []) as unknown as MaterialRequestRow[], appointments });
+  const [{data:staff}, {data:transfers}] = await Promise.all([
+    supabase.from("profiles").select("id,full_name,profile_blocks(block_id)").eq("role","maintenance_staff").eq("is_active",true).is("deleted_at",null),
+    supabase.from("job_assignment_history").select("id,reason,created_at,previous:profiles!previous_staff(full_name),next:profiles!assigned_staff(full_name),actor:profiles!changed_by(full_name)").eq("job_id",id).order("created_at"),
+  ]);
+  const relationName = (value: unknown) => (value as {full_name?:string}|null)?.full_name || "Unknown";
+  for (const transfer of transfers || []) events.push({id:`transfer-${transfer.id}`,timestamp:transfer.created_at,action:"Job Transferred",actor:relationName(transfer.actor),remarks:`${relationName(transfer.previous)} → ${relationName(transfer.next)} · ${transfer.reason}`});
+  if (transfers?.length) { const initial = events.find(event => event.id === "job-assigned"); if (initial) initial.actor = relationName(transfers[0].previous); }
+  events.sort((a,b) => new Date(a.timestamp).getTime()-new Date(b.timestamp).getTime());
+  const { data: photos, error: photoError } = await supabase.from("maintenance_job_photos").select("id,storage_path,created_at").eq("job_id", id).order("created_at");
+  const completedEvents = events.filter(event => event.action === "Completed");
+  let photoLoadFailed = Boolean(photoError);
+  for (const photo of photos || []) {
+    const { data: signed, error: signError } = await supabase.storage.from("maintenance-evidence").createSignedUrl(photo.storage_path, 3600);
+    if (signError) photoLoadFailed = true;
+    const event = completedEvents.find(event => new Date(event.timestamp).getTime() >= new Date(photo.created_at).getTime()) ?? completedEvents.at(-1);
+    if (signed && event) (event.photos ??= []).push({id:photo.id,url:signed.signedUrl});
+  }
 
   return <AppShell profile={profile} title="Maintenance Job Detail">
     <div className="section-head"><div><p className="eyebrow">{job.job_no}</p><h2>Block {job.block?.code} · {job.room_no}</h2><p className="subtle">Assigned {formatDate(job.assigned_at)}</p></div><div className="actions"><PriorityBadge value={job.priority}/><StatusBadge value={job.status}/></div></div>
     <section className="panel detail-grid" style={{marginBottom:18}}><div><span>Complaint</span><strong>{job.complaint?.complaint_no}</strong></div><div><span>Assigned Staff</span><strong>{job.assignee?.full_name||"—"}</strong></div><div><span>Category</span><strong>{job.category}</strong></div><div className="field-wide"><span>Description</span><p>{job.description}</p></div></section>
+    {profile.role === "admin" && !["completed","cancelled"].includes(job.status) && <section className="panel"><h3>Transfer task</h3><form action={transferJob.bind(null,id)} className="form-grid"><label className="field">Assign to<select name="staffId" required defaultValue=""><option value="">Choose employee</option>{staff?.filter(person => person.id !== job.assignee?.id && person.profile_blocks.some(block => block.block_id === job.block?.id)).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label className="field">Reason<input name="reason" required maxLength={1000}/></label><button className="button">Transfer task</button></form></section>}
     <ReporterInformation name={job.complaint?.reporter_name||job.complaint?.complainant_name} phone={job.complaint?.reporter_phone||job.complaint?.complainant_contact} email={job.complaint?.reporter_email} availabilityDate={job.complaint?.availability_date} availabilityTime={job.complaint?.availability_time} roomAccessPermission={job.complaint?.room_access_permission}/>
     {message.error&&<p className="error">{message.error}</p>}{message.appointment&&<p className="success">Appointment saved.</p>}
     <MaintenanceAppointment appointment={appointment}/>
     {appointments.some(({status})=>status==="no_show")&&<section className="panel list-panel" style={{marginBottom:18}}><h3>Appointment History</h3>{appointments.filter(({status})=>status==="no_show").map((past)=><div className="list-row" key={past.id}><div><strong>No Show · {past.appointment_date} {past.appointment_time.slice(0,5)}</strong><p>Attendance / No-Show Time: {past.attended_at?formatDate(past.attended_at):"—"}</p>{past.attendee?.full_name&&<p>Recorded by: {past.attendee.full_name}</p>}{past.no_show_remarks&&<p>No-Show Remarks: {past.no_show_remarks}</p>}</div></div>)}</section>}
     {profile.role==="admin"&&<section className="panel assignment-panel" style={{marginBottom:18}}><h3>{appointment?"Manage / Reschedule Appointment":"Add Appointment"}</h3><p className="subtle">Schedule the maintenance visit without changing the reporter&apos;s preferred availability or room access response.</p><form action={saveJobAppointment.bind(null,id,appointment?.id??null)} className="form-grid"><label className="field"><span>Maintenance Date *</span><input name="appointmentDate" type="date" defaultValue={appointment?.appointment_date} required/></label><label className="field"><span>Maintenance Time *</span><select name="appointmentTime" defaultValue={appointment?.appointment_time?.slice(0,5)||""} required><option value="" disabled>Choose a time slot</option>{appointmentTimeSlots.map(slot=><option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>{appointment&&<label className="field"><span>Status *</span><select name="status" defaultValue={appointment.status}>{appointmentStatuses.map(status=><option key={status} value={status}>{titleCase(status)}</option>)}</select></label>}<label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000} defaultValue={appointment?.remarks||""}/></label><div className="field-wide"><button className="button">{appointment?"Save / Reschedule Appointment":"Add Appointment"}</button></div></form></section>}
+    {photoLoadFailed && <p className="error">Some completion photos could not be loaded. Please refresh and try again.</p>}
     <JobActivityTimeline events={events}/>
   </AppShell>;
 }

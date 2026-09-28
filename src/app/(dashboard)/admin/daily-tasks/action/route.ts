@@ -36,8 +36,25 @@ export async function POST(request: Request) {
     const title=String(form.get("title")??"").trim();
     const notes=String(form.get("notes")??"").trim();
     if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date))return redirect(request,date,"invalid admin task");
-    const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,created_by:profile.id});
+    const assignedTo=String(form.get("assignedTo")||"");
+    const frequency=String(form.get("frequency")||"once");
+    const {data:employee}=await db.from("profiles").select("id").eq("id",assignedTo).eq("is_active",true).is("deleted_at",null).maybeSingle();
+    if(!employee || !["once","weekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active employee and valid recurrence");
+    if(frequency!=="once"){
+      const day=Number(form.get("dayNumber"));
+      if(!Number.isInteger(day)||(frequency==="weekly"?(day<0||day>6):(day<1||day>31)))return redirect(request,date,"Invalid recurrence day");
+      const{error}=await db.from("recurring_daily_tasks").insert({title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,frequency,day_number:day,starts_on:date});
+      if(error)return redirect(request,date,error.message);
+      const {error:generateError}=await db.rpc("materialize_recurring_tasks",{p_date:date});
+      return redirect(request,date,generateError?.message);
+    }
+    const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id});
     return error?redirect(request,date,error.message):redirect(request,date);
+  }
+
+  if(action==="recurrence_stop"){
+    const{error}=await db.from("recurring_daily_tasks").update({is_active:false}).eq("id",String(form.get("recurrenceId")||""));
+    return redirect(request,date,error?.message);
   }
 
   if(action==="admin_task_status"){

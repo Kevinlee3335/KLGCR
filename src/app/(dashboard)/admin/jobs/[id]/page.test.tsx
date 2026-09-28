@@ -12,12 +12,14 @@ function query(result: unknown) {
   const builder = {
     select: vi.fn(),
     eq: vi.fn(),
+    is: vi.fn(),
     order: vi.fn(),
     maybeSingle: vi.fn(),
     then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };
   builder.select.mockReturnValue(builder);
   builder.eq.mockReturnValue(builder);
+  builder.is.mockReturnValue(builder);
   builder.order.mockReturnValue(builder);
   builder.maybeSingle.mockReturnValue(builder);
   return builder;
@@ -72,6 +74,9 @@ describe("Admin Job Detail", () => {
     queries.set("appointments", query({ data: [], error: { message: "relationship unavailable" } }));
     queries.set("job_status_history", query({ data: null, error: { message: "history unavailable" } }));
     queries.set("material_requests", query({ data: null, error: { message: "materials unavailable" } }));
+    queries.set("profiles", query({data:[],error:null}));
+    queries.set("job_assignment_history", query({data:[],error:null}));
+    queries.set("maintenance_job_photos", query({data:[],error:null}));
   });
 
   it("renders the job and timeline when optional activity queries return no data", async () => {

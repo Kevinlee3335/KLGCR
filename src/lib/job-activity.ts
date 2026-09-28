@@ -4,6 +4,7 @@ export type ActivityEvent = {
   action: string;
   actor?: string | null;
   remarks?: string | null;
+  photos?: { id: string; url: string }[];
 };
 
 export type JobHistoryRow = {
@@ -28,6 +29,7 @@ export type MaterialRequestRow = {
   reviewer: { full_name: string } | null;
   issuer: { full_name: string } | null;
   items: Array<{
+    other_item_name?: string | null;
     requested_qty: number;
     approved_qty: number | null;
     issued_qty: number | null;
@@ -68,9 +70,9 @@ type TimelineSource = {
 };
 
 function materialDetails(request: MaterialRequestRow, quantity: "requested_qty" | "approved_qty" | "issued_qty") {
-  return request.items.map(({ item, ...quantities }) => {
+  return request.items.map(({ item, other_item_name, ...quantities }) => {
     const qty = quantities[quantity];
-    return `${item?.item_code || "Material"} · ${item?.description || "Unknown item"} — ${qty ?? quantities.requested_qty}${item?.unit ? ` ${item.unit}` : ""}`;
+    return `${item?.item_code || "Other"} · ${item?.description || other_item_name || "Unknown item"} — ${qty ?? quantities.requested_qty}${item?.unit ? ` ${item.unit}` : ""}`;
   }).join("; ");
 }
 

@@ -27,6 +27,6 @@ describe("transactional email", () => {
     expect(complaintReceivedEmail({ ...complaint, submittedAt: "2026-09-12T10:00:00Z" }).text).toContain("Dear Aisha");
     const noShow = tenantNotAvailableEmail({ ...complaint, appointmentDate: "2026-09-13", appointmentTime: "10:00", attendedAt: "2026-09-13T10:05:00Z" });
     expect(noShow.subject).toBe("Maintenance Visit – Tenant Not Available");
-    expect(noShow.text).toContain("Maintenance Attendance Time: 2026-09-13T10:05:00Z");
+    expect(noShow.text).toContain("Maintenance Attendance Time: 13 September 2026, 6:05 PM (Malaysia Time)");
   });
 });

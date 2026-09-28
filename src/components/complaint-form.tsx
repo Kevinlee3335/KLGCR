@@ -12,14 +12,23 @@ type ComplaintFormProps = {
   mode: "create" | "review";
 };
 
+const externalAreas = ["Bungalow XA3", "Bungalow X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45 (CD)", "Substation PE46 (AB)"];
+
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
+  const existingArea = externalAreas.find(area => complaint?.room_no === area || complaint?.room_no.startsWith(`${area} · `));
+  const [locationType, setLocationType] = useState(existingArea ? "external" : "block");
+  const [area, setArea] = useState(existingArea || "");
+  const [room, setRoom] = useState(existingArea ? (complaint?.room_no.slice(existingArea.length).replace(/^ · /, "") || "") : (complaint?.room_no || ""));
   return (
     <form action={action} className="panel form-grid operational-form">
-      <label className="field"><span>Source</span><select name="source" defaultValue={complaint?.source || "manual"}>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select></label>
-      <label className="field"><span>Block *</span><select name="blockId" required defaultValue={complaint?.block?.id}><option value="">Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>
-      <label className="field"><span>Room *</span><input name="room" required defaultValue={complaint?.room_no}/></label>
-      <label className="field"><span>Category *</span><input name="category" required defaultValue={complaint?.category}/></label>
+      {complaint && ["google_form", "flex"].includes(complaint.source) ? <input type="hidden" name="source" value={complaint.source}/> : <label className="field"><span>Source</span><select name="source" defaultValue={complaint?.source || "manual"}>{sources.filter(source => !["google_form", "flex"].includes(source)).map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select></label>}
+      <label className="field"><span>Location type</span><select value={locationType} onChange={event => setLocationType(event.target.value)}><option value="block">Block</option><option value="external">External Area</option></select></label>
+      <label className="field"><span>{locationType === "external" ? "Responsible block *" : "Block *"}</span><select name="blockId" required defaultValue={complaint?.block?.id}><option value="">Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>
+      {locationType === "external" && <label className="field"><span>External Area *</span><select required value={area} onChange={event => setArea(event.target.value)}><option value="">Choose location</option>{externalAreas.map(value => <option key={value}>{value}</option>)}</select></label>}
+      <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
+      <input type="hidden" name="room" value={locationType === "external" ? `${area}${room.trim() ? ` · ${room.trim()}` : ""}` : room}/>
+      <input type="hidden" name="category" value={complaint?.category || (locationType === "external" ? "Common Area" : "Room Maintenance")}/>
       <label className="field"><span>Complainant name</span><input name="name" defaultValue={complaint?.complainant_name || ""}/></label>
       <label className="field"><span>Contact</span><input name="contact" defaultValue={complaint?.complainant_contact || ""}/></label>
       <label className="field"><span>Priority *</span><select name="priority" required defaultValue={complaint?.priority || "normal"}>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select></label>
@@ -100,7 +109,6 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
     }
     return next;
   }));
-  const preferredVisit = source === "google_form" && roomAccess === "no" ? [preferredDate, preferredTime].filter(Boolean).join(" · ") : "";
   const preferredAppointment = preferredAppointmentSelection(source, roomAccess, preferredDate, preferredTime);
   return (
     <form action={action} className="form-grid">

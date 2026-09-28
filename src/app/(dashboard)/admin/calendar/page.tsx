@@ -5,6 +5,7 @@ import { AppointmentCalendar, type CalendarItem } from "@/components/appointment
 import { CalendarEventForm } from "@/components/calendar-event-form";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAppNotifications } from "@/lib/app-notifications";
 
 type AppointmentRow = { id: string; job_id: string | null; appointment_date: string; appointment_time: string; status: string; job: { job_no: string } | null; staff: { full_name: string } | null; complaint: { room_no: string; category: string; block: { code: string } | null } | null; };
 type JobRow = { id: string; job_no: string; room_no: string; category: string; scheduled_for: string; status: string; block: { code: string } | null; assignee: { full_name: string } | null; };
@@ -27,25 +28,38 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,job:maintenance_jobs!appointments_job_id_fkey(job_no),staff:profiles!appointments_assigned_staff_fkey(full_name),complaint:complaints!appointment_complaint_id_fkey(room_no,category,block:blocks!complaints_block_id_fkey(code))").gte("appointment_date", start).lte("appointment_date", end).not("status", "in", '("cancelled","no_show")').order("appointment_date").order("appointment_time"),
     supabase.from("maintenance_jobs").select("id,job_no,room_no,category,scheduled_for,status,block:blocks!maintenance_jobs_block_id_fkey(code),assignee:profiles!maintenance_jobs_assigned_to_fkey(full_name)").gte("scheduled_for", start).lte("scheduled_for", end).not("status", "in", '("completed","cancelled")').order("scheduled_for"),
     supabase.from("calendar_events").select("id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").gte("starts_at", `${start}T00:00:00+08:00`).lt("starts_at", `${next}T00:00:00+08:00`).order("starts_at"),
-    supabase.from("profiles").select("id,full_name,role").in("role", ["maintenance_staff", "cleaner"]).eq("is_active", true).is("deleted_at", null).order("full_name"),
+    supabase.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null).order("full_name"),
     supabase.from("calendar_events").select("id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").order("starts_at", { ascending: false }),
   ]);
 
   async function createCalendarEvent(formData: FormData) {
     "use server";
-    await requireRole(["admin"]);
+    const actor = await requireRole(["admin"]);
     const eventType = String(formData.get("event_type") || "");
     const title = String(formData.get("title") || "").trim();
     const eventDate = String(formData.get("event_date") || "");
     const startTime = String(formData.get("start_time") || "09:00");
     const endDate = String(formData.get("end_date") || "") || eventDate;
     const audience = String(formData.get("audience") || "all_staff");
-    const recipient = String(formData.get("recipient") || "") || null;
+    const recipients = [...new Set(formData.getAll("recipient").map(String).filter(Boolean))];
     const subjectStaff = String(formData.get("subject_staff") || "") || null;
     const notes = String(formData.get("notes") || "").trim() || null;
-    if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < eventDate || !["all_staff", "individual"].includes(audience) || (audience === "individual" && !recipient) || (eventType === "leave" && !subjectStaff)) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
-    const { error } = await (await createClient()).from("calendar_events").insert({ event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, created_by: profile.id, audience, assigned_to: audience === "individual" ? recipient : null, subject_staff_id: eventType === "leave" ? subjectStaff : null });
+    if (!["work", "leave", "meeting", "other"].includes(eventType) || title.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < eventDate || !["all_staff", "individual", "multiple"].includes(audience) || (audience !== "all_staff" && !recipients.length) || (audience === "individual" && recipients.length !== 1) || (eventType === "leave" && !subjectStaff)) redirect(`/admin/calendar?month=${month}&error=Please+complete+the+event+details`);
+    const db = await createClient();
+    const {data: activeStaff, error: staffError} = await db.from("profiles").select("id,role").eq("is_active",true).is("deleted_at",null);
+    if (staffError || recipients.some(id => !activeStaff?.some(person => person.id === id))) redirect(`/admin/calendar?month=${month}&error=Invalid+recipient`);
+    const values = { event_type: eventType, title, notes, starts_at: `${eventDate}T${startTime}:00+08:00`, ends_at: `${endDate}T23:59:59+08:00`, created_by: actor.id, subject_staff_id: eventType === "leave" ? subjectStaff : null };
+    const eventRows: (typeof values & {audience:string;assigned_to:string|null})[] = audience === "all_staff" ? [{...values,audience:"all_staff",assigned_to:null}] : recipients.map(id => ({...values,audience:"individual",assigned_to:id}));
+    const { data: saved, error } = await db.from("calendar_events").insert(eventRows).select("id,assigned_to");
     if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
+    try {
+      const targets = (activeStaff || []).filter(person => audience === "all_staff" || recipients.includes(person.id));
+      await Promise.all(targets.map(person => createAppNotifications({recipientIds:[person.id],type:"calendar_event",title,body:`${eventDate} ${startTime}${notes ? ` · ${notes}` : ""}`,href:person.role === "admin" || person.role === "management_viewer" ? "/admin/calendar" : "/staff/calendar",entityId:saved?.find(event => event.assigned_to === person.id)?.id || saved?.[0]?.id})));
+    } catch (notificationError) {
+      console.error("Calendar saved but notification failed", notificationError);
+      revalidatePath("/admin/calendar");
+      redirect(`/admin/calendar?month=${month}&error=Calendar+saved,+but+some+notifications+could+not+be+sent`);
+    }
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
 
