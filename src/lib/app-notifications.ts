@@ -10,8 +10,7 @@ export type AppNotificationType =
   | "checkout_assigned"
   | "checkout_completed"
   | "calendar_event"
-  | "material_request"
-  | "daily_task";
+  | "material_request";
 
 type NotificationInput = {
   recipientIds: string[];
@@ -65,8 +64,7 @@ export async function notifyMaterialRequestRecipients(input: NotificationInput) 
     .is("deleted_at", null);
   if (error) throw new Error(`Unable to find material request recipients: ${error.message}`);
 
-  const activeIds = (recipients || []).map((recipient) => recipient.id);
-  await createAppNotifications({ ...input, recipientIds: activeIds });
+  await createAppNotifications({ ...input, recipientIds: (recipients || []).map((recipient) => recipient.id) });
 }
 
 export async function notifyActiveMaterialApprovers(input: Omit<NotificationInput, "recipientIds">) {
