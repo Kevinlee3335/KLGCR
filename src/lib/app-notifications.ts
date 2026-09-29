@@ -10,7 +10,8 @@ export type AppNotificationType =
   | "checkout_assigned"
   | "checkout_completed"
   | "calendar_event"
-  | "material_request";
+  | "material_request"
+  | "daily_task";
 
 type NotificationInput = {
   recipientIds: string[];
@@ -51,7 +52,6 @@ export async function notifyActiveAdmins(input: Omit<NotificationInput, "recipie
   if (error) throw new Error(`Unable to find administrators: ${error.message}`);
   await createAppNotifications({ ...input, recipientIds: (data || []).map((profile) => profile.id) });
 }
-
 
 export async function notifyMaterialRequestRecipients(input: NotificationInput) {
   const recipientIds = [...new Set(input.recipientIds.filter(Boolean))];
