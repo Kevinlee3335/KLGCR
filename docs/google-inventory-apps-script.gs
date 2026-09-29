@@ -81,7 +81,8 @@ function inventoryRowFromSheet_(sheet, row) {
 
 function findItemRow_(sheet, itemCode) {
   const codes = sheet.getRange(1, 6, sheet.getLastRow(), 1).getDisplayValues();
-  for (let index = 0; index < codes.length; index++) if (String(codes[index][0]).trim().toUpperCase() === itemCode.toUpperCase()) return index + 1;
+  const normaliseCode = (value) => String(value).trim().toUpperCase().replace(/^KLGCR-/, "");
+  for (let index = 0; index < codes.length; index++) if (normaliseCode(codes[index][0]) === normaliseCode(itemCode)) return index + 1;
   return null;
 }
 

@@ -11,7 +11,8 @@ type InventorySheetRow = {
 export function normaliseInventorySheetRow(value: unknown): InventorySheetRow | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  const itemCode = String(row.itemCode ?? "").trim().toUpperCase();
+  const rawCode = String(row.itemCode ?? "").trim().toUpperCase();
+  const itemCode = rawCode && !rawCode.startsWith("KLGCR-") ? `KLGCR-${rawCode}` : rawCode;
   const description = String(row.description ?? "").trim();
   const category = String(row.category ?? "").trim();
   const balanceQty = Number(row.balanceQty);
@@ -36,15 +37,19 @@ export async function pushInventoryItemToGoogle(item: {
       body: JSON.stringify({
         action: "update_balance", secret,
         item: {
-          itemCode: item.item_code, description: item.description, category: item.category,
+          itemCode: item.item_code.replace(/^KLGCR-/i, ""), description: item.description, category: item.category,
           movementCategory: item.movement_category, balanceQty: Number(item.balance_qty),
           reorderLevel: Number(item.reorder_level), unit: item.unit,
         },
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok) console.error("Google inventory sync failed", response.status);
-    return { skipped: false, ok: response.ok };
+    // Apps Script returns HTTP 200 even when its JSON reports a failed update.
+    const result = await response.json().catch(() => null);
+    const ok = response.ok && result?.ok === true;
+    if (!ok) console.error("Google inventory sync failed", response.status, result?.error || "Invalid response");
+    return { skipped: false, ok };
   } catch (error) {
     console.error("Google inventory sync failed", error);
     return { skipped: false, ok: false };

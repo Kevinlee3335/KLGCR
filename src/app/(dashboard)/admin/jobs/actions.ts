@@ -18,6 +18,20 @@ const appointmentSchema = z.object({
 const destination = (jobId: string, error?: string) =>
   `/admin/jobs/${jobId}?${error ? `error=${encodeURIComponent(error)}` : "appointment=1"}`;
 
+export async function transferJob(jobId: string, data: FormData) {
+  await requireRole(["admin"]);
+  const staffId = String(data.get("staffId") || "");
+  const reason = String(data.get("reason") || "").trim();
+  if (!z.string().uuid().safeParse(staffId).success || !reason) redirect(destination(jobId, "Choose an employee and enter the transfer reason."));
+  const db = await createClient();
+  const {error} = await db.rpc("transfer_maintenance_job", {p_job_id:jobId,p_staff_id:staffId,p_reason:reason});
+  if (error) redirect(destination(jobId,error.message));
+  try { await createAppNotifications({recipientIds:[staffId],type:"job_assigned",title:"Maintenance job transferred to you",body:reason,href:`/staff/jobs/${jobId}`,entityId:jobId}); }
+  catch (error) { console.error("Transfer notification failed",error); }
+  revalidatePath("/admin/jobs"); revalidatePath(`/admin/jobs/${jobId}`); revalidatePath("/staff/tasks"); revalidatePath("/staff/calendar");
+  redirect(`/admin/jobs/${jobId}`);
+}
+
 export async function saveJobAppointment(jobId: string, appointmentId: string | null, data: FormData) {
   const actor = await requireRole(["admin"]);
   const parsed = appointmentSchema.safeParse({

@@ -74,7 +74,7 @@ import { createClient } from "@/lib/supabase/server";
 describe("Complaint Review", () => {
   it("adds distinct defects to one complaint before assignment", async () => {
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Add another defect" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add Another Defect/i }));
     fireEvent.change(screen.getAllByLabelText("Defect Item *")[1], { target: { value: "Door Closer" } });
     expect(screen.getByText("Defect 2")).toBeInTheDocument();
     const payload = document.querySelector<HTMLInputElement>('input[name="defects"]');
@@ -83,13 +83,13 @@ describe("Complaint Review", () => {
     expect(JSON.parse(payload?.value || "[]")).toHaveLength(1);
   });
 
-  it("renders optional appointment inputs for a manual complaint without room access", async () => {
+  it("hides appointment inputs for a manual complaint without room access", async () => {
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
-    expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
-    expect(screen.getByLabelText("Maintenance Time")).not.toBeRequired();
+    expect(screen.queryByLabelText("Maintenance Date")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Maintenance Time")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
   });
-  it("renders optional appointment inputs for a Google Form YES when the optional lookup fails", async () => {
+  it("hides appointment inputs for a Google Form YES when the optional lookup fails", async () => {
     const client = await createClient();
     const googleFormComplaint = { ...complaint, source: "google_form", room_access_permission: "YES" };
     vi.mocked(client.from).mockImplementation((table: string) => {
@@ -105,8 +105,8 @@ describe("Complaint Review", () => {
       return complaintQuery as never;
     });
     render(await ComplaintDetail({ params: Promise.resolve({ id: complaint.id }), searchParams: Promise.resolve({}) }));
-    expect(screen.getByLabelText("Maintenance Date")).not.toBeRequired();
-    expect(screen.getByLabelText("Maintenance Time")).not.toBeRequired();
+    expect(screen.queryByLabelText("Maintenance Date")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Maintenance Time")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
     expect(screen.getByText(/Scheduling a visit is optional\./)).toBeInTheDocument();
   });
