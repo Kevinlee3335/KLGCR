@@ -31,6 +31,7 @@ beforeAll(async()=>{
     create policy complaints_delete on public.complaints for delete to authenticated using(public.is_admin());
     grant delete on public.complaints to authenticated;`);
   await db.exec(sql("20260928070041_september_review_batch"));
+  await db.exec(sql("20260929120000_fix_review_items_3_4_5_6"));
   await db.query("insert into auth.users(id,email) values($1,'admin@example.test'),($2,'worker@example.test'),($3,'other@example.test')",[admin,staff,next]);
   await db.query("update public.profiles set role='admin',full_name='Admin' where id=$1",[admin]);
   await db.query("update public.profiles set full_name='Abdullah' where id=$1",[staff]);
@@ -83,16 +84,19 @@ describe("September review database flows",()=>{
     expect((await db.query("select count(*)::int n from admin_daily_tasks")).rows[0]).toMatchObject({n:2});
     await asUser(next);expect((await db.query("select id from admin_daily_tasks")).rows).toHaveLength(0);
     await asUser(staff);const tasks=await db.query<{id:number}>("select id from admin_daily_tasks");
-    await db.query("select update_assigned_daily_task($1,'completed')",[tasks.rows[0].id]);
+    await db.query("select update_assigned_daily_task($1,'accepted','Will do after lunch')",[tasks.rows[0].id]);
+    expect((await db.query("select status,accepted_at from admin_daily_tasks where id=$1",[tasks.rows[0].id])).rows[0]).toMatchObject({status:"accepted"});
+    await db.query("select update_assigned_daily_task($1,'completed','Completed')",[tasks.rows[0].id]);
     expect((await db.query("select status from admin_daily_tasks where id=$1",[tasks.rows[0].id])).rows[0]).toMatchObject({status:"completed"});
+    expect((await db.query("select action,comment from daily_task_activity where task_id=$1 order by id",[tasks.rows[0].id])).rows).toEqual(expect.arrayContaining([expect.objectContaining({action:"Task Accepted",comment:"Will do after lunch"}),expect.objectContaining({action:"Completed",comment:"Completed"})]));
   });
   it("formats automatic reports with real newlines, confirmed defects and requested items",async()=>{
     await asUser(staff);await db.query("select create_material_request($1,'',$2::jsonb)",[job,JSON.stringify([{inventory_item_id:item,qty:1},{other_item_name:"Connector",qty:2}])]);
     await db.exec("reset role");await db.query("select generate_automatic_report('daily_summary')");
-    const report=(await db.query<{whatsapp_text:string}>("select whatsapp_text from report_snapshots where block_group='AB' and report_type='daily_summary'")).rows[0].whatsapp_text;
+    const report=(await db.query<{whatsapp_text:string}>("select whatsapp_text from report_snapshots where block_group='ALL' and report_type='daily_summary'")).rows[0].whatsapp_text;
     expect(report).toContain("🔧 Electrical — Admin confirmed: light not working");
     expect(report).toContain("📦 KLGCR-E00001 Lamp | 1.00 pcs");expect(report).toContain("Connector | 2.00");
-    expect(report).toContain("\n\n🔴 PENDING MATERIAL\n");expect(report).not.toContain("\\n");
+    expect(report).toContain("\n\n🔴 PENDING MATERIAL\n");expect(report).toContain("\n\n📋 ADMIN TASKS\n");expect(report).not.toContain("\\n");
     expect(report).toContain("CARRY FORWARD TO NEXT DAY: 1 JOBS");
     expect((await db.query("select schedule from cron.job where jobname='klgcr-phase5-morning'")).rows[0]).toMatchObject({schedule:"30 1 * * *"});
   });
