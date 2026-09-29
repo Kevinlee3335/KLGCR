@@ -22,7 +22,7 @@ export function MaterialItemPicker({ items, name, required }: { items: MaterialI
   };
 
   return <div className="material-autocomplete">
-    <label><input type="checkbox" checked={other} onChange={event => {setOther(event.target.checked);setSelected(null);setQuery("");}}/> Other item (not in inventory)</label>
+    <div className="material-picker-options"><button type="button" className={`button secondary ${!other ? "is-selected" : ""}`} onClick={() => {setOther(false);setQuery("");}}>Inventory item</button><button type="button" className={`button secondary ${other ? "is-selected" : ""}`} onClick={() => {setOther(true);setSelected(null);setQuery("");}}>Other Item</button></div>
     <input type="hidden" name={name} value={other ? "other" : selected?.id || ""} />
     <input type={other ? "text" : "hidden"} name="otherItemName" required={other} maxLength={200} placeholder="Enter the material name" aria-label="Other material name"/>
     {!other && <>
