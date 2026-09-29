@@ -60,7 +60,8 @@ export async function POST(request: Request) {
   if(action==="admin_task_status"){
     const id=Number(form.get("taskId"));
     const status=String(form.get("status")??"pending");
-    const{error}=await db.from("admin_daily_tasks").update({status,updated_at:new Date().toISOString()}).eq("id",id);
+    const comment=String(form.get("comment")||"").trim()||null;
+    const{error}=await db.rpc("admin_update_daily_task",{p_id:id,p_status:status,p_comment:comment});
     return error?redirect(request,date,error.message):redirect(request,date);
   }
 
