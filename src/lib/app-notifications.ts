@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushNotifications } from "@/lib/push";
-import { COMMON_EMAIL_FOOTER, sendTransactionalEmail } from "@/lib/email";
 
 export type AppNotificationType =
   | "complaint_created"
@@ -52,32 +51,19 @@ export async function notifyActiveAdmins(input: Omit<NotificationInput, "recipie
   await createAppNotifications({ ...input, recipientIds: (data || []).map((profile) => profile.id) });
 }
 
-
 export async function notifyMaterialRequestRecipients(input: NotificationInput) {
   const recipientIds = [...new Set(input.recipientIds.filter(Boolean))];
   if (!recipientIds.length) return;
   const db = createAdminClient();
   const { data: recipients, error } = await db
     .from("profiles")
-    .select("id,email")
+    .select("id")
     .in("id", recipientIds)
     .eq("is_active", true)
     .is("deleted_at", null);
   if (error) throw new Error(`Unable to find material request recipients: ${error.message}`);
 
-  const activeIds = (recipients || []).map((recipient) => recipient.id);
-  await createAppNotifications({ ...input, recipientIds: activeIds });
-  await Promise.all((recipients || []).map((recipient) => sendTransactionalEmail(recipient.email, {
-    subject: input.title,
-    text: `${input.body}
-
-Open the KLG Campus Residence Operations Management System for details.
-
-Best regards,
-KLG Campus Residence Management
-
-${COMMON_EMAIL_FOOTER}`,
-  })));
+  await createAppNotifications({ ...input, recipientIds: (recipients || []).map((recipient) => recipient.id) });
 }
 
 export async function notifyActiveMaterialApprovers(input: Omit<NotificationInput, "recipientIds">) {
