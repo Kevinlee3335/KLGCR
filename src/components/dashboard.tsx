@@ -12,7 +12,7 @@ type TenantNoShow = { id: string; job_id: string; appointment_date: string; appo
 type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number>;
 
 export type AdminDashboardData = {
-  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; todayAppointments?:number;pendingAppointments?:number };
+  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number };
   tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
@@ -37,7 +37,7 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
     { title: "In Progress", value: data.kpis.inProgress, subtitle: "Active now", href: "/admin/jobs?status=in_progress", icon: PlayCircle, tone: "violet" },
     { title: "Pending Material", value: data.kpis.pendingMaterial, subtitle: "Awaiting material", href: "/admin/jobs?status=pending_material", icon: PackageOpen, tone: "amber" },
     { title: "Under Monitoring", value: data.kpis.underMonitoring, subtitle: "Follow-up required", href: "/admin/jobs?status=under_monitoring", icon: Clock3, tone: "purple" },
-    { title: "Completed Today", value: data.kpis.completedToday, subtitle: "Completed today", href: "/admin/jobs?scope=completed-today", icon: CheckCircle2, tone: "green" },
+    { title: "Completion Photos", value: data.kpis.completionPhotos, subtitle: "27 Sep onwards", href: "/admin/jobs?scope=completion-photos", icon: CheckCircle2, tone: "green" },
     { title: "Today's Appointments", value: data.kpis.todayAppointments, subtitle: "Scheduled visits", href: "/admin/daily-tasks", icon: Clock3, tone: "gold" },
   ];
   const quickActions = [
