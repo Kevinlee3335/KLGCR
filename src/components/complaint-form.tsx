@@ -61,6 +61,7 @@ const defectOptions = {
     "Flexible Hose": ["Leaking", "Broken"], Other: ["Other"],
   },
   "Common Area": { Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"] },
+  "External Area": Object.fromEntries(externalAreas.map((area) => [area, ["General Maintenance", "Other"]])) as Record<string, string[]>,
 } as const;
 
 type DefectArea = keyof typeof defectOptions;
@@ -78,9 +79,8 @@ type ConfirmedDefect = {
   note: string;
 };
 
-function newDefect(key: number): ConfirmedDefect {
-  const area: DefectArea = "Room";
-  const item = Object.keys(defectOptions[area])[0];
+function newDefect(key: number, area: DefectArea = "Room", presetItem?: string): ConfirmedDefect {
+  const item = presetItem && presetItem in defectOptions[area] ? presetItem : Object.keys(defectOptions[area])[0];
   const issue = (defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0];
   return { key, area, item, issue, note: "" };
 }
@@ -94,11 +94,14 @@ type AssignmentFormProps = {
   roomAccess?: string | null;
   preferredDate?: string | null;
   preferredTime?: string | null;
+  externalArea?: string | null;
 };
 
-export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0, source, roomAccess, preferredDate, preferredTime }: AssignmentFormProps) {
+export function AssignmentForm({ complaintId, eligible, requiresAppointment = false, existingCount = 0, source, roomAccess, preferredDate, preferredTime, externalArea }: AssignmentFormProps) {
   const action = assignComplaint.bind(null, complaintId);
-  const [defects, setDefects] = useState<ConfirmedDefect[]>(() => [newDefect(existingCount + 1)]);
+  const matchedExternalArea = externalAreas.find((area) => externalArea === area || externalArea?.startsWith(`${area} · `));
+  const defaultArea: DefectArea = matchedExternalArea ? "External Area" : "Room";
+  const [defects, setDefects] = useState<ConfirmedDefect[]>(() => [newDefect(existingCount + 1, defaultArea, matchedExternalArea)]);
   const updateDefect = (key: number, change: Partial<ConfirmedDefect>) => setDefects((current) => current.map((defect) => {
     if (defect.key !== key) return defect;
     const next = { ...defect, ...change };
@@ -118,7 +121,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         <h4>Confirmed defects for maintenance</h4>
         <p className="subtle">Add every verified defect in this complaint first. Maintenance will receive the complete defect list. You can add up to 10 defects.</p>
       </div>
-      <div className="field field-wide assignment-action-bar"><button className="button assignment-submit" type="button" onClick={() => setDefects((current) => current.length >= 10 ? current : [...current, newDefect(existingCount + current.length + 1)])} disabled={defects.length >= 10}>+ Add Another Defect</button></div>
+      <div className="field field-wide assignment-action-bar"><button className="button assignment-submit" type="button" onClick={() => setDefects((current) => current.length >= 10 ? current : [...current, newDefect(existingCount + current.length + 1, defaultArea, matchedExternalArea)])} disabled={defects.length >= 10}>+ Add Another Defect</button></div>
       <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note }) => ({ area, item, issue, note })))} />
       {defects.map((defect, index) => {
         const items = Object.keys(defectOptions[defect.area]);
