@@ -12,7 +12,9 @@ type ComplaintFormProps = {
   mode: "create" | "review";
 };
 
-const externalAreas = ["Bungalow XA3", "Bungalow X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45 (CD)", "Substation PE46 (AB)"];
+// These are shared external facilities, so they deliberately do not belong to
+// a residential block. Keep the labels exactly as staff use them onsite.
+const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
