@@ -16,6 +16,7 @@ describe("JobWorkflowActions", () => {
     render(<JobWorkflowActions jobId="job-id" status="pending_material" returnTo="/staff/tasks?status=pending_material"/>);
     const form = screen.getByRole("button", { name: "Confirm completion" }).closest("form");
     expect(form?.querySelector('input[name="returnTo"]')).toHaveValue("/staff/tasks?status=pending_material");
+    expect(form?.querySelector('input[name="completionPhotos"]')).toBeRequired();
   });
   it("shows Start Job and Tenant Not Available for an assigned appointment job", () => {
     render(<JobWorkflowActions jobId="job-id" status="assigned" hasActionableAppointment/>);
