@@ -32,6 +32,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission)").order("updated_at", { ascending: false });
   if (filters.scope === "today-active") query = query.eq("scheduled_for", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
   if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", `${today}T00:00:00+08:00`).lt("completed_at", `${today}T23:59:59.999+08:00`);
+  if (filters.scope === "completion-photos") query = query.eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00");
   if (filters.scope === "outstanding") query = query.in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
   if (filters.block) query = query.eq("block_id", filters.block);
   if (filters.staff) query = query.eq("assigned_to", filters.staff);
