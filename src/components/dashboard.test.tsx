@@ -10,6 +10,8 @@ describe("role dashboards", () => {
       complaints: [], tasks: [], tenantNoShows: [], inventory: { outOfStock: 1, nearReorder: 2 },
     }}/>)
     expect(screen.getByRole("link", { name: /New complaints/i })).toHaveAttribute("href", "/admin/complaints?status=new");
+    expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveAttribute("href", "/admin/jobs?scope=completed-today");
+    expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveTextContent("5");
     expect(screen.getByText("Operations Command Centre")).toBeInTheDocument();
     expect(screen.getByText("15")).toBeInTheDocument();
   });
