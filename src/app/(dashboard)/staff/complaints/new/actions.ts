@@ -8,7 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 
 const detailsSchema = z.object({
   locationType: z.enum(["room", "bathroom", "common", "external"]),
-  blockId: z.coerce.number().int().positive().optional(),
+  blockId: z.preprocess(
+    (value) => value === "" || value === null ? undefined : value,
+    z.coerce.number().int().positive().optional(),
+  ),
   area: z.string().trim().min(1, "Choose an area."),
   location: z.string().trim().max(120),
   defectType: z.string().trim().min(1, "Choose a defect item.").max(100),
