@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AssignmentForm } from "./complaint-form";
 
@@ -30,5 +30,22 @@ describe("AssignmentForm", () => {
     expect(screen.queryByLabelText("Maintenance Date")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Maintenance Time")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Assigned Staff *")).toBeRequired();
+  });
+
+  it("keeps original and external locations available for Common Area defects", () => {
+    render(<AssignmentForm complaintId="complaint-id" eligible={staff}/>);
+
+    const area = screen.getByLabelText("Area *");
+    fireEvent.change(area, { target: { value: "Common Area" } });
+
+    const location = screen.getByLabelText("Common Area Location *");
+    expect(location).toHaveTextContent("Balcony");
+    expect(location).toHaveTextContent("Corridor");
+    expect(location).toHaveTextContent("Common Bathroom");
+    expect(location).toHaveTextContent("Visitor Room");
+    expect(location).toHaveTextContent("Drying Area");
+    expect(location).toHaveTextContent("Lobby");
+    expect(location).toHaveTextContent("Lift");
+    expect(location).toHaveTextContent("Bungalow XA3/X3");
   });
 });
