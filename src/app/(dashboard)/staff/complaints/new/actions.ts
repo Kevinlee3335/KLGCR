@@ -27,7 +27,7 @@ const detailsSchema = z.object({
 });
 
 export async function prepareCleanerComplaint(formData: FormData) {
-  const actor = await requireRole(["cleaner"]);
+  await requireRole(["cleaner"]);
   const parsed = detailsSchema.safeParse({
     locationType: formData.get("locationType"),
     blockId: formData.get("blockId"),
@@ -42,7 +42,7 @@ export async function prepareCleanerComplaint(formData: FormData) {
   try {
     const supabase = await createClient();
     const roomNo = `${parsed.data.area}${parsed.data.location ? ` · ${parsed.data.location}` : ""}`;
-    const { data: complaint, error: insertError } = await supabase
+    const { data: createdComplaint, error: insertError } = await supabase
       .rpc("create_cleaner_complaint", {
         p_block_id: parsed.data.locationType === "external" ? null : parsed.data.blockId ?? null,
         p_room_no: roomNo,
@@ -51,6 +51,7 @@ export async function prepareCleanerComplaint(formData: FormData) {
         p_priority: parsed.data.priority,
       })
       .single();
+    const complaint = createdComplaint as unknown as { id: string; complaint_no: string } | null;
     if (insertError || !complaint) return { error: insertError?.message || "Unable to create the complaint." };
 
     const path = `complaints/${complaint.id}/${crypto.randomUUID()}.jpg`;
