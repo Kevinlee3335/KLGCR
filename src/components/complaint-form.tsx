@@ -16,6 +16,11 @@ type ComplaintFormProps = {
 // a residential block. Keep the labels exactly as staff use them onsite.
 const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 
+// Keep the original shared-building locations as well as the external
+// facilities. The external-area change must not remove existing Common Area
+// choices used for complaints inside Blocks A–D.
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Other", ...externalAreas];
+
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
   const existingArea = externalAreas.find(area => complaint?.room_no === area || complaint?.room_no.startsWith(`${area} · `));
@@ -131,7 +136,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
           <div className="confirmed-defect-heading"><h4>Defect {existingCount + index + 1}</h4>{defects.length > 1 && <button className="button secondary button-compact" type="button" onClick={() => setDefects((current) => current.filter((entry) => entry.key !== defect.key))}>Remove</button>}</div>
           <div className="form-grid">
             <label className="field"><span>Area *</span><select value={defect.area} onChange={(event) => updateDefect(defect.key, { area: event.target.value as DefectArea })}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
-            {defect.area === "Common Area" && <label className="field"><span>Common Area Location *</span><select value={defect.location} onChange={(event) => updateDefect(defect.key, { location: event.target.value })} required><option value="">Choose location</option>{externalAreas.map((value) => <option key={value}>{value}</option>)}</select></label>}
+            {defect.area === "Common Area" && <label className="field"><span>Common Area Location *</span><select value={defect.location} onChange={(event) => updateDefect(defect.key, { location: event.target.value })} required><option value="">Choose location</option>{commonAreaLocations.map((value) => <option key={value}>{value}</option>)}</select></label>}
             <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => updateDefect(defect.key, { item: event.target.value })}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => updateDefect(defect.key, { issue: event.target.value })}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Location / Note"}</span><input value={defect.note} onChange={(event) => updateDefect(defect.key, { note: event.target.value })} maxLength={500} required={needsOtherDetails} placeholder={needsOtherDetails ? "Write the problem clearly, for example: broken door stopper" : "Example: Near window, beside main door"}/></label>
