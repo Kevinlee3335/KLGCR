@@ -18,9 +18,9 @@ describe("CleanerComplaintForm", () => {
 
     fireEvent.change(screen.getByLabelText("Location Type *"), { target: { value: "external" } });
     const external = screen.getByLabelText("External Area *");
-    expect(external).toHaveTextContent("Bungalow XA3/X3");
-    expect(external).toHaveTextContent("Futsal");
-    expect(external).toHaveTextContent("Substation PE45/46");
+    ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"].forEach((area) => {
+      expect(external).toHaveTextContent(area);
+    });
     expect(screen.queryByLabelText("Block *")).not.toBeInTheDocument();
   });
 });
