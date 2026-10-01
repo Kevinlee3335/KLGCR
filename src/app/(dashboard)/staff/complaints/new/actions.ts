@@ -7,16 +7,19 @@ import { notifyActiveAdmins } from "@/lib/app-notifications";
 import { createClient } from "@/lib/supabase/server";
 
 const detailsSchema = z.object({
-  locationType: z.enum(["common", "external"]),
+  locationType: z.enum(["room", "bathroom", "common", "external"]),
   blockId: z.coerce.number().int().positive().optional(),
   area: z.string().trim().min(1, "Choose an area."),
   location: z.string().trim().max(120),
-  defectType: z.enum(["Lighting", "Water Leakage", "Door / Lock", "Plumbing", "Furniture", "Air Conditioning", "Cleaning Issue", "Other"]),
+  defectType: z.string().trim().min(1, "Choose a defect item.").max(100),
   description: z.string().trim().max(3000),
   priority: z.enum(["low", "normal", "high", "urgent"]),
 }).superRefine((details, context) => {
-  if (details.locationType === "common" && !details.blockId) {
+  if (details.locationType !== "external" && !details.blockId) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["blockId"], message: "Choose a block." });
+  }
+  if (["room", "bathroom"].includes(details.locationType) && !details.location) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["location"], message: "Enter the room or bathroom location." });
   }
   if ((details.area === "Other" || details.defectType === "Other") && !details.description) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["description"], message: "Describe the Other problem." });
@@ -43,7 +46,7 @@ export async function prepareCleanerComplaint(formData: FormData) {
     const { data: complaint, error: insertError } = await supabase.from("complaints").insert({
       source: "cleaning",
       source_reference: ownershipMarker,
-      block_id: parsed.data.locationType === "common" ? parsed.data.blockId : null,
+      block_id: parsed.data.locationType === "external" ? null : parsed.data.blockId,
       room_no: roomNo,
       complainant_name: actor.full_name,
       reporter_name: actor.full_name,
