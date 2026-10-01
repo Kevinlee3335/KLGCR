@@ -22,5 +22,15 @@ describe("CleanerComplaintForm", () => {
       expect(external).toHaveTextContent(area);
     });
     expect(screen.queryByLabelText("Block *")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Location Type *"), { target: { value: "room" } });
+    expect(screen.getByLabelText("Room No. *")).toBeRequired();
+    expect(screen.getByLabelText("Defect Item *")).toHaveTextContent("Ceiling Fan");
+    expect(screen.getByLabelText("Defect Item *")).toHaveTextContent("Wardrobe");
+
+    fireEvent.change(screen.getByLabelText("Location Type *"), { target: { value: "bathroom" } });
+    expect(screen.getByLabelText("Room No. / Bathroom Location *")).toBeRequired();
+    expect(screen.getByLabelText("Defect Item *")).toHaveTextContent("Water Tap / Sink Tap");
+    expect(screen.getByLabelText("Defect Item *")).toHaveTextContent("Toilet Seat");
   });
 });
