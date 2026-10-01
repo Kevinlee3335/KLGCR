@@ -7,6 +7,8 @@ import { cancelCleanerComplaint, finalizeCleanerComplaint, prepareCleanerComplai
 import { createClient } from "@/lib/supabase/client";
 
 type Block = { id: number; code: string };
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Other"];
+const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 
 async function compressPhoto(file: File) {
   const objectUrl = URL.createObjectURL(file);
@@ -41,6 +43,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
   const [photoSource, setPhotoSource] = useState<"camera" | "upload" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [locationType, setLocationType] = useState<"common" | "external">("common");
   const [area, setArea] = useState("Corridor");
   const [defectType, setDefectType] = useState("Lighting");
   const needsOtherDetails = area === "Other" || defectType === "Other";
@@ -100,8 +103,9 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
     </section>
     {error && <p className="error cleaner-report-error">{error}</p>}
     <div className="cleaner-report-grid">
-      <label className="field"><span>Block *</span><select name="blockId" required defaultValue=""><option value="" disabled>Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>
-      <label className="field"><span>Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{["Corridor","Balcony","Lobby","Common Bathroom","Staircase","Drying Area","Visitor Room","Utility Room","Pantry","Room","Other"].map((option) => <option key={option}>{option}</option>)}</select></label>
+      <label className="field"><span>Location Type *</span><select name="locationType" value={locationType} onChange={(event) => { const next = event.target.value as "common" | "external"; setLocationType(next); setArea(next === "common" ? "Corridor" : externalAreas[0]); }}><option value="common">Common Area</option><option value="external">External Area</option></select></label>
+      {locationType === "common" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue=""><option value="" disabled>Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
+      {locationType === "common" ? <label className="field"><span>Common Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{commonAreaLocations.map((option) => <option key={option}>{option}</option>)}</select></label> : <label className="field"><span>External Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{externalAreas.map((option) => <option key={option}>{option}</option>)}</select></label>}
       <label className="field field-wide"><span>Room / Exact Location</span><input name="location" maxLength={120} placeholder="e.g. Block C Level 3 corridor, near lift"/></label>
       <label className="field"><span>Defect Type *</span><select name="defectType" required value={defectType} onChange={(event) => setDefectType(event.target.value)}>{["Lighting","Water Leakage","Door / Lock","Plumbing","Furniture","Air Conditioning","Cleaning Issue","Other"].map((option) => <option key={option}>{option}</option>)}</select></label>
       <label className="field"><span>Priority *</span><select name="priority" required defaultValue="normal"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
