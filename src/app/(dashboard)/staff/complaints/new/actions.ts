@@ -8,7 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 
 const detailsSchema = z.object({
   locationType: z.enum(["room", "bathroom", "common", "external"]),
-  blockId: z.coerce.number().int().positive().optional(),
+  blockId: z.preprocess(
+    (value) => value === "" || value === null ? undefined : value,
+    z.coerce.number().int().positive().optional(),
+  ),
   area: z.string().trim().min(1, "Choose an area."),
   location: z.string().trim().max(120),
   defectType: z.string().trim().min(1, "Choose a defect item.").max(100),
@@ -27,7 +30,7 @@ const detailsSchema = z.object({
 });
 
 export async function prepareCleanerComplaint(formData: FormData) {
-  const actor = await requireRole(["cleaner"]);
+  await requireRole(["cleaner"]);
   const parsed = detailsSchema.safeParse({
     locationType: formData.get("locationType"),
     blockId: formData.get("blockId"),
@@ -41,19 +44,17 @@ export async function prepareCleanerComplaint(formData: FormData) {
 
   try {
     const supabase = await createClient();
-    const ownershipMarker = `cleaner:${actor.id}:${crypto.randomUUID()}`;
     const roomNo = `${parsed.data.area}${parsed.data.location ? ` · ${parsed.data.location}` : ""}`;
-    const { data: complaint, error: insertError } = await supabase.from("complaints").insert({
-      source: "cleaning",
-      source_reference: ownershipMarker,
-      block_id: parsed.data.locationType === "external" ? null : parsed.data.blockId,
-      room_no: roomNo,
-      complainant_name: actor.full_name,
-      reporter_name: actor.full_name,
-      category: `${parsed.data.area} · ${parsed.data.defectType}`,
-      description: parsed.data.description,
-      priority: parsed.data.priority,
-    }).select("id,complaint_no").single();
+    const { data: createdComplaint, error: insertError } = await supabase
+      .rpc("create_cleaner_complaint", {
+        p_block_id: parsed.data.locationType === "external" ? null : parsed.data.blockId ?? null,
+        p_room_no: roomNo,
+        p_category: `${parsed.data.area} · ${parsed.data.defectType}`,
+        p_description: parsed.data.description,
+        p_priority: parsed.data.priority,
+      })
+      .single();
+    const complaint = createdComplaint as unknown as { id: string; complaint_no: string } | null;
     if (insertError || !complaint) return { error: insertError?.message || "Unable to create the complaint." };
 
     const path = `complaints/${complaint.id}/${crypto.randomUUID()}.jpg`;
