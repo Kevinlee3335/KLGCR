@@ -22,20 +22,20 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const supabase = await createClient();
   const search = (query.q || "").trim();
   const category = ["Building", "Electrical", "Chemical", "Piping", "Painting"].includes(query.category || "") ? query.category! : "";
-  let inventoryQuery = supabase.from("inventory_items").select("id,item_code,description,category,movement_category,balance_qty,reorder_level,cost,unit,is_active").order("item_code");
-  if (search) {
-    // Quote PostgREST operands: names such as WINDOW HANDLE (L) contain filter syntax.
-    const pattern = `"%${search.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}%"`;
-    inventoryQuery = inventoryQuery.or(`item_code.ilike.${pattern},description.ilike.${pattern}`);
-  }
-  if (category) inventoryQuery = inventoryQuery.eq("category", category);
+  // Filter after loading the stock list: real names such as WINDOW HANDLE (R)
+  // contain characters that PostgREST can interpret as query syntax.
+  const inventoryQuery = supabase.from("inventory_items").select("id,item_code,description,category,movement_category,balance_qty,reorder_level,cost,unit,is_active").order("item_code");
   const [{ data: items, error }, { data: issues }, { data: adjustments }, { data: catalog }] = await Promise.all([
     inventoryQuery,
     supabase.from("inventory_issue_history").select("id,qty,balance_before,balance_after,issued_at,item:inventory_items(item_code,description),job:maintenance_jobs(job_no,room_no),staff:profiles!staff_id(full_name)").order("issued_at", { ascending: false }).limit(30),
     supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,item:inventory_items(item_code,description),user:profiles!adjusted_by(full_name)").order("adjusted_at", { ascending: false }).limit(30),
     supabase.from("inventory_items").select("item_code,description,category").eq("is_active", true).order("item_code"),
   ]);
-  const rows = items || [];
+  const normalizedSearch = search.toLocaleLowerCase();
+  const rows = (items || []).filter((item: any) =>
+    (!category || item.category === category) &&
+    (!normalizedSearch || item.item_code.toLocaleLowerCase().includes(normalizedSearch) || item.description.toLocaleLowerCase().includes(normalizedSearch))
+  );
   const itemOptions = catalog || [];
   const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item) => item.category)])];
   const hasStockFilter = Boolean(search || category);
