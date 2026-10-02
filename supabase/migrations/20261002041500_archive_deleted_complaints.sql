@@ -18,3 +18,6 @@ drop policy if exists "admins archive deleted complaints" on public.deleted_comp
 create policy "admins archive deleted complaints"
 on public.deleted_complaints for insert to authenticated
 with check (public.is_admin());
+
+
+grant select, insert on table public.deleted_complaints to authenticated;
