@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAppNotifications } from "@/lib/app-notifications";
 
 function redirect(request:Request,date:string,error?:string){
   const url=new URL("/admin/daily-tasks",request.url);
@@ -21,8 +22,15 @@ export async function POST(request: Request) {
   if(action==="schedule"){
     const jobId=String(form.get("jobId")??"");
     if(!jobId||!/^\d{4}-\d{2}-\d{2}$/.test(date))return redirect(request,date,"invalid");
-    const{error}=await db.rpc("schedule_job",{p_job_id:jobId,p_date:date});
-    return error?redirect(request,date,error.message):redirect(request,date);
+    const { data: job, error: jobError } = await db.from("maintenance_jobs").select("job_no,assigned_to,scheduled_for").eq("id", jobId).maybeSingle();
+    if (jobError || !job) return redirect(request, date, jobError?.message || "Active job not found");
+    const {error}=await db.rpc("schedule_job",{p_job_id:jobId,p_date:date});
+    if (error) return redirect(request,date,error.message);
+    if (job.assigned_to && job.scheduled_for !== date) {
+      try { await createAppNotifications({ recipientIds: [job.assigned_to], type: "job_assigned", title: "Maintenance job scheduled", body: `${job.job_no} is scheduled for ${date}.`, href: `/staff/jobs/${jobId}`, entityId: jobId }); }
+      catch (notificationError) { console.error("Unable to notify scheduled maintenance staff", notificationError); }
+    }
+    return redirect(request,date);
   }
 
   if(action==="work_state"){
@@ -44,13 +52,22 @@ export async function POST(request: Request) {
       const monthlyDate=String(form.get("monthlyDate")||"");
       const day=frequency==="monthly" ? Number(monthlyDate.slice(8,10)) : Number(form.get("dayNumber"));
       if(!Number.isInteger(day)||((frequency==="weekly"||frequency==="biweekly")?(day<0||day>6):(day<1||day>31)))return redirect(request,date,"Invalid recurrence day");
-      const{error}=await db.from("recurring_daily_tasks").insert({title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,frequency,day_number:day,starts_on:date});
+      const { data: recurrence, error } = await db.from("recurring_daily_tasks").insert({title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,frequency,day_number:day,starts_on:date}).select("id").single();
       if(error)return redirect(request,date,error.message);
       const {error:generateError}=await db.rpc("materialize_recurring_tasks",{p_date:date});
-      return redirect(request,date,generateError?.message);
+      if (generateError) return redirect(request,date,generateError.message);
+      const { data: task } = await db.from("admin_daily_tasks").select("id").eq("recurrence_id", recurrence.id).eq("task_date", date).maybeSingle();
+      if (task) {
+        try { await createAppNotifications({ recipientIds: [assignedTo], type: "calendar_event", title: "Recurring daily task assigned", body: `${title} is scheduled for ${date}.`, href: "/staff/tasks", entityId: String(task.id) }); }
+        catch (notificationError) { console.error("Unable to notify recurring daily-task assignee", notificationError); }
+      }
+      return redirect(request,date);
     }
-    const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id});
-    return error?redirect(request,date,error.message):redirect(request,date);
+    const { data: task, error } = await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id}).select("id").single();
+    if (error) return redirect(request,date,error.message);
+    try { await createAppNotifications({ recipientIds: [assignedTo], type: "calendar_event", title: "Daily task assigned", body: `${title} is scheduled for ${date}.`, href: "/staff/tasks", entityId: String(task.id) }); }
+    catch (notificationError) { console.error("Unable to notify daily-task assignee", notificationError); }
+    return redirect(request,date);
   }
 
   if(action==="recurrence_stop"){
