@@ -24,9 +24,13 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const category = ["Building", "Electrical", "Chemical", "Piping", "Painting"].includes(query.category || "") ? query.category! : "";
   let inventoryQuery = supabase.from("inventory_items").select("id,item_code,description,category,movement_category,balance_qty,reorder_level,cost,unit,is_active").order("item_code");
   if (search) {
-    // Quote PostgREST operands: names such as WINDOW HANDLE (L) contain filter syntax.
-    const pattern = `"%${search.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}%"`;
-    inventoryQuery = inventoryQuery.or(`item_code.ilike.${pattern},description.ilike.${pattern}`);
+    // PostgREST OR filters treat commas and parentheses as syntax. Strip only
+    // those separators, then use a normal case-insensitive contains search.
+    const term = search.replace(/[(),]/g, " ").replace(/[%_]/g, "").trim();
+    if (term) {
+      const pattern = `%${term}%`;
+      inventoryQuery = inventoryQuery.or(`item_code.ilike.${pattern},description.ilike.${pattern}`);
+    }
   }
   if (category) inventoryQuery = inventoryQuery.eq("category", category);
   const [{ data: items, error }, { data: issues }, { data: adjustments }, { data: catalog }] = await Promise.all([
@@ -38,7 +42,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const rows = items || [];
   const itemOptions = catalog || [];
   const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item) => item.category)])];
-  const hasStockFilter = Boolean(search || category);
+  const hasStockFilter = Boolean((search && search.replace(/[(),]/g, " ").replace(/[%_]/g, "").trim()) || category);
   const stockRows = hasStockFilter ? rows : [];
   const groupedRows = category
     ? [{ category, items: stockRows }]
