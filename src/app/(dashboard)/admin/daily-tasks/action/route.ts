@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       }
       return redirect(request,date);
     }
-    const { data: task, error } = await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id}).select("id").single();
+    const { error } = await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id});
     if (error) return redirect(request,date,error.message);
     try { await createAppNotifications({ recipientIds: [assignedTo], type: "job_assigned", title: "New daily task assigned", body: `${title} is scheduled for ${date}.`, href: "/staff/tasks" }); }
     catch (notificationError) { console.error("Unable to notify daily-task assignee", notificationError); }
