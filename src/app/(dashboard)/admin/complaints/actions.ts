@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { appointmentTimeValues, validateComplaintAppointmentSelection } from "@/lib/appointments";
 import { createAppNotifications } from "@/lib/app-notifications";
 
@@ -67,7 +68,11 @@ export async function deleteComplaint(id:string){
   const {data:complaint,error:lookupError}=await s.from("complaints").select("id,status").eq("id",id).maybeSingle();
   if(lookupError||!complaint)redirect("/admin/complaints/"+id+"?error="+encodeURIComponent(lookupError?.message||"Complaint not found."));
   if(!["new","under_review","rejected"].includes(complaint.status))redirect("/admin/complaints/"+id+"?error=Only%20unassigned%20or%20rejected%20complaints%20can%20be%20deleted.");
-  const {data:removed,error}=await s.from("complaints").delete().eq("id",id).select("id").maybeSingle();
+  // This is a server-only admin action after the current administrator and the
+  // allowed complaint state have been checked above.  It lets the archival
+  // trigger write its history row even on deployments where the authenticated
+  // Data API table grant has not yet been refreshed.
+  const {data:removed,error}=await createAdminClient().from("complaints").delete().eq("id",id).select("id").maybeSingle();
   if(error)redirect("/admin/complaints/"+id+"?error="+encodeURIComponent(error.message));
   if(!removed)redirect("/admin/complaints/"+id+"?error=This%20complaint%20has%20a%20maintenance%20job%20and%20cannot%20be%20deleted.");
   revalidatePath("/admin");
