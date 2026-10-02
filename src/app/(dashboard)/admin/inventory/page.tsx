@@ -37,7 +37,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   ]);
   const rows = items || [];
   const itemOptions = catalog || [];
-  const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item) => item.category)])];
+  const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item: any) => item.category)])];
   const hasStockFilter = Boolean(search || category);
   const stockRows = hasStockFilter ? rows : [];
   const groupedRows = category
