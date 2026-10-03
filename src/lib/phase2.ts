@@ -12,7 +12,7 @@ export type ComplaintRow = {
   block:{id:number;code:string}|null; assignee:{id:string;full_name:string}|null;
 };
 export type JobRow = {
-  id:string;job_no:string;room_no:string;category:string;description:string;priority:string;status:string;assigned_at:string;updated_at:string;
+  id:string;job_no:string;room_no:string;category:string;description:string;priority:string;status:string;assigned_to:string;assigned_at:string;updated_at:string;
   started_at:string|null;completed_at:string|null;action_taken:string|null;monitoring_note:string|null;monitoring_started_at:string|null;monitoring_review_at:string|null;pending_material_note:string|null;block:{id:number;code:string}|null;assignee?:{id:string;full_name:string}|null;complaint?:{id?:string;complaint_no:string;complainant_name?:string|null;complainant_contact?:string|null;reporter_name?:string|null;reporter_phone?:string|null;reporter_email?:string|null;availability_date?:string|null;availability_time?:string|null;room_access_permission?:string|null;submitted_at?:string|null;reviewed_at?:string|null;reviewer?:{full_name:string}|null}|null;
   appointments?:{appointment_date:string;appointment_time:string;status:string}[];
 };

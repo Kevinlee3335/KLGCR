@@ -16,9 +16,10 @@ describe("role dashboards", () => {
     expect(screen.getByText("15")).toBeInTheDocument();
   });
 
-  it("shows assigned blocks on staff mobile dashboard", () => {
+  it("shows team report visibility on staff mobile dashboard", () => {
     render(<Dashboard kind="staff" name="Abdullah" blocks="Block A & Block B" values={[1, 0, 0, 0]}/>);
-    expect(screen.getByText("My tasks — Block A & Block B")).toBeInTheDocument();
+    expect(screen.getByText("Maintenance Reports — Block A & Block B")).toBeInTheDocument();
+    expect(screen.getByText("All maintenance staff can view every report. Only the assigned staff member can update a job.")).toBeInTheDocument();
     expect(screen.queryByText("New complaints")).not.toBeInTheDocument();
   });
 });

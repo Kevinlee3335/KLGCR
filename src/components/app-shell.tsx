@@ -16,7 +16,7 @@ const adminNav = [
 ] as const;
 const cleanerNav = [["New Complaint", "/staff/complaints/new"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["Calendar", "/staff/calendar"]] as const;
 const staffNav = [
-  ["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"],
+  ["Maintenance Dashboard", "/staff"], ["Maintenance Reports", "/staff/tasks"],
   ["Daily Tasks", "/staff/daily-tasks"],
   ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
   ["Calendar", "/staff/calendar"], ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
