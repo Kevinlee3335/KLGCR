@@ -42,7 +42,8 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
   function choose(files: FileList | null, source: "camera" | "upload") {
     const selected = Array.from(files || []);
     if (!selected.length) return;
-    const combined = source === "camera" ? selected : [...photos, ...selected];
+    // Keep earlier photos when the cleaner takes several camera shots one by one.
+    const combined = [...photos, ...selected];
     if (combined.length > 6) { setError("You can attach up to 6 photos."); return; }
     setPhotos(combined);
     setError("");
