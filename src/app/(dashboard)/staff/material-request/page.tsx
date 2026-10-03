@@ -12,7 +12,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
   const query = await searchParams;
   const supabase = await createClient();
   const [{ data: jobs }, { data: items }, { data: requests }] = await Promise.all([
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,status,block:blocks!block_id(code)").in("status", ["in_progress", "pending_material"]).order("assigned_at", { ascending: false }),
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,status,block:blocks!block_id(code)").eq("assigned_to", profile.id).in("status", ["in_progress", "pending_material"]).order("assigned_at", { ascending: false }),
     supabase.from("inventory_items").select("id,item_code,description,balance_qty,unit").eq("is_active", true).order("description"),
     supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,issued_at,job:maintenance_jobs!job_id(id,job_no,room_no,status),items:material_request_items(other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,unit))").order("created_at", { ascending: false }).limit(20),
   ]);
