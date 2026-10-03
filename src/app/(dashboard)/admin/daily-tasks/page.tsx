@@ -16,7 +16,7 @@ export default async function DailyTasksPage({searchParams}:{searchParams:Promis
   ]);
   const isAdmin=profile.role==="admin";
   const [{data:employees},{data:recurrences}] = await Promise.all([
-    db.from("profiles").select("id,full_name").eq("is_active",true).is("deleted_at",null).order("full_name"),
+    db.from("profiles").select("id,full_name").eq("role","cleaner").eq("is_active",true).is("deleted_at",null).order("full_name"),
     db.from("recurring_daily_tasks").select("id,title,frequency,day_number,assignee:profiles!assigned_to(full_name)").eq("is_active",true),
   ]);
   const rows=((jobs??[]) as any[]).filter(r=>r.complaint?.room_access_permission!=="no");const appointmentRows=(appointments??[]) as any[];const today=rows.filter(r=>r.scheduled_for===date);const unscheduled=rows.filter(r=>!r.scheduled_for);

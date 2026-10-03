@@ -54,6 +54,9 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!photos.length) { setError("Take or upload at least one completion photo."); return; }
+    // Capture the value before awaiting uploads. React no longer keeps a usable
+    // currentTarget after asynchronous work on every browser.
+    const comment = String(new FormData(event.currentTarget).get("comment") || "");
     setBusy(true);
     setError("");
     try {
@@ -66,7 +69,6 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
         const { error: uploadError } = await db.storage.from("checkout-evidence").uploadToSignedUrl(upload.path, upload.token, compressed);
         if (uploadError) throw new Error(`Photo ${index + 1} could not upload: ${uploadError.message}`);
       }
-      const comment = String(new FormData(event.currentTarget).get("comment") || "");
       const completed = await completeDailyTask(taskId, comment, prepared.uploads.map((upload) => upload.path));
       if ("error" in completed) { setError(completed.error || "Unable to complete this task."); return; }
       router.refresh();
