@@ -23,21 +23,21 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const search = (query.q || "").trim();
   const category = ["Building", "Electrical", "Chemical", "Piping", "Painting"].includes(query.category || "") ? query.category! : "";
   let inventoryQuery = supabase.from("inventory_items").select("id,item_code,description,category,movement_category,balance_qty,reorder_level,cost,unit,is_active").order("item_code");
-  if (search) {
-    // Quote PostgREST operands: names such as WINDOW HANDLE (L) contain filter syntax.
-    const pattern = `"%${search.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}%"`;
-    inventoryQuery = inventoryQuery.or(`item_code.ilike.${pattern},description.ilike.${pattern}`);
-  }
   if (category) inventoryQuery = inventoryQuery.eq("category", category);
+  // Search through SQL rather than PostgREST's filter grammar so item names
+  // with brackets, commas, double spaces and special characters still match.
+  const itemResult = search
+    ? supabase.rpc("search_inventory_items", { p_search: search, p_category: category || null })
+    : inventoryQuery;
   const [{ data: items, error }, { data: issues }, { data: adjustments }, { data: catalog }] = await Promise.all([
-    inventoryQuery,
+    itemResult,
     supabase.from("inventory_issue_history").select("id,qty,balance_before,balance_after,issued_at,item:inventory_items(item_code,description),job:maintenance_jobs(job_no,room_no),staff:profiles!staff_id(full_name)").order("issued_at", { ascending: false }).limit(30),
     supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,item:inventory_items(item_code,description),user:profiles!adjusted_by(full_name)").order("adjusted_at", { ascending: false }).limit(30),
     supabase.from("inventory_items").select("item_code,description,category").eq("is_active", true).order("item_code"),
   ]);
   const rows = items || [];
   const itemOptions = catalog || [];
-  const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item) => item.category)])];
+  const categoryOrder = [...new Set(["Building", "Electrical", "Chemical", "Piping", "Painting", ...rows.map((item: any) => item.category)])];
   const hasStockFilter = Boolean(search || category);
   const stockRows = hasStockFilter ? rows : [];
   const groupedRows = category
