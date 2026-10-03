@@ -121,6 +121,7 @@ export async function completeJob(id: string, data: FormData) {
   }
   revalidatePath(`/staff/jobs/${id}`);
   revalidatePath(`/admin/jobs/${id}`);
+  revalidatePath("/staff/complaints");
   return { returnTo } satisfies CompletionResult;
 }
 

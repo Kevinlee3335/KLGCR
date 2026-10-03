@@ -14,9 +14,9 @@ const adminNav = [
   ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
 ] as const;
-const cleanerNav = [["New Complaint", "/staff/complaints/new"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["Calendar", "/staff/calendar"]] as const;
+const cleanerNav = [["Dashboard", "/staff"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["New Complaint", "/staff/complaints/new"], ["My Reports", "/staff/complaints"], ["Calendar", "/staff/calendar"]] as const;
 const staffNav = [
-  ["Maintenance Dashboard", "/staff"], ["Maintenance Reports", "/staff/tasks"],
+  ["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"],
   ["Daily Tasks", "/staff/daily-tasks"],
   ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
   ["Calendar", "/staff/calendar"], ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
@@ -60,8 +60,9 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
 
     <nav className="mobile-nav" aria-label="Mobile quick navigation">
       {profile.role === "cleaner" ? <>
-        <Link href="/staff/checkouts"><NavIcon kind="tasks"/><span>Check-outs</span></Link>
-        <Link href="/staff/complaints/new"><NavIcon kind="more"/><span>Report</span></Link>
+        <Link href="/staff"><NavIcon kind="dashboard"/><span>Dashboard</span></Link>
+        <Link href="/staff/daily-tasks"><NavIcon kind="tasks"/><span>Tasks</span></Link>
+        <Link href="/staff/complaints"><NavIcon kind="more"/><span>Reports</span></Link>
         <Link href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></Link>
       </> : <>
         <Link href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></Link>

@@ -6,8 +6,25 @@ import { JobList } from "@/components/phase2-ui";
 import { createClient } from "@/lib/supabase/server";
 import type { JobRow } from "@/lib/phase2";
 
+function malaysiaToday() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year:"numeric",month:"2-digit",day:"2-digit" }).format(new Date()); }
+
+async function CleanerDashboard({ profile }: { profile: Awaited<ReturnType<typeof requireRole>> }) {
+  const supabase = await createClient();
+  const today = malaysiaToday();
+  const { error: materializeError } = await supabase.rpc("materialize_recurring_tasks", { p_date: today });
+  const [tasksResult, checkoutResult, reportsResult] = await Promise.all([
+    supabase.from("admin_daily_tasks").select("id,title,notes,status,task_date,recurrence_id").eq("assigned_to", profile.id).eq("task_date", today).order("created_at"),
+    supabase.from("checkout_rooms").select("id,reference_no,room_no,status,block:blocks!block_id(code)").eq("cleaner_id", profile.id).in("status", ["cleaning", "verification"]).order("updated_at", { ascending: false }).limit(5),
+    supabase.from("complaints").select("id").eq("source", "cleaning").limit(1),
+  ]);
+  const tasks = tasksResult.data || [];
+  const checkouts = (checkoutResult.data || []) as unknown as Array<{ id: string; reference_no: string | null; room_no: string; status: string; block: { code: string } | null }>;
+  return <AppShell profile={profile} title="Dashboard"><div className="section-head"><div><p className="eyebrow">Cleaner workspace</p><h2>Today&apos;s work</h2><p className="subtle">Your assigned cleaning tasks, check-out rooms and reports in one place.</p></div><Link className="button" href="/staff/complaints/new">New Complaint</Link></div>{(materializeError || tasksResult.error || checkoutResult.error || reportsResult.error) && <p className="error">{materializeError?.message || tasksResult.error?.message || checkoutResult.error?.message || reportsResult.error?.message}</p>}<section className="panel"><div className="section-head"><div><h3>Daily Tasks · {today}</h3><p className="subtle">Tasks assigned by Admin for today.</p></div><Link className="text-link" href={`/staff/daily-tasks?date=${today}`}>View all</Link></div><div className="daily-task-list cleaner-daily-task-list">{tasks.map((task) => <Link className="panel daily-task-card daily-task-link" key={task.id} href={`/staff/daily-tasks/${task.id}`}><div className="record-head"><strong>{task.title}</strong><span className={`status-badge status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div><p>{task.notes || "No additional instructions."}</p><small>{task.recurrence_id ? "Repeating task" : "One-time task"}</small></Link>)}</div>{!tasks.length && <p className="subtle">No daily tasks due today.</p>}</section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>Check-out Rooms</h3><p className="subtle">Rooms handed over to you for housekeeping.</p></div><Link className="text-link" href="/staff/checkouts">Open rooms</Link></div>{checkouts.length ? <div className="mobile-cards" style={{ display:"grid" }}>{checkouts.map((room) => <Link className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}><div className="record-head"><strong>{room.reference_no || "Check-out room"}</strong><span className={`status-badge status-${room.status}`}>{room.status.replaceAll("_", " ")}</span></div><h3>Block {room.block?.code || "–"} · Room {room.room_no}</h3></Link>)}</div> : <p className="subtle">No check-out rooms are waiting for cleaning.</p>}</section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>My Reports</h3><p className="subtle">Track the status of defects you submitted.</p></div><Link className="text-link" href="/staff/complaints">View report status</Link></div><Link className="button secondary" href="/staff/complaints/new">Report a defect</Link></section></AppShell>;
+}
+
 export default async function StaffPage() {
-  const profile = await requireRole(["maintenance_staff"]);
+  const profile = await requireRole(["maintenance_staff", "cleaner"]);
+  if (profile.role === "cleaner") return <CleanerDashboard profile={profile}/>;
   const supabase = await createClient();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year:"numeric",month:"2-digit",day:"2-digit" }).format(new Date());
   const [statusResult, recentResult, appointmentResult] = await Promise.all([

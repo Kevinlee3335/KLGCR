@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAppNotifications } from "@/lib/app-notifications";
 
 function redirect(request:Request,date:string,error?:string){
   const url=new URL("/admin/daily-tasks",request.url);
@@ -38,8 +39,8 @@ export async function POST(request: Request) {
     if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date))return redirect(request,date,"invalid admin task");
     const assignedTo=String(form.get("assignedTo")||"");
     const frequency=String(form.get("frequency")||"once");
-    const {data:employee}=await db.from("profiles").select("id").eq("id",assignedTo).eq("is_active",true).is("deleted_at",null).maybeSingle();
-    if(!employee || !["once","weekly","biweekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active employee and valid recurrence");
+    const {data:employee}=await db.from("profiles").select("id").eq("id",assignedTo).eq("role","cleaner").eq("is_active",true).is("deleted_at",null).maybeSingle();
+    if(!employee || !["once","weekly","biweekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active Cleaner and valid recurrence");
     if(frequency!=="once"){
       const monthlyDate=String(form.get("monthlyDate")||"");
       const day=frequency==="monthly" ? Number(monthlyDate.slice(8,10)) : Number(form.get("dayNumber"));
@@ -47,10 +48,13 @@ export async function POST(request: Request) {
       const{error}=await db.from("recurring_daily_tasks").insert({title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,frequency,day_number:day,starts_on:date});
       if(error)return redirect(request,date,error.message);
       const {error:generateError}=await db.rpc("materialize_recurring_tasks",{p_date:date});
+      try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"Repeating daily task assigned", body:`${title} repeats from ${date}.`, href:"/staff/daily-tasks", entityId:null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
       return redirect(request,date,generateError?.message);
     }
-    const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id});
-    return error?redirect(request,date,error.message):redirect(request,date);
+    const{data:task,error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id}).select("id").single();
+    if(error)return redirect(request,date,error.message);
+    try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"New daily task assigned", body:`${title} is due on ${date}.`, href:"/staff/daily-tasks", entityId:String(task?.id||"") || null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
+    return redirect(request,date);
   }
 
   if(action==="recurrence_stop"){
