@@ -2,10 +2,22 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { JobList } from "@/components/phase2-ui";
 import { requireRole } from "@/lib/auth";
-import { jobStatuses, priorities, titleCase, type JobRow } from "@/lib/phase2";
+import { formatDate, jobStatuses, priorities, titleCase, type JobRow } from "@/lib/phase2";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 50;
+type ArchivedComplaintRow = {
+  id: string;
+  complaint_no: string;
+  block_id: number | null;
+  room_no: string | null;
+  category: string | null;
+  description: string | null;
+  priority: string;
+  submitted_at: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+};
 
 function malaysiaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -18,14 +30,20 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const page = Math.max(1, Number(filters.page) || 1);
   const today = malaysiaToday();
   const archive = ["rejected","deleted"].includes(filters.status || "");
-  let archiveQuery = supabase.from(filters.status === "deleted" ? "deleted_complaints" : "complaints").select("id,complaint_no,block_id,room_no,category,description,priority,submitted_at").order("submitted_at",{ascending:false});
+  const archiveFields = filters.status === "deleted"
+    ? "id,complaint_no,block_id,room_no,category,description,priority,submitted_at,deleted_at,deleted_by"
+    : "id,complaint_no,block_id,room_no,category,description,priority,submitted_at";
+  let archiveQuery = supabase.from(filters.status === "deleted" ? "deleted_complaints" : "complaints").select(archiveFields).order(filters.status === "deleted" ? "deleted_at" : "submitted_at",{ascending:false});
   if (filters.status === "rejected") archiveQuery = archiveQuery.eq("status","rejected");
   if (filters.block) archiveQuery = archiveQuery.eq("block_id",filters.block);
   if (filters.priority) archiveQuery = archiveQuery.eq("priority",filters.priority);
   if (filters.date) archiveQuery = archiveQuery.gte("submitted_at",`${filters.date}T00:00:00+08:00`).lt("submitted_at",`${filters.date}T23:59:59.999+08:00`);
   if (filters.search) { const term = JSON.stringify(`%${filters.search}%`); archiveQuery=archiveQuery.or(`complaint_no.ilike.${term},room_no.ilike.${term},description.ilike.${term}`); }
   const archived = archive ? await archiveQuery.range((page-1)*PAGE_SIZE,page*PAGE_SIZE) : null;
-  const archiveRows = (archived?.data || []).slice(0,PAGE_SIZE);
+  const archiveRows = ((archived?.data || []).slice(0,PAGE_SIZE)) as ArchivedComplaintRow[];
+  const deletedByIds = filters.status === "deleted" ? [...new Set(archiveRows.map((row) => row.deleted_by).filter((id): id is string => Boolean(id)))] : [];
+  const { data: deletedByRows } = deletedByIds.length ? await supabase.from("profiles").select("id,full_name").in("id", deletedByIds) : { data: [] };
+  const deletedByName = new Map((deletedByRows || []).map((row) => [row.id, row.full_name]));
   // Appointments are linked to complaints, not necessarily to maintenance_jobs
   // in PostgREST's schema cache. Keep them out of this select and load them
   // separately below so jobs without appointments still render normally.
@@ -70,5 +88,5 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const pageHref = (target: number) => { const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value && key !== "page") params.set(key, value); }); params.set("page", String(target)); return `/admin/jobs?${params}`; };
   const hasNext = (archive ? archived?.data?.length || 0 : jobRows?.length || 0) > PAGE_SIZE;
 
-  return <AppShell profile={profile} title="Maintenance Jobs"><div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div><form className="panel filter-bar"><input name="search" defaultValue={filters.search} placeholder="Search job, room, description…"/><select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select><select name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{[...jobStatuses,"rejected","deleted"].map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="priority" defaultValue={filters.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><input type="date" name="date" defaultValue={filters.date}/><button className="button">Filter</button></form><section className="panel list-panel">{error ? <p className="error">{error.message}</p> : archive ? <><p className="subtle">{filters.status === "deleted" ? "Deleted complaints retained from this update onward." : "Rejected complaints have no assigned maintenance job."}</p><table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Defect</th><th>Status</th></tr></thead><tbody>{archiveRows.map(row=><tr key={row.id}><td>{filters.status === "rejected" ? <Link href={`/admin/complaints/${row.id}`}>{row.complaint_no}</Link> : row.complaint_no}</td><td>Block {blocks?.find(block=>block.id===row.block_id)?.code} · {row.room_no}</td><td>{row.category} — {row.description}</td><td>{titleCase(filters.status || "")}</td></tr>)}</tbody></table>{!archiveRows.length&&<p>No matching records.</p>}</> : <JobList rows={rows}/>}</section>{(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}</AppShell>;
+  return <AppShell profile={profile} title="Maintenance Jobs"><div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div><form className="panel filter-bar"><input name="search" defaultValue={filters.search} placeholder="Search job, room, description…"/><select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select><select name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{[...jobStatuses,"rejected","deleted"].map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="priority" defaultValue={filters.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><input type="date" name="date" defaultValue={filters.date}/><button className="button">Filter</button></form><section className="panel list-panel">{error ? <p className="error">{error.message}</p> : archive ? <><p className="subtle">{filters.status === "deleted" ? "Deleted complaints retained from this update onward." : "Rejected complaints have no assigned maintenance job."}</p><table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Defect</th><th>Status</th>{filters.status === "deleted" && <><th>Deleted by</th><th>Deleted</th></>}</tr></thead><tbody>{archiveRows.map((row)=><tr key={row.id}><td>{filters.status === "rejected" ? <Link href={`/admin/complaints/${row.id}`}>{row.complaint_no}</Link> : row.complaint_no}</td><td>Block {blocks?.find(block=>block.id===row.block_id)?.code} · {row.room_no}</td><td>{row.category} — {row.description}</td><td>{titleCase(filters.status || "")}</td>{filters.status === "deleted" && <><td>{row.deleted_by ? deletedByName.get(row.deleted_by) || "—" : "—"}</td><td>{row.deleted_at ? formatDate(row.deleted_at) : "—"}</td></>}</tr>)}</tbody></table>{!archiveRows.length&&<p>No matching records.</p>}</> : <JobList rows={rows}/>}</section>{(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}</AppShell>;
 }
