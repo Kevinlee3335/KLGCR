@@ -46,7 +46,7 @@ const CATS=[["Room Vacated",[["Room vacated",[0,0,0],[]]]],
 ["Room Completed",[["No defects",[0,0,0],[]],["No missing items",[0,0,0],[]],["Locked",[0,0,0],[]],["Keys returned",[0,0,0],[4]]]]];
 const mx=(u,p)=>{const s=u[1][p];return s>0?s:s<0?99:1};
 const AB=["Vacated","Electrical","Bathroom","Bed/Furn","Paint","Door","Window","Clear","Done"],$=s=>document.querySelector(s);
-const S={tab:"sum",blk:"C",recs:[],cur:null,open:-1};let DB=null;
+const S={tab:"sum",blk:"C",recs:[],cur:null,open:-1};let DB=null;const clearTest=new URLSearchParams(location.search).get("clear_test");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const lv=b=>Object.keys(RM[b]),rl=(b,l)=>RM[b][l].split(",").flatMap(x=>{const[a,t]=x.split(":"),[s,e]=a.split("-").map(Number);return Array.from({length:e-s+1},(_,i)=>[s+i,+t])});
 const pi=r=>r.t/2-1,cs=(r,c)=>{const v=CATS[c][1].map((_,i)=>r.it[c+"."+i]);return v.some(x=>x>0)?"x":v.every(x=>x===0)?"o":"-"};
@@ -56,7 +56,7 @@ const tot=r=>costs(r).reduce((a,c)=>a+c.a,0),rm=n=>"RM "+n.toLocaleString("en-MY
 const maintenanceDefects=r=>{const defects=[];CATS.forEach((c,ci)=>c[1].forEach((s,si)=>{const quantity=r.it[ci+"."+si];if(quantity>0)defects.push({category:c[0],description:s[0],quantity,remarks:String(r.nt[ci]||"").trim()})}));return defects};
 const latest=()=>{const m={};S.recs.forEach(r=>{const k=r.b+r.room;if(!m[k]||r.round>m[k].round)m[k]=r});return m};
 const toast=t=>{const e=$("#t");e.textContent=t;e.style.display="block";setTimeout(()=>e.style.display="none",2600)};
-try{const q=indexedDB.open("klg-handover",1);q.onupgradeneeded=()=>q.result.createObjectStore("ins",{keyPath:"id"});q.onsuccess=()=>{DB=q.result;const g=DB.transaction("ins").objectStore("ins").getAll();g.onsuccess=()=>{S.recs=g.result;render()}}}catch(e){}
+try{const q=indexedDB.open("klg-handover",1);q.onupgradeneeded=()=>q.result.createObjectStore("ins",{keyPath:"id"});q.onsuccess=()=>{DB=q.result;const g=DB.transaction("ins").objectStore("ins").getAll();g.onsuccess=()=>{S.recs=g.result;if(clearTest==="C101"){const removed=S.recs.filter(r=>r.b==="C"&&String(r.room)==="101");if(removed.length){const tx=DB.transaction("ins","readwrite"),store=tx.objectStore("ins");removed.forEach(r=>store.delete(r.id));S.recs=S.recs.filter(r=>!(r.b==="C"&&String(r.room)==="101"));toast("C101 test inspection cleared")}history.replaceState({},"",location.pathname)}render()}}}catch(e){}
 const put=r=>{const i=S.recs.findIndex(x=>x.id==r.id);i<0?S.recs.push(r):S.recs[i]=r;try{DB.transaction("ins","readwrite").objectStore("ins").put(r)}catch(e){}};
 function start(b,l,room){const pr=latest()[b+room],it={};if(pr)for(const k in pr.it)if(pr.it[k]===0)it[k]=0;
 S.cur={id:b+room+"-"+Date.now(),b,l,room,t:rl(b,l).find(x=>x[0]==room)[1],round:pr?pr.round+1:1,date:new Date().toISOString().slice(0,10),reason:pr?"Follow-up inspection":"Handover at Vacation",by:"",it,nt:{},ph:{}};S.tab="ins";S.open=-1;render()}
