@@ -72,8 +72,12 @@ export async function POST(request: Request) {
     const itemCode = action === "create" ? String(form.get("itemCode") || "").trim() : null;
     const query = itemId ? supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("id", itemId).maybeSingle() : supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("item_code", itemCode!).maybeSingle();
     const { data: item } = await query;
-    if (item) await pushInventoryItemToGoogle(item);
-    url.searchParams.set("success", action);
+    const syncResult = item ? await pushInventoryItemToGoogle(item) : null;
+    if (item && (!syncResult || syncResult.skipped || !syncResult.ok)) {
+      url.searchParams.set("error", "Inventory updated in the system, but Google Sheet sync failed. Do not repeat the adjustment; retry after the Google Sheet connection is corrected.");
+    } else {
+      url.searchParams.set("success", action);
+    }
   }
   return NextResponse.redirect(url, 303);
 }
