@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date))return redirect(request,date,"invalid admin task");
     const assignedTo=String(form.get("assignedTo")||"");
     const frequency=String(form.get("frequency")||"once");
-    const {data:employee}=await db.from("profiles").select("id").eq("id",assignedTo).eq("role","cleaner").eq("is_active",true).is("deleted_at",null).maybeSingle();
-    if(!employee || !["once","weekly","biweekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active Cleaner and valid recurrence");
+    const {data:employee}=await db.from("profiles").select("id").eq("id",assignedTo).eq("is_active",true).is("deleted_at",null).maybeSingle();
+    if(!employee || !["once","weekly","biweekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active employee and valid recurrence");
     if(frequency!=="once"){
       const monthlyDate=String(form.get("monthlyDate")||"");
       const day=frequency==="monthly" ? Number(monthlyDate.slice(8,10)) : Number(form.get("dayNumber"));
