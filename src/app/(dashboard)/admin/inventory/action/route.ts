@@ -61,6 +61,8 @@ export async function POST(request: Request) {
       return NextResponse.redirect(url, 303);
     }
     ({ error } = await supabase.rpc("adjust_inventory_item", { p_item_id: itemId, p_type: type, p_qty: qty, p_note: note }));
+  } else if (action === "sync") {
+    if (!String(form.get("itemId") || "")) error = { message: "Inventory item is required." };
   } else {
     url.searchParams.set("error", "Unknown action.");
     return NextResponse.redirect(url, 303);
@@ -72,11 +74,15 @@ export async function POST(request: Request) {
     const itemCode = action === "create" ? String(form.get("itemCode") || "").trim() : null;
     const query = itemId ? supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("id", itemId).maybeSingle() : supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("item_code", itemCode!).maybeSingle();
     const { data: item } = await query;
-    const syncResult = item ? await pushInventoryItemToGoogle(item) : null;
-    if (item && (!syncResult || syncResult.skipped || !syncResult.ok)) {
-      url.searchParams.set("error", "Inventory updated in the system, but Google Sheet sync failed. Do not repeat the adjustment; retry after the Google Sheet connection is corrected.");
+    if (!item) {
+      url.searchParams.set("error", "Inventory item was not found.");
     } else {
-      url.searchParams.set("success", action);
+      const syncResult = await pushInventoryItemToGoogle(item);
+      if (syncResult.skipped || !syncResult.ok) {
+        url.searchParams.set("error", "The system inventory is updated, but Google Sheet sync failed. Do not repeat a stock adjustment; use Retry Google Sheet sync after the connection is corrected.");
+      } else {
+        url.searchParams.set("success", action);
+      }
     }
   }
   return NextResponse.redirect(url, 303);
