@@ -4,11 +4,11 @@ import { NotificationBell } from "./notification-bell";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
-import { Bell, Boxes, CalendarDays, ClipboardCheck, DoorOpen, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
 
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
-  ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays], ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
+  ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays],
   ["Check-out Rooms", "/admin/checkouts", DoorOpen],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
   ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
@@ -27,6 +27,29 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
   return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d={paths[kind]}/></svg>;
 }
 
+function DailyTaskNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
+  const active = currentTitle === "Daily Tasks" || ["Admin Task", "Operation Task", "Housekeeping Task"].includes(currentTitle);
+  return <div className={`nav-submenu${mobile ? " nav-submenu-mobile" : ""}`}>
+    <Link href="/admin/daily-tasks" aria-current={active ? "page" : undefined}><ClipboardCheck size={18}/><span>Daily Tasks</span></Link>
+    <details>
+      <summary aria-label="Show Daily Task categories"><ChevronRight size={16}/></summary>
+      <div className="nav-submenu-links">
+        <Link href="/admin/daily-tasks?category=admin">Admin Task</Link>
+        <Link href="/admin/daily-tasks?category=operation">Operation Task</Link>
+        <Link href="/admin/daily-tasks?category=housekeeping">Housekeeping Task</Link>
+      </div>
+    </details>
+  </div>;
+}
+
+function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
+  return <nav className={`nav admin-nav${mobile ? " mobile-drawer-nav" : ""}`} aria-label="Main navigation">
+    {adminNav.slice(0, 3).map(([item, href, Icon]) => <Link key={item} href={href} aria-current={currentTitle === item || (item === "New Complaints" && currentTitle === "Complaint Detail") ? "page" : undefined}><Icon size={18}/><span>{item}</span></Link>)}
+    <DailyTaskNavigation mobile={mobile} currentTitle={currentTitle}/>
+    {adminNav.slice(3).map(([item, href, Icon]) => <Link key={item} href={href} aria-current={currentTitle === item ? "page" : undefined}><Icon size={18}/><span>{item}</span></Link>)}
+  </nav>;
+}
+
 export function AppShell({ profile, children, title }: { profile: Profile; children: React.ReactNode; title: string }) {
   const isStaff = profile.role === "maintenance_staff" || profile.role === "cleaner";
   const operationalNav = profile.role === "cleaner" ? cleanerNav : [...staffNav, ["Check-out Rooms", "/staff/checkouts"] as const];
@@ -36,7 +59,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
   return <div className={`shell ${isStaff ? "staff-shell" : "admin-shell"}`}>
     <aside className="sidebar">
       <Brand/>
-      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <nav className="nav admin-nav" aria-label="Main navigation">{adminNav.map(([item, href, Icon]) => <Link key={item} href={href} aria-current={current(item)}><Icon size={18}/><span>{item}</span></Link>)}</nav>}
+      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <AdminNavigation currentTitle={title}/>}
       <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{roleLabel[profile.role]}</small></div><Link className="change-password-link" href="/account">Change Password</Link><LogoutForm/></div>
     </aside>
 
@@ -53,7 +76,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
       <div className="mobile-menu-backdrop" aria-hidden="true"/>
       <aside className="mobile-drawer" aria-label="Full navigation menu">
         <div className="mobile-drawer-heading"><Brand/><span>Menu</span></div>
-        {isStaff ? <nav className="nav mobile-drawer-nav">{operationalNav.map(([item, href]) => <Link key={item} href={href} aria-current={current(item)}>{item}</Link>)}</nav> : <nav className="nav admin-nav mobile-drawer-nav">{adminNav.map(([item, href, Icon]) => <Link key={item} href={href} aria-current={current(item)}><Icon size={18}/><span>{item}</span></Link>)}</nav>}
+        {isStaff ? <nav className="nav mobile-drawer-nav">{operationalNav.map(([item, href]) => <Link key={item} href={href} aria-current={current(item)}>{item}</Link>)}</nav> : <AdminNavigation mobile currentTitle={title}/>}
         <div className="mobile-drawer-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{roleLabel[profile.role]}</small></div><LogoutForm/></div>
       </aside>
     </details>
