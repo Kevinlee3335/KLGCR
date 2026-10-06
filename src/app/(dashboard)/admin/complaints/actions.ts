@@ -59,6 +59,16 @@ export async function assignComplaint(id:string,data:FormData){
   revalidatePath("/admin/jobs");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath("/staff/tasks");
   redirect(`/admin/complaints/${id}?assigned=1`);
 }
+export async function markComplaintUnderReview(id:string,data:FormData){
+  await requireRole(["admin"]);
+  const note=String(data.get("note")||"").trim();
+  if(note.length>1000)redirect(`/admin/complaints/${id}?error=Under%20Review%20note%20must%20be%201000%20characters%20or%20less.`);
+  const s=await createClient();
+  const{error}=await s.rpc("mark_complaint_under_review",{p_complaint_id:id,p_note:note||null});
+  if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath(`/admin/complaints/${id}`);
+  redirect(`/admin/complaints/${id}?underReview=1`);
+}
 export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
 
 export async function deleteComplaint(id:string){
