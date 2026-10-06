@@ -29,15 +29,24 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
 
 function DailyTaskNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
   const active = currentTitle === "Daily Tasks" || ["Admin Task", "Operation Task", "Housekeeping Task"].includes(currentTitle);
+  const categoryLinks = <div className="nav-submenu-links">
+    <Link href="/admin/daily-tasks?category=admin">Admin Task</Link>
+    <Link href="/admin/daily-tasks?category=operation">Operation Task</Link>
+    <Link href="/admin/daily-tasks?category=housekeeping">Housekeeping Task</Link>
+  </div>;
+
+  if (!mobile) {
+    return <div className="nav-submenu nav-submenu-desktop">
+      <Link href="/admin/daily-tasks" aria-current={active ? "page" : undefined}><ClipboardCheck size={18}/><span>Daily Tasks</span></Link>
+      {categoryLinks}
+    </div>;
+  }
+
   return <div className={`nav-submenu${mobile ? " nav-submenu-mobile" : ""}`}>
     <Link href="/admin/daily-tasks" aria-current={active ? "page" : undefined}><ClipboardCheck size={18}/><span>Daily Tasks</span></Link>
     <details>
       <summary aria-label="Show Daily Task categories"><ChevronRight size={16}/></summary>
-      <div className="nav-submenu-links">
-        <Link href="/admin/daily-tasks?category=admin">Admin Task</Link>
-        <Link href="/admin/daily-tasks?category=operation">Operation Task</Link>
-        <Link href="/admin/daily-tasks?category=housekeeping">Housekeeping Task</Link>
-      </div>
+      {categoryLinks}
     </details>
   </div>;
 }
