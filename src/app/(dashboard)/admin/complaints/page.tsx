@@ -2,9 +2,31 @@ import Link from "next/link";
 import { ComplaintSummary } from "@/components/complaint-summary";
 import { AppShell } from "@/components/app-shell";
 import { ComplaintList, PriorityBadge, StatusBadge } from "@/components/phase2-ui";
+import { StatusColumnFilter } from "@/components/status-column-filter";
 import { requireRole } from "@/lib/auth";
 import { complaintStatuses, formatDate, priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
 import { createClient } from "@/lib/supabase/server";
+
+const complaintSortOptions = [
+  ["submitted_at:desc", "Submitted time · Descending"],
+  ["submitted_at:asc", "Submitted time · Ascending"],
+  ["status:asc", "Status · Ascending (A–Z)"],
+  ["status:desc", "Status · Descending (Z–A)"],
+] as const;
+
+function selectedComplaintSort(filters: Record<string, string | undefined>) {
+  if (complaintSortOptions.some(([value]) => value === filters.sort)) {
+    const [sortBy, direction] = filters.sort!.split(":");
+    return { value: filters.sort!, sortBy, ascending: direction === "asc" };
+  }
+  return { value: "submitted_at:desc", sortBy: "submitted_at", ascending: false };
+}
+
+function selectedComplaintStatuses(filters: Record<string, string | undefined>) {
+  const checkedStatuses = complaintStatuses.filter((status) => filters[`status_${status}`] === status);
+  if (checkedStatuses.length) return checkedStatuses as string[];
+  return complaintStatuses.includes(filters.status as typeof complaintStatuses[number]) ? [filters.status!] : [];
+}
 
 type DeletedComplaint = {
   id: string;
@@ -33,7 +55,10 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const q = await searchParams;
   const supabase = await createClient();
   const isDeleted = q.status === "deleted";
-  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)").order("submitted_at", { ascending: false });
+  const selectedStatuses = selectedComplaintStatuses(q);
+  const statusesShownInMenu = selectedStatuses.length ? selectedStatuses : [...complaintStatuses];
+  const sort = selectedComplaintSort(q);
+  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,source_reference,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)");
   let deletedQuery = supabase.from("deleted_complaints").select("id,complaint_no,block_id,room_no,category,description,priority,submitted_at,deleted_at,deleted_by_name").order("deleted_at", { ascending: false });
 
   if (isDeleted) {
@@ -42,13 +67,14 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     if (q.date) deletedQuery = deletedQuery.gte("submitted_at", `${q.date}T00:00:00`).lt("submitted_at", `${q.date}T23:59:59.999`);
     if (q.search) deletedQuery = deletedQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%`);
   } else {
-    if (q.status) activeQuery = activeQuery.eq("status", q.status);
+    if (selectedStatuses.length) activeQuery = activeQuery.in("status", selectedStatuses);
     if (q.needAppointment) activeQuery = activeQuery.eq("need_appointment", true);
     if (q.block) activeQuery = activeQuery.eq("block_id", q.block);
     if (q.priority) activeQuery = activeQuery.eq("priority", q.priority);
     if (q.source) activeQuery = activeQuery.eq("source", q.source);
     if (q.date) activeQuery = activeQuery.gte("submitted_at", `${q.date}T00:00:00`).lt("submitted_at", `${q.date}T23:59:59.999`);
     if (q.search) activeQuery = activeQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%,complainant_name.ilike.%${q.search}%`);
+    activeQuery = activeQuery.order(sort.sortBy, { ascending: sort.ascending });
   }
 
   const [{ data, error }, { data: deletedRows, error: deletedError }, { data: blocks }, { count: newCount }, { count: reviewCount }, { count: assignedToday }, { count: urgentCount }] = await Promise.all([
@@ -62,6 +88,20 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   ]);
   const resultError = isDeleted ? deletedError : error;
   const statusOptions = [...complaintStatuses, "deleted"];
+  const statusFilter = <StatusColumnFilter
+    action="/admin/complaints"
+    statusOptions={complaintStatuses.map((status) => ({ value: status, label: titleCase(status) }))}
+    selectedStatuses={statusesShownInMenu}
+    sortOptions={complaintSortOptions.map(([value, label]) => ({ value, label }))}
+    selectedSort={sort.value}
+    preserved={[
+      { name: "search", value: q.search },
+      { name: "block", value: q.block },
+      { name: "priority", value: q.priority },
+      { name: "source", value: q.source },
+      { name: "date", value: q.date },
+    ]}
+  />;
 
-  return <AppShell profile={profile} title="New Complaints"><div className="section-head"><div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>{profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}</div><section className="metrics compact">{[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>)}</section><ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={blocks || []} filters={q} /><form className="panel filter-bar">{q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}{q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}<input name="search" defaultValue={q.search} placeholder="Search complaint, room, name…" /><select name="status" defaultValue={q.status || ""}><option value="">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="block" defaultValue={q.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="priority" defaultValue={q.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><select name="source" defaultValue={q.source || ""} disabled={isDeleted}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select><input type="date" name="date" defaultValue={q.date} /><button className="button">Filter</button></form>{q.deleted && <p className="success">Complaint deleted.</p>}<section className="panel list-panel">{resultError ? <p className="error">{resultError.message}</p> : isDeleted ? <DeletedComplaintList rows={(deletedRows || []) as DeletedComplaint[]} blocks={blocks || []} /> : <ComplaintList rows={(data || []) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} />}</section></AppShell>;
+  return <AppShell profile={profile} title="New Complaints"><div className="section-head"><div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>{profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}</div><section className="metrics compact">{[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>)}</section><ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={blocks || []} filters={q} /><form className="panel filter-bar">{q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}{q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}{!isDeleted && selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}{!isDeleted && <input type="hidden" name="sort" value={sort.value} />}<input name="search" defaultValue={q.search} placeholder="Search complaint, room, name…" /><select name="status" defaultValue={q.status || ""}><option value="">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="block" defaultValue={q.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="priority" defaultValue={q.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><select name="source" defaultValue={q.source || ""} disabled={isDeleted}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select><input type="date" name="date" defaultValue={q.date} /><button className="button">Filter</button></form>{q.deleted && <p className="success">Complaint deleted.</p>}<section className="panel list-panel">{resultError ? <p className="error">{resultError.message}</p> : isDeleted ? <DeletedComplaintList rows={(deletedRows || []) as DeletedComplaint[]} blocks={blocks || []} /> : <ComplaintList rows={(data || []) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} statusFilter={statusFilter} />}</section></AppShell>;
 }
