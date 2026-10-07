@@ -6,6 +6,26 @@ import { formatDate, jobStatuses, priorities, titleCase, type JobRow } from "@/l
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 50;
+const jobSortOptions = [
+  ["work_date:asc", "Work date · Ascending"],
+  ["work_date:desc", "Work date · Descending"],
+  ["created_at:asc", "Created time · Ascending"],
+  ["created_at:desc", "Created time · Descending"],
+  ["status:asc", "Status · Ascending (A–Z)"],
+  ["status:desc", "Status · Descending (Z–A)"],
+] as const;
+
+function selectedJobSort(filters: Record<string, string | undefined>) {
+  if (jobSortOptions.some(([value]) => value === filters.sort)) {
+    const [sortBy, direction] = filters.sort!.split(":");
+    return { value: filters.sort!, sortBy, ascending: direction === "asc" };
+  }
+
+  const sortBy = ["work_date", "created_at", "status"].includes(filters.sortBy || "") ? filters.sortBy! : "created_at";
+  const ascending = filters.sortOrder === "asc";
+  return { value: `${sortBy}:${ascending ? "asc" : "desc"}`, sortBy, ascending };
+}
+
 type ArchivedComplaintRow = {
   id: string;
   complaint_no: string;
@@ -30,8 +50,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const page = Math.max(1, Number(filters.page) || 1);
   const today = malaysiaToday();
   const archive = ["rejected","deleted"].includes(filters.status || "");
-  const sortBy = ["work_date", "created_at", "status"].includes(filters.sortBy || "") ? filters.sortBy! : "created_at";
-  const ascending = filters.sortOrder === "asc";
+  const sort = selectedJobSort(filters);
+  const { sortBy, ascending } = sort;
   const archiveFields = filters.status === "deleted"
     ? "id,complaint_no,block_id,room_no,category,description,priority,submitted_at,deleted_at,deleted_by_name"
     : "id,complaint_no,block_id,room_no,category,description,priority,submitted_at";
@@ -96,12 +116,11 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       <input name="search" defaultValue={filters.search} placeholder="Search job, room, description…" />
       <select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select>
       <select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select>
-      <select name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{[...jobStatuses,"rejected","deleted"].map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select>
-      <select name="sortBy" defaultValue={sortBy} aria-label="Sort by"><option value="work_date">Sort: Work date</option><option value="created_at">Sort: Created time</option><option value="status">Sort: Status</option></select>
-      <select name="sortOrder" defaultValue={ascending ? "asc" : "desc"} aria-label="Sort order"><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+      <select name="status" defaultValue={filters.status || ""} aria-label="Status filter"><option value="">Status: All</option>{[...jobStatuses,"rejected","deleted"].map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select>
+      <select name="sort" defaultValue={sort.value} aria-label="Sort jobs">{jobSortOptions.map(([value, label]) => <option key={value} value={value}>Sort: {label}</option>)}</select>
       <select name="priority" defaultValue={filters.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select>
       <input type="date" name="date" defaultValue={filters.date} />
-      <button className="button">Filter</button>
+      <button className="button">Apply</button>
     </form>
     <section className="panel list-panel">{error ? <p className="error">{error.message}</p> : archive ? <>
       <p className="subtle">{filters.status === "deleted" ? "Deleted complaints retained from this update onward." : "Rejected complaints have no assigned maintenance job."}</p>
