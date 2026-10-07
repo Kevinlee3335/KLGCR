@@ -73,7 +73,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
 
     <section className="panel">
       <div className="section-head"><div><h3>{categoryLabel} · {date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div></div>
-      {isAdmin && <DailyTaskForm date={date} staff={employees || []} category={category} />}
+      {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
       <div className="daily-task-list">
         {!dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} for this date.</p> : dailyTaskRows.map((task) => {
           const photos = taskPhotosByTaskId.get(Number(task.id)) || [];
