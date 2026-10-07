@@ -11,6 +11,7 @@ function myDate() {
 }
 
 const workStates = [["standard", "Normal"], ["partially_completed", "Partially Completed"], ["appointment", "Appointment"], ["kiv", "KIV"]] as const;
+const dailyTaskStatuses = ["pending", "accepted", "in_progress", "completed", "kiv"] as const;
 
 export default async function DailyTasksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
@@ -19,16 +20,21 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   const db: any = await createClient();
   const category = dailyTaskCategories.includes(filters.category as DailyTaskCategory) ? filters.category as DailyTaskCategory : undefined;
   const categoryLabel = category ? dailyTaskCategoryLabel[category] : "Daily Tasks";
+  const selectedStatus = dailyTaskStatuses.includes(filters.status as typeof dailyTaskStatuses[number]) ? filters.status as typeof dailyTaskStatuses[number] : "";
+  const sortBy = ["work_date", "created_at", "status"].includes(filters.sortBy || "") ? filters.sortBy! : "created_at";
+  const ascending = filters.sortOrder === "asc";
 
   let taskQuery = db.from("admin_daily_tasks")
     .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),activity:daily_task_activity(id,action,comment,created_at,actor:profiles!daily_task_activity_actor_id_fkey(full_name))")
-    .eq("task_date", date).order("created_at", { ascending: true });
+    .eq("task_date", date);
   let recurrenceQuery = db.from("recurring_daily_tasks")
     .select("id,task_category,title,frequency,day_number,assignee:profiles!assigned_to(full_name)").eq("is_active", true);
   if (category) {
     taskQuery = taskQuery.eq("task_category", category);
     recurrenceQuery = recurrenceQuery.eq("task_category", category);
   }
+  if (selectedStatus) taskQuery = taskQuery.eq("status", selectedStatus);
+  taskQuery = taskQuery.order(sortBy === "work_date" ? "task_date" : sortBy, { ascending });
 
   const [{ data: jobs, error }, { data: adminTasks }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
     db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status", "in", '("completed","cancelled")').order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
@@ -67,9 +73,17 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
       <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up the Daily Tasks for this working day." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
-      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><form>{category && <input type="hidden" name="category" value={category} />}<input type="date" name="date" defaultValue={date} /><button className="button secondary" style={{ marginLeft: 8 }}>View</button></form></div>
+      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link></div>
     </div>
     {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}
+    <form className="panel filter-bar">
+      {category && <input type="hidden" name="category" value={category} />}
+      <input type="date" name="date" defaultValue={date} />
+      <select name="status" defaultValue={selectedStatus} aria-label="Task status"><option value="">All statuses</option>{dailyTaskStatuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select>
+      <select name="sortBy" defaultValue={sortBy} aria-label="Sort by"><option value="work_date">Sort: Work date</option><option value="created_at">Sort: Created time</option><option value="status">Sort: Status</option></select>
+      <select name="sortOrder" defaultValue={ascending ? "asc" : "desc"} aria-label="Sort order"><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+      <button className="button">Filter</button>
+    </form>
 
     <section className="panel">
       <div className="section-head"><div><h3>{categoryLabel} · {date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div></div>

@@ -33,7 +33,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const q = await searchParams;
   const supabase = await createClient();
   const isDeleted = q.status === "deleted";
-  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)").order("submitted_at", { ascending: false });
+  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,source_reference,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)").order("submitted_at", { ascending: false });
   let deletedQuery = supabase.from("deleted_complaints").select("id,complaint_no,block_id,room_no,category,description,priority,submitted_at,deleted_at,deleted_by_name").order("deleted_at", { ascending: false });
 
   if (isDeleted) {
