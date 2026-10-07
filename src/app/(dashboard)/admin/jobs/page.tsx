@@ -153,7 +153,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       <p className="subtle">{archiveStatus === "deleted" ? "Deleted complaints retained from this update onward." : "Rejected complaints have no assigned maintenance job."}</p>
       <table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Defect</th><th>Status</th>{archiveStatus === "deleted" && <><th>Deleted by</th><th>Deleted</th></>}</tr></thead><tbody>{archiveRows.map((row) => <tr key={row.id}><td>{archiveStatus === "rejected" ? <Link href={`/admin/complaints/${row.id}`}>{row.complaint_no}</Link> : row.complaint_no}</td><td>Block {blocks?.find((block) => block.id === row.block_id)?.code} · {row.room_no}</td><td>{row.category} — {row.description}</td><td>{titleCase(archiveStatus)}</td>{archiveStatus === "deleted" && <><td>{row.deleted_by_name || "—"}</td><td>{row.deleted_at ? formatDate(row.deleted_at) : "—"}</td></>}</tr>)}</tbody></table>
       {!archiveRows.length && <p>No matching records.</p>}
-    </> : <JobList rows={rows} statusFilter={statusFilter} />}</section>
+    </> : <JobList rows={rows} statusFilter={statusFilter} compactDesktopColumns />}</section>
     {(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}
   </AppShell>;
 }
