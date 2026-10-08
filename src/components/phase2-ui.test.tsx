@@ -4,7 +4,7 @@ import { JobList } from "@/components/phase2-ui";
 
 describe("admin Maintenance Jobs timeline columns", () => {
   it("shows only the requested timeline timestamps on the compact admin list", () => {
-    const html = renderToStaticMarkup(<JobList compactDesktopColumns statusFilter={<span>Status filter</span>} rows={[{
+    const html = renderToStaticMarkup(<JobList compactDesktopColumns statusFilter={<span>Status filter</span>} columnFilters={{ location: <span>Location filter</span>, staff: <span>Staff filter</span>, assigned: <span>Assigned filter</span>, inProgress: <span>In Progress filter</span>, completed: <span>Completed filter</span> }} rows={[{
       id: "job-1", job_no: "KLGCR-JOB-001", room_no: "A427", category: "Electrical", description: "Light not working",
       priority: "normal", status: "completed", assigned_to: "staff-1", assigned_at: "2026-10-07T02:15:00.000Z",
       started_at: "2026-10-07T03:00:00.000Z", completed_at: "2026-10-07T04:30:00.000Z", updated_at: "2026-10-07T04:30:00.000Z",
@@ -13,6 +13,11 @@ describe("admin Maintenance Jobs timeline columns", () => {
     }]} />);
 
     expect(html).toContain("Status filter");
+    expect(html).toContain("Location filter");
+    expect(html).toContain("Staff filter");
+    expect(html).toContain("Assigned filter");
+    expect(html).toContain("In Progress filter");
+    expect(html).toContain("Completed filter");
     expect(html).toContain("Assigned");
     expect(html).toContain("In Progress");
     expect(html).toContain("Completed");
