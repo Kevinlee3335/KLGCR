@@ -4,6 +4,7 @@ import { Camera, ImageUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { completeDailyTask, prepareDailyTaskEvidence } from "@/app/(dashboard)/staff/daily-tasks/actions";
+import { prepareAdminDailyTaskEvidence, completeAdminDailyTask } from "@/app/(dashboard)/admin/daily-tasks/evidence-actions";
 import { createClient } from "@/lib/supabase/client";
 
 async function compressPhoto(file: File) {
@@ -31,7 +32,7 @@ async function compressPhoto(file: File) {
   }
 }
 
-export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
+export function DailyTaskCompletionForm({ taskId, admin = false, supplemental = false }: { taskId: number; admin?: boolean; supplemental?: boolean }) {
   const router = useRouter();
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -60,7 +61,7 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
     setBusy(true);
     setError("");
     try {
-      const prepared = await prepareDailyTaskEvidence(taskId, photos.length);
+      const prepared = await (admin ? prepareAdminDailyTaskEvidence : prepareDailyTaskEvidence)(taskId, photos.length);
       if ("error" in prepared) { setError(prepared.error || "Unable to prepare the photo upload."); return; }
       const db = createClient();
       for (let index = 0; index < photos.length; index += 1) {
@@ -69,8 +70,11 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
         const { error: uploadError } = await db.storage.from("checkout-evidence").uploadToSignedUrl(upload.path, upload.token, compressed);
         if (uploadError) throw new Error(`Photo ${index + 1} could not upload: ${uploadError.message}`);
       }
-      const completed = await completeDailyTask(taskId, comment, prepared.uploads.map((upload) => upload.path));
+      const completed = await (admin ? completeAdminDailyTask : completeDailyTask)(taskId, comment, prepared.uploads.map((upload) => upload.path));
       if ("error" in completed) { setError(completed.error || "Unable to complete this task."); return; }
+      setPhotos([]);
+      if (cameraRef.current) cameraRef.current.value = "";
+      if (uploadRef.current) uploadRef.current.value = "";
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to complete this task.");
@@ -81,15 +85,16 @@ export function DailyTaskCompletionForm({ taskId }: { taskId: number }) {
 
   return <form className="daily-task-complete-form" onSubmit={submit}>
     {error && <p className="error">{error}</p>}
-    <label className="field"><span>Completion notes</span><textarea name="comment" rows={4} maxLength={1000} placeholder="Describe the work completed, or any handover note." /></label>
+    <label className="field"><span>Completion notes</span><textarea disabled={busy} name="comment" rows={4} maxLength={1000} placeholder="Describe the work completed, or any handover note." /></label>
     <section className="cleaner-photo-section">
       <div><span>Completion photos *</span><small>Attach 1 to 6 photos. Camera photos are compressed before upload.</small></div>
       <div className="cleaner-photo-actions">
-        <label className="cleaner-photo-button"><Camera size={22}/><span>Take Photo</span><input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => choose(event.target.files, "camera")} /></label>
-        <label className="cleaner-photo-button"><ImageUp size={22}/><span>Upload Photos</span><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => choose(event.target.files, "upload")} /></label>
+        <label className="cleaner-photo-button"><Camera size={22}/><span>Take Photo</span><input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={(event) => { choose(event.target.files, "camera"); event.target.value = ""; }} /></label>
+        <label className="cleaner-photo-button"><ImageUp size={22}/><span>Upload Photos</span><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(event) => { choose(event.target.files, "upload"); event.target.value = ""; }} /></label>
       </div>
       {photos.length > 0 && <p className="cleaner-photo-selected">✓ {photos.length} photo{photos.length === 1 ? "" : "s"} ready</p>}
+    {photos.map((photo, index) => <div className="task-selected-photo" key={`${photo.name}-${index}`}><span>{photo.name}</span><button type="button" className="button secondary button-compact" disabled={busy} onClick={() => setPhotos(photos.filter((_, i) => i !== index))} aria-label={`Remove photo ${index + 1}`}>Remove</button></div>)}
     </section>
-    <button className="button" type="submit" disabled={busy}>{busy ? "Completing…" : "Complete task"}</button>
+    <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : supplemental ? "Save additional photos" : "Confirm Completion"}</button>
   </form>;
 }
