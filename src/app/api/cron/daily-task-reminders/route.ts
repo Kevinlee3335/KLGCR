@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const { data: claimed } = await db.from("admin_daily_tasks").update({ due_notification_sent_at: new Date().toISOString() }).eq("id", task.id).is("due_notification_sent_at", null).select("id").maybeSingle();
     if (!claimed || !task.assigned_to) continue;
     try {
-      await createAppNotifications({ recipientIds: [task.assigned_to], type: "daily_task_assigned", title: "Daily task due today", body: task.title, href: `/staff/daily-tasks/${task.id}`, entityId: String(task.id) });
+      await createAppNotifications({ recipientIds: [task.assigned_to], type: "daily_task_assigned", title: "Daily task due today", body: task.title, href: `/staff/daily-tasks/${task.id}`, entityId: null });
       sent += 1;
     } catch (notificationError) {
       console.error("Unable to send daily task reminder", notificationError);
