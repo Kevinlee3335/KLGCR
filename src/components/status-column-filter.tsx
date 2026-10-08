@@ -1,7 +1,7 @@
 import { ListFilter } from "lucide-react";
 
 type Option = { value: string; label: string };
-type PreservedValue = { name: string; value?: string | null };
+export type PreservedValue = { name: string; value?: string | null };
 
 export function StatusColumnFilter({
   action,
@@ -36,4 +36,12 @@ export function StatusColumnFilter({
       </form>
     </details>
   </span>;
+}
+
+export function ColumnFilter({ label, action, name, options, selectedValue, preserved = [] }: { label: string; action: string; name: string; options: Option[]; selectedValue?: string; preserved?: PreservedValue[] }) {
+  return <span className="status-column-filter"><span>{label}</span><details className="status-column-menu"><summary aria-label={`Filter ${label}`}><ListFilter size={14} strokeWidth={2.4} /></summary><form action={action} className="status-column-menu-panel">{preserved.filter((item) => item.value).map((item) => <input key={item.name} type="hidden" name={item.name} value={item.value!} />)}<fieldset><legend>Filter by {label}</legend><label><input type="radio" name={name} value="" defaultChecked={!selectedValue} />All</label>{options.map((option) => <label key={option.value}><input type="radio" name={name} value={option.value} defaultChecked={option.value === selectedValue} />{option.label}</label>)}</fieldset><button className="button button-compact" type="submit">Apply</button></form></details></span>;
+}
+
+export function DateColumnFilter({ action, selectedDate, selectedSort, preserved = [] }: { action: string; selectedDate?: string; selectedSort: string; preserved?: PreservedValue[] }) {
+  return <span className="status-column-filter"><span>Submitted</span><details className="status-column-menu"><summary aria-label="Filter submitted date"><ListFilter size={14} strokeWidth={2.4} /></summary><form action={action} className="status-column-menu-panel">{preserved.filter((item) => item.value).map((item) => <input key={item.name} type="hidden" name={item.name} value={item.value!} />)}<fieldset><legend>Submitted date</legend><label>Date<input name="date" type="date" defaultValue={selectedDate || ""} /></label></fieldset><fieldset><legend>Sort</legend><label><input type="radio" name="sort" value="submitted_at:desc" defaultChecked={selectedSort === "submitted_at:desc"} />Newest first</label><label><input type="radio" name="sort" value="submitted_at:asc" defaultChecked={selectedSort === "submitted_at:asc"} />Oldest first</label></fieldset><button className="button button-compact" type="submit">Apply</button></form></details></span>;
 }
