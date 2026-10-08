@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"Repeating daily task assigned", body:`${title} repeats from ${date}.`, href:"/staff/daily-tasks", entityId:null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
       return redirect(request,date,generateError?.message,taskCategory);
     }
-    const{data:task,error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,task_category:taskCategory}).select("id").single();
+    const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,task_category:taskCategory});
     if(error)return redirect(request,date,error.message,taskCategory);
-    try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"New daily task assigned", body:`${title} is due on ${date}.`, href:"/staff/daily-tasks", entityId:String(task?.id||"") || null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
+    try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"New daily task assigned", body:`${title} is due on ${date}.`, href:"/staff/daily-tasks", entityId:null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
     return redirect(request,date,undefined,taskCategory);
   }
 
