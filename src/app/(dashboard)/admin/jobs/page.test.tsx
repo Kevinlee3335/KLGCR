@@ -14,7 +14,7 @@ vi.mock("@/components/phase2-ui", () => ({
 
 function query(result: unknown) {
   const builder = {
-    select: vi.fn(), order: vi.fn(), eq: vi.fn(), in: vi.fn(), gte: vi.fn(), lt: vi.fn(),
+    select: vi.fn(), order: vi.fn(), eq: vi.fn(), in: vi.fn(), is: vi.fn(), gte: vi.fn(), lt: vi.fn(),
     or: vi.fn(), range: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };
   Object.values(builder).forEach((method) => {
@@ -49,5 +49,15 @@ describe("Maintenance Jobs", () => {
     expect(renderToStaticMarkup(page)).toContain("JOB-001: 0 appointments");
     expect(jobsQuery.select).toHaveBeenCalledOnce();
     expect(jobsQuery.select.mock.calls[0][0]).not.toContain("appointments(");
+  });
+
+  it("filters timeline dates while keeping location and staff header filters", async () => {
+    await JobsPage({ searchParams: Promise.resolve({ block: "external", staff: "unassigned", assignedDate: "2026-10-08", startedDate: "2026-10-07", completedDate: "2026-10-06" }) });
+
+    expect(jobsQuery.is).toHaveBeenCalledWith("block_id", null);
+    expect(jobsQuery.is).toHaveBeenCalledWith("assigned_to", null);
+    expect(jobsQuery.gte).toHaveBeenCalledWith("assigned_at", "2026-10-08T00:00:00+08:00");
+    expect(jobsQuery.gte).toHaveBeenCalledWith("started_at", "2026-10-07T00:00:00+08:00");
+    expect(jobsQuery.gte).toHaveBeenCalledWith("completed_at", "2026-10-06T00:00:00+08:00");
   });
 });
