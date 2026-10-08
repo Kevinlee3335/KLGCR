@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { AdminDailyTaskControls } from "@/components/admin-daily-task-controls";
 import { DailyTaskForm } from "@/components/daily-task-form";
 import { StatusColumnFilter } from "@/components/status-column-filter";
 import { dailyTaskCategories, dailyTaskCategoryLabel, type DailyTaskCategory } from "@/lib/daily-tasks";
@@ -120,10 +121,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
           const photos = taskPhotosByTaskId.get(Number(task.id)) || [];
           return <article className="panel daily-task-card" key={task.id}>
             <div className="section-head"><div><h3>{task.title}</h3><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
-              {isAdmin && <div className="daily-task-actions">
-                <form action="/admin/daily-tasks/action" method="post" className="daily-task-update"><input type="hidden" name="action" value="admin_task_status" /><input type="hidden" name="taskId" value={task.id} /><input type="hidden" name="date" value={date} />{categoryField}<select name="status" aria-label="Task status" defaultValue={task.status}><option value="pending">Pending</option><option value="accepted">Accepted</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="kiv">KIV</option></select><input name="comment" maxLength={1000} placeholder="Add update note" /><button className="button secondary button-compact">Update</button></form>
-                <form action="/admin/daily-tasks/action" method="post"><input type="hidden" name="action" value="admin_task_delete" /><input type="hidden" name="taskId" value={task.id} /><input type="hidden" name="date" value={date} />{categoryField}<button className="button danger button-compact" aria-label={`Delete ${task.title}`}>Delete</button></form>
-              </div>}
+              {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
             </div>
             {photos.length > 0 && <section className="checkout-evidence"><h4>Completion photos</h4><div className="photo-grid">{photos.map((photo) => photo.url && <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt="Daily task completion evidence" /><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(photo.created_at))}</span></a>)}</div></section>}
             <details><summary>Timeline</summary>{task.activity?.length ? <ol className="activity-timeline">{task.activity.map((entry: any) => <li key={entry.id}><div className="activity-marker" /><time><strong>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date(entry.created_at))}</strong><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(entry.created_at))}</span></time><div className="activity-content"><strong>{entry.action}</strong>{entry.actor?.full_name && <span className="activity-actor">{entry.actor.full_name}</span>}{entry.comment && <p>{entry.comment}</p>}</div></li>)}</ol> : <p className="subtle">No progress update yet.</p>}</details>
