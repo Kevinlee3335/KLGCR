@@ -28,8 +28,8 @@ export default async function StaffPage() {
   const supabase = await createClient();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year:"numeric",month:"2-digit",day:"2-digit" }).format(new Date());
   const [statusResult, recentResult, appointmentResult] = await Promise.all([
-    supabase.from("maintenance_jobs").select("status"),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").order("assigned_at", { ascending: false }).limit(5),
+    supabase.from("maintenance_jobs").select("status").eq("assigned_to", profile.id),
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false }).limit(5),
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,complaint:complaints!complaint_id(room_no,category,complainant_contact,availability_date,availability_time,room_access_permission,block:blocks!block_id(code))").eq("appointment_date",today).not("status","in",'("completed","cancelled","no_show")').order("appointment_date").order("appointment_time").limit(10),
   ]);
   const statuses = statusResult.data || [];
