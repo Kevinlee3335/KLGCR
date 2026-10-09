@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     return inventory_item_id && Number.isFinite(qty) && qty > 0 ? [{ inventory_item_id: inventory_item_id === "other" ? null : inventory_item_id, other_item_name:inventory_item_id === "other" ? otherNames[index] : null, qty }] : [];
   });
   const url = new URL("/staff/material-request", request.url);
+  if (jobId) url.searchParams.set("job", jobId);
   if (itemIds.some((id,index)=>id && (!Number.isFinite(quantities[index]) || quantities[index]<=0 || (id==="other" && !otherNames[index])))) {
     url.searchParams.set("error","Enter a name and valid quantity for every selected material.");
     return NextResponse.redirect(url,303);
