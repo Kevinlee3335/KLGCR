@@ -8,7 +8,7 @@ const props = { taskId: 42, title: "Check pump", date: "2026-10-08", category: "
 describe("Admin Daily Task completion controls", () => {
   it("replaces the quick status update with photo completion when Completed is selected", () => {
     render(<AdminDailyTaskControls {...props} status="accepted" />);
-    fireEvent.click(screen.getByRole("button", { name: "Completed", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Completed" }));
     expect(screen.getByText("Completion uploader")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Update" })).toBeNull();
   });
