@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { DailyTaskFilters } from "@/components/daily-task-filters";
+import { taskSearchFilter, taskFilterDate } from "@/lib/daily-task-filters";
 import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
@@ -36,6 +38,7 @@ function selectedDailyTaskSort(filters: Record<string, string | undefined>) {
 }
 
 function selectedDailyTaskStatuses(filters: Record<string, string | undefined>) {
+  if (dailyTaskStatuses.includes(filters.status as typeof dailyTaskStatuses[number])) return [filters.status!];
   const checkedStatuses = dailyTaskStatuses.filter((status) => filters[`status_${status}`] === status);
   if (checkedStatuses.length) return checkedStatuses as string[];
   return dailyTaskStatuses.includes(filters.status as typeof dailyTaskStatuses[number]) ? [filters.status!] : [];
@@ -48,14 +51,20 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   const db: any = await createClient();
   const category = dailyTaskCategories.includes(filters.category as DailyTaskCategory) ? filters.category as DailyTaskCategory : undefined;
   const categoryLabel = category ? dailyTaskCategoryLabel[category] : "Daily Tasks";
-  const selectedStatuses = category ? selectedDailyTaskStatuses(filters) : [];
+  const selectedStatuses = selectedDailyTaskStatuses(filters);
   const statusesShownInMenu = selectedStatuses.length ? selectedStatuses : [...dailyTaskStatuses];
   const sort = selectedDailyTaskSort(filters);
   const { sortBy, ascending } = sort;
 
+  const allRecords = !taskFilterDate(filters.date);
   let taskQuery = db.from("admin_daily_tasks")
-    .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),activity:daily_task_activity(id,action,comment,created_at,actor:profiles!daily_task_activity_actor_id_fkey(full_name))")
-    .eq("task_date", date);
+    .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),activity:daily_task_activity(id,action,comment,created_at,actor:profiles!daily_task_activity_actor_id_fkey(full_name))");
+  if (!allRecords) taskQuery = taskQuery.eq("task_date", date);
+  const search = taskSearchFilter(filters.q);
+  if (search) taskQuery = taskQuery.or(search);
+  if (taskFilterDate(filters.from)) taskQuery = taskQuery.gte("task_date", filters.from);
+  if (taskFilterDate(filters.to)) taskQuery = taskQuery.lte("task_date", filters.to);
+  if (/^[0-9a-f-]{36}$/i.test(filters.assignedTo || "")) taskQuery = taskQuery.eq("assigned_to", filters.assignedTo);
   let recurrenceQuery = db.from("recurring_daily_tasks")
     .select("id,task_category,title,frequency,day_number,assignee:profiles!assigned_to(full_name)").eq("is_active", true);
   if (category) {
@@ -65,7 +74,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   if (selectedStatuses.length) taskQuery = taskQuery.in("status", selectedStatuses);
   taskQuery = taskQuery.order(category ? (sortBy === "work_date" ? "task_date" : sortBy) : "created_at", { ascending: category ? ascending : true });
 
-  const [{ data: jobs, error }, { data: adminTasks }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
+  const [{ data: jobs, error }, { data: adminTasks, error: taskError }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
     db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status", "in", '("completed","cancelled")').order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
     taskQuery,
     db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
@@ -101,7 +110,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     selectedStatuses={statusesShownInMenu}
     sortOptions={dailyTaskSortOptions.map(([value, label]) => ({ value, label }))}
     selectedSort={sort.value}
-    preserved={[{ name: "category", value: category }, { name: "date", value: date }]}
+    preserved={[{ name: "category", value: category }, { name: "date", value: allRecords ? undefined : date }, ...["q", "from", "to", "assignedTo"].map(name => ({ name, value: filters[name] }))]}
   /> : null;
   const stateForm = (job: any) => isAdmin
     ? <form action="/admin/daily-tasks/action" method="post" className="daily-table-control"><input type="hidden" name="action" value="work_state" /><input type="hidden" name="jobId" value={job.id} /><input type="hidden" name="date" value={date} /><select name="workState" aria-label="Progress label" defaultValue={job.work_state ?? "standard"}>{workStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button className="button secondary button-compact">Save</button></form>
@@ -109,18 +118,19 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
 
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
-      <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up the Daily Tasks for this working day." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
-      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><form className="daily-task-list-controls">{category && <input type="hidden" name="category" value={category} />}<input type="date" name="date" defaultValue={date} />{category && <>{selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}<input type="hidden" name="sort" value={sort.value} /></>}<button className="button secondary">View</button></form></div>
+      <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up tasks. Previous records remain available." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
+      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link>{category && <Link className="button secondary" href={`/admin/daily-tasks?category=${category}`}>All Records</Link>}</div>
     </div>
-    {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}
+    <DailyTaskFilters filters={filters} category={category} staff={employees || []} sort={sort.value} />
+    {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}{taskError && <p className="error">Unable to load task records: {taskError.message}</p>}
     <section className="panel">
-      <div className="section-head"><div><h3>{categoryLabel} · {date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
+      <div className="section-head"><div><h3>{categoryLabel} · {allRecords ? "All Records" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
       {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
       <div className="daily-task-list">
-        {!dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} for this date.</p> : dailyTaskRows.map((task) => {
+        {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => {
           const photos = taskPhotosByTaskId.get(Number(task.id)) || [];
           return <article className="panel daily-task-card" key={task.id}>
-            <div className="section-head"><div><h3>{task.title}</h3><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
+            <div className="section-head"><div><h3>{task.title}</h3><p className="subtle">Work date · {task.task_date}</p><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
               {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
             </div>
             {photos.length > 0 && <section className="checkout-evidence"><h4>Completion photos</h4><div className="photo-grid">{photos.map((photo) => photo.url && <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt="Daily task completion evidence" /><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(photo.created_at))}</span></a>)}</div></section>}
