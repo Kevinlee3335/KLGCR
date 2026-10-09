@@ -11,7 +11,7 @@ export function AdminDailyTaskControls({ taskId, title, status, date, category }
   const completing = selected === "completed";
   return <div className="task-control-panel">
     <div className="task-control-toolbar">
-      <label className="task-status-field"><span>Status</span><select aria-label="Task status" value={selected} onChange={(event) => { setSelected(event.target.value); setAddPhotos(false); }}><option value="pending">Pending</option><option value="accepted">Accepted</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="kiv">KIV</option></select></label>
+      <div className="task-status-field"><span>Status</span><div className="task-status-buttons" role="group" aria-label="Task status">{[["pending", "Pending"], ["accepted", "Accepted"], ["in_progress", "In Progress"], ["completed", "Completed"], ["kiv", "KIV"]].map(([value, label]) => <button key={value} type="button" className={`task-status-choice${selected === value ? " selected" : ""}`} aria-pressed={selected === value} onClick={() => { setSelected(value); setAddPhotos(false); }}>{label}</button>)}</div></div>
       {status === "completed" && completing && <button type="button" className="button secondary" onClick={() => setAddPhotos(!addPhotos)}>{addPhotos ? "Hide upload" : "Add Photos"}</button>}
       <form action="/admin/daily-tasks/action" method="post" onSubmit={(event) => { if (!window.confirm(`Delete “${title}”?`)) event.preventDefault(); }}>{fields}<input type="hidden" name="action" value="admin_task_delete" /><button className="button danger task-delete-button" aria-label={`Delete ${title}`} title="Delete task"><Trash2 size={18} /></button></form>
     </div>

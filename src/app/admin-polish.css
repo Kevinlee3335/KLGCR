@@ -126,3 +126,5 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 @media(max-width:1000px){.daily-task-card>.section-head{grid-template-columns:1fr;gap:16px}.task-control-panel{width:100%}}
 
 .daily-task-search-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:16px 0}.daily-task-search-controls .field{min-width:135px;flex:1}.daily-task-search-controls .field:first-of-type{min-width:220px;flex:2}.daily-task-search-controls input,.daily-task-search-controls select{width:100%;min-height:42px;box-sizing:border-box}.daily-task-search-controls .button{min-height:42px}
+
+.task-status-buttons{display:flex;flex-wrap:wrap;gap:6px}.task-status-choice{padding:8px 11px;min-height:36px;border:1px solid #dfd2ba;border-radius:8px;background:#fffdf8;color:#5b4b2e;font:inherit;font-size:.76rem;font-weight:650;cursor:pointer;white-space:nowrap}.task-status-choice:hover{background:#f7edda;border-color:#bf943c}.task-status-choice.selected{background:#bb8c2b;color:#fff;border-color:#a87920;box-shadow:0 2px 6px #b58b2420}.task-status-choice:focus-visible{outline:2px solid #936715;outline-offset:3px}.task-control-toolbar{align-items:flex-end}
