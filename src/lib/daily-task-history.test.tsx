@@ -9,7 +9,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   rpc: async () => ({ error: null }),
   from: (table: string) => {
     const chain: Record<string, unknown> = {};
-    for (const method of ["select", "eq", "in", "is", "not", "or", "order", "limit"]) chain[method] = (...args: unknown[]) => { mocks.calls.push({ table, method, args }); return chain; };
+    for (const method of ["select", "eq", "in", "is", "not", "or", "order", "limit", "gte", "lte"]) chain[method] = (...args: unknown[]) => { mocks.calls.push({ table, method, args }); return chain; };
     chain.then = (resolve: (result: unknown) => void) => resolve({ data: [], error: table === "admin_daily_tasks" ? mocks.taskError : null });
     return chain;
   },
@@ -40,6 +40,21 @@ describe("Daily Task history visibility", () => {
     renderToStaticMarkup(await StaffTasks({ searchParams: Promise.resolve({}) }));
     expect(dateCalls()).toHaveLength(0);
     expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["assigned_to", "staff-id"] });
+  });
+  it("combines admin search, date range, staff and status", async () => {
+    const staff = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    renderToStaticMarkup(await AdminTasks({ searchParams: Promise.resolve({ category: "operation", q: "pump", from: "2026-10-01", to: "2026-10-09", assignedTo: staff, status: "accepted" }) }));
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "or", args: ['title.ilike."%pump%",notes.ilike."%pump%"'] });
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "gte", args: ["task_date", "2026-10-01"] });
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "lte", args: ["task_date", "2026-10-09"] });
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["assigned_to", staff] });
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "in", args: ["status", ["accepted"]] });
+  });
+  it("keeps cleaner searches restricted to their own tasks", async () => {
+    mocks.role = "cleaner";
+    renderToStaticMarkup(await StaffTasks({ searchParams: Promise.resolve({ q: "clean", status: "completed", assignedTo: "other-user" }) }));
+    expect(mocks.calls.filter(c => c.table === "admin_daily_tasks" && c.method === "eq" && c.args[0] === "assigned_to").map(c => c.args[1])).toEqual(["staff-id"]);
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["status", "completed"] });
   });
   it("includes overdue unfinished work on the cleaner dashboard", async () => {
     mocks.role = "cleaner";
