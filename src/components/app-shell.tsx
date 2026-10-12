@@ -41,10 +41,14 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
     { label: "System", Icon: Settings, links: adminNav.filter(([label]) => ["Notifications", "Users", "Settings"].includes(label)) },
   ];
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
-  const renderGroup = ({ label, Icon, links }: typeof groups[number]) => <details key={label} className={`admin-nav-group${links.some(([item]) => active(item)) ? " is-active" : ""}`}>
-    <summary><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></summary>
-    <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon]) => <Link key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{item === "Daily Tasks" ? "All Daily Tasks" : item}</span></Link>)}</div>
-  </details>;
+  const renderGroup = ({ label, Icon, links }: typeof groups[number]) => {
+    const groupClass = `admin-nav-group${links.some(([item]) => active(item)) ? " is-active" : ""}`;
+    const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
+    const submenu = <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon]) => <Link key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{item === "Daily Tasks" ? "All Daily Tasks" : item}</span></Link>)}</div>;
+    return mobile
+      ? <details key={label} className={groupClass}><summary>{heading}</summary>{submenu}</details>
+      : <div key={label} className={groupClass}><button type="button" className="admin-nav-group-trigger" aria-label={`${label} submenu`}>{heading}</button>{submenu}</div>;
+  };
   return <nav className={`nav admin-nav${mobile ? " mobile-drawer-nav" : ""}`} aria-label="Main navigation">
     <Link href="/admin" aria-current={active("Dashboard") ? "page" : undefined}><Gauge size={18}/><span>Dashboard</span></Link>
     {groups.slice(0, 2).map(renderGroup)}
