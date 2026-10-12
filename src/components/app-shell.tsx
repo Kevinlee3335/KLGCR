@@ -27,35 +27,29 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
   return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d={paths[kind]}/></svg>;
 }
 
-function DailyTaskNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
-  const active = currentTitle === "Daily Tasks" || ["Admin Task", "Operation Task", "Housekeeping Task"].includes(currentTitle);
-  const categoryLinks = <div className="nav-submenu-links">
-    <Link href="/admin/daily-tasks?category=admin">Admin Task</Link>
-    <Link href="/admin/daily-tasks?category=operation">Operation Task</Link>
-    <Link href="/admin/daily-tasks?category=housekeeping">Housekeeping Task</Link>
-  </div>;
-
-  if (!mobile) {
-    return <div className="nav-submenu nav-submenu-desktop">
-      <Link href="/admin/daily-tasks" aria-current={active ? "page" : undefined}><ClipboardCheck size={18}/><span>Daily Tasks</span></Link>
-      {categoryLinks}
-    </div>;
-  }
-
-  return <div className={`nav-submenu${mobile ? " nav-submenu-mobile" : ""}`}>
-    <Link href="/admin/daily-tasks" aria-current={active ? "page" : undefined}><ClipboardCheck size={18}/><span>Daily Tasks</span></Link>
-    <details>
-      <summary aria-label="Show Daily Task categories"><ChevronRight size={16}/></summary>
-      {categoryLinks}
-    </details>
-  </div>;
-}
-
 function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
+  const groups = [
+    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms"].includes(label)) },
+    { label: "Daily Tasks", Icon: ClipboardCheck, links: [
+      ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
+      ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
+      ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
+      ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
+    ] as const },
+    { label: "Materials", Icon: Boxes, links: adminNav.filter(([label]) => ["Material Requests", "Inventory"].includes(label)) },
+    { label: "Documents & Reports", Icon: FolderOpen, links: adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)) },
+    { label: "System", Icon: Settings, links: adminNav.filter(([label]) => ["Notifications", "Users", "Settings"].includes(label)) },
+  ];
+  const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
+  const renderGroup = ({ label, Icon, links }: typeof groups[number]) => <details key={label} className={`admin-nav-group${links.some(([item]) => active(item)) ? " is-active" : ""}`}>
+    <summary><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></summary>
+    <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon]) => <Link key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{item === "Daily Tasks" ? "All Daily Tasks" : item}</span></Link>)}</div>
+  </details>;
   return <nav className={`nav admin-nav${mobile ? " mobile-drawer-nav" : ""}`} aria-label="Main navigation">
-    {adminNav.slice(0, 3).map(([item, href, Icon]) => <Link key={item} href={href} aria-current={currentTitle === item || (item === "New Complaints" && currentTitle === "Complaint Detail") ? "page" : undefined}><Icon size={18}/><span>{item}</span></Link>)}
-    <DailyTaskNavigation mobile={mobile} currentTitle={currentTitle}/>
-    {adminNav.slice(3).map(([item, href, Icon]) => <Link key={item} href={href} aria-current={currentTitle === item ? "page" : undefined}><Icon size={18}/><span>{item}</span></Link>)}
+    <Link href="/admin" aria-current={active("Dashboard") ? "page" : undefined}><Gauge size={18}/><span>Dashboard</span></Link>
+    {groups.slice(0, 2).map(renderGroup)}
+    <Link href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></Link>
+    {groups.slice(2).map(renderGroup)}
   </nav>;
 }
 
