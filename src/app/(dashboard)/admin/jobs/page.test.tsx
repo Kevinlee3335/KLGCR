@@ -34,6 +34,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     from: vi.fn((table: string) => {
       if (table === "maintenance_jobs") return jobsQuery;
+      if (table === "blocks") return query({ data: [{ id: "block-a-id", code: "A" }], error: null });
       if (table === "appointments") return query({ data: [], error: null });
       return query({ data: [], error: null });
     }),
@@ -60,4 +61,10 @@ describe("Maintenance Jobs", () => {
     expect(jobsQuery.gte).toHaveBeenCalledWith("started_at", "2026-10-07T00:00:00+08:00");
     expect(jobsQuery.gte).toHaveBeenCalledWith("completed_at", "2026-10-06T00:00:00+08:00");
   });
+  it("uses the room prefix to override a different selected block", async () => {
+    await JobsPage({ searchParams: Promise.resolve({ search: "a421", block: "block-b-id" }) });
+    expect(jobsQuery.eq).toHaveBeenCalledWith("block_id", "block-a-id");
+    expect(jobsQuery.or).toHaveBeenCalledWith(expect.stringContaining('room_no.ilike."421"'));
+  });
+
 });
