@@ -4,8 +4,9 @@ Status: review branch only. Production database was queried read-only; no record
 objects, grants, policies, schedules or migrations were changed. No production
 deployment or merge is included in this change.
 
-Baseline: `18f0bbf7c1e29b6f9be1d08e97dfabb1a3ab40fc`, including the Documents
-release. Reviewed `KLGCR_PROJECT_BASELINE.md` (1 October) and the later decisions
+Initial baseline: `18f0bbf7c1e29b6f9be1d08e97dfabb1a3ab40fc`, including the Documents
+release. Synced the later production notification fix from
+`494ccd2e5884b2a369d9aad128bc4bf208ecdf25` into this review branch. Reviewed `KLGCR_PROJECT_BASELINE.md` (1 October) and the later decisions
 visible in the project conversation. Current working behavior takes precedence
 over older baseline entries; this branch does not change staff allocations.
 
@@ -26,8 +27,9 @@ over older baseline entries; this branch does not change staff allocations.
 ## Validation
 
 - Baseline: typecheck and 169 existing tests passed before implementation.
-- Updated: typecheck passed; all 175 tests passed after implementation. Two additional
-  Job Detail regression tests subsequently passed (177 total tests in the suite).
+- Final after synchronizing the production notification fix: typecheck passed;
+  all 188 tests passed in 50 test files, including the new gallery/read-persistence
+  regressions and the existing task assignment/completion notification tests.
 - `npm run build` passed. Comparison builds used the same installed dependency tree.
 - `npm run lint` passed with 0 errors and the four existing raw-photo image warnings.
 - `git diff --check` passed.
@@ -78,8 +80,8 @@ dependencies or database behavior in a performance patch.
 
 5. **Phone push:** a phone delivery check needs an actual subscribed device plus
    assignment/completion tests for the main Daily Task and each Sub Task. Unit
-   tests and a bell badge cannot confirm delivery to a closed iPhone PWA. Preserve
-   the ongoing notification fix independently of this optimization branch.
+   tests and a bell badge cannot confirm delivery to a closed iPhone PWA. The latest production notification fix is preserved in this branch.
+   Actual phone delivery still needs device verification.
 
 6. **Hosted verification:** Vercel project discovery worked but deployment listing
    returned HTTP 403. No local Vercel CLI was installed. GitHub commit statuses can

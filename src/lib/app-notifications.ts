@@ -10,6 +10,7 @@ export type AppNotificationType =
   | "checkout_assigned"
   | "checkout_completed"
   | "daily_task_assigned"
+  | "daily_task_completed"
   | "calendar_event"
   | "material_request";
 

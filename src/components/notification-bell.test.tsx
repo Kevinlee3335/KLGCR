@@ -69,18 +69,34 @@ describe("phone alert restoration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("offers setup when permission exists but the browser subscription is gone", async () => {
-    vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn() });
-    const fetchMock = vi.fn();
+  it("automatically recreates a missing subscription when permission is already granted", async () => {
+    const subscription = { endpoint: "https://push.example/recovered" };
+    const subscribe = vi.fn().mockResolvedValue(subscription);
+    const requestPermission = vi.fn();
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "YWJj" }) }).mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
     Object.defineProperty(navigator, "serviceWorker", {
-      configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null) } }) },
+      configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe } }) },
     });
-
     render(<NotificationBell userId="staff-2"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await waitFor(() => expect(screen.getByText("Phone alerts active on this device.")).toBeInTheDocument());
+    expect(subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/push/subscribe", expect.objectContaining({ method: "POST", body: JSON.stringify(subscription) }));
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Set up phone alerts" })).toBeInTheDocument());
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("does not request permission or subscribe automatically before consent", async () => {
+    const requestPermission = vi.fn();
+    const getSubscription = vi.fn();
+    vi.stubGlobal("Notification", { permission: "default", requestPermission });
+    vi.stubGlobal("fetch", vi.fn());
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription } }) } });
+    render(<NotificationBell userId="staff-3"/>);
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enable phone alerts" })).toBeInTheDocument());
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(getSubscription).not.toHaveBeenCalled();
   });
 });
