@@ -4,14 +4,14 @@ import { NotificationBell } from "./notification-bell";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
-import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
 
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
   ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays],
   ["Check-out Rooms", "/admin/checkouts", DoorOpen],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
-  ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
+  ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
 ] as const;
 const cleanerNav = [["Dashboard", "/staff"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["New Complaint", "/staff/complaints/new"], ["My Reports", "/staff/complaints"], ["Calendar", "/staff/calendar"]] as const;
@@ -61,7 +61,7 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
 
 export function AppShell({ profile, children, title }: { profile: Profile; children: React.ReactNode; title: string }) {
   const isStaff = profile.role === "maintenance_staff" || profile.role === "cleaner";
-  const operationalNav = profile.role === "cleaner" ? cleanerNav : [...staffNav, ["Check-out Rooms", "/staff/checkouts"] as const];
+  const operationalNav = [...(profile.role === "cleaner" ? cleanerNav : [...staffNav, ["Check-out Rooms", "/staff/checkouts"] as const]), ["Documents", "/documents"] as const];
   const date = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
   const current = (item: string) => title === item || (item === "New Complaints" && title === "Complaint Detail") ? "page" : undefined;
 
