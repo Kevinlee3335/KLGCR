@@ -1,5 +1,6 @@
 "use server";
 
+import { notifyDailyTaskCompleted } from "@/lib/daily-task-notifications";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -28,7 +29,7 @@ export async function completeAdminDailyTask(taskId: number, comment: string, pa
   const profile = await requireRole(["admin"]);
   if (!Number.isSafeInteger(taskId) || taskId < 1 || !Array.isArray(paths) || paths.length < 1 || paths.length > 6 || new Set(paths).size !== paths.length || paths.some((path) => typeof path !== "string" || !new RegExp(`^daily-tasks/${taskId}/[0-9a-f-]+\\.jpg$`).test(path))) return { error: "Invalid completion photos." };
   const db = await createClient();
-  const { data: task, error: taskError } = await db.from("admin_daily_tasks").select("id").eq("id", taskId).maybeSingle();
+  const { data: task, error: taskError } = await db.from("admin_daily_tasks").select("id,title,status,task_date,task_category").eq("id", taskId).maybeSingle();
   if (taskError || !task) return { error: taskError?.message || "Daily task not found." };
   const adminDb = createAdminClient();
   for (const path of paths) {
@@ -43,6 +44,8 @@ export async function completeAdminDailyTask(taskId: number, comment: string, pa
     await adminDb.from("daily_task_photos").delete().in("id", (photos || []).map((photo) => photo.id));
     return { error: error.message };
   }
+  try { await notifyDailyTaskCompleted(task, profile.full_name); }
+  catch (notificationError) { console.error("Unable to notify daily task completion", notificationError); }
   revalidatePath("/admin/daily-tasks");
   revalidatePath("/admin/daily-tasks/photos");
   revalidatePath("/staff");
