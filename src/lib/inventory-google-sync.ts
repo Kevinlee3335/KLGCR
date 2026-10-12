@@ -1,3 +1,4 @@
+import { recordSyncHealth } from "@/lib/sync-health";
 type InventorySheetRow = {
   itemCode: string;
   description: string;
@@ -29,7 +30,7 @@ export async function pushInventoryItemToGoogle(item: {
 }) {
   const url = process.env.GOOGLE_INVENTORY_APPS_SCRIPT_URL;
   const secret = process.env.GOOGLE_INVENTORY_SYNC_SECRET;
-  if (!url || !secret) return { skipped: true };
+  if (!url || !secret) { await recordSyncHealth("inventory", `to-sheet:${item.item_code}`, true, "Google Sheet connection is not configured"); return { skipped: true }; }
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -49,9 +50,11 @@ export async function pushInventoryItemToGoogle(item: {
     const result = await response.json().catch(() => null);
     const ok = response.ok && result?.ok === true;
     if (!ok) console.error("Google inventory sync failed", response.status, result?.error || "Invalid response");
+    await recordSyncHealth("inventory", `to-sheet:${item.item_code}`, !ok, ok ? "Google Sheet acknowledged the update" : `Google Sheet did not acknowledge the update (HTTP ${response.status})`);
     return { skipped: false, ok };
   } catch (error) {
     console.error("Google inventory sync failed", error);
+    await recordSyncHealth("inventory", `to-sheet:${item.item_code}`, true, "Google Sheet request failed or timed out");
     return { skipped: false, ok: false };
   }
 }

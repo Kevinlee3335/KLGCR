@@ -43,3 +43,18 @@ export async function saveMaintenanceAssignments(
   revalidatePath("/admin/complaints");
   return { ok: "Maintenance assignment settings saved." };
 }
+
+export async function savePhoneNotificationPreferences(_previous: MaintenanceAssignmentState, formData: FormData): Promise<MaintenanceAssignmentState> {
+  const actor = await requireRole(["admin"]);
+  const id = staffIdSchema.safeParse(formData.get("userId"));
+  if (!id.success) return { error: "Select an employee." };
+  const db = await createClient();
+  const { data: target, error: targetError } = await db.from("profiles").select("id").eq("id", id.data).eq("is_active", true).is("deleted_at", null).maybeSingle();
+  if (targetError || !target) return { error: "This employee is no longer active. Refresh the page." };
+  const { notificationOptions } = await import("@/lib/notification-preferences");
+  const events = Object.fromEntries(notificationOptions.map(([key]) => [key, formData.get(`event:${key}`) === "on"]));
+  const { error } = await db.from("phone_notification_preferences").upsert({ user_id: id.data, enabled: formData.get("enabled") === "on", events, updated_by: actor.id, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) return { error: `Unable to save notification settings: ${error.message}` };
+  revalidatePath("/admin/settings");
+  return { ok: "Phone notification settings saved." };
+}

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normaliseInventorySheetRow, pushInventoryItemToGoogle } from "./inventory-google-sync";
+const health = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("./sync-health", () => ({ recordSyncHealth: health }));
 const item={item_code:"KLGCR-E00069",description:"Restart button",category:"Electrical",movement_category:"slow",balance_qty:2,reorder_level:1,unit:"unit"};
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();});
 describe("Google inventory sync",()=>{
@@ -12,11 +14,13 @@ describe("Google inventory sync",()=>{
     vi.spyOn(console,"error").mockImplementation(()=>{});
     const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({ok:false,error:"Item code not found"}),{status:200}));vi.stubGlobal("fetch",fetch);
     expect(await pushInventoryItemToGoogle(item)).toEqual({skipped:false,ok:false});
+    expect(health).toHaveBeenCalledWith("inventory", "to-sheet:KLGCR-E00069", true, expect.any(String));
     expect(JSON.parse(fetch.mock.calls[0][1].body).item).toMatchObject({itemCode:"E00069",balanceQty:2});
   });
   it("accepts only explicit acknowledgement from Google",async()=>{
     vi.stubEnv("GOOGLE_INVENTORY_APPS_SCRIPT_URL","https://script.example.test/exec");vi.stubEnv("GOOGLE_INVENTORY_SYNC_SECRET","test-secret");
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({ok:true}),{status:200})));
     expect(await pushInventoryItemToGoogle(item)).toEqual({skipped:false,ok:true});
+    expect(health).toHaveBeenCalledWith("inventory", "to-sheet:KLGCR-E00069", false, expect.any(String));
   });
 });
