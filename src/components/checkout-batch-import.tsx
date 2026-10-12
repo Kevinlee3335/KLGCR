@@ -1,6 +1,5 @@
 "use client";
 
-import * as XLSX from "xlsx";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createCheckoutBatch, type BatchCheckoutInput } from "@/app/(dashboard)/admin/checkouts/actions";
@@ -14,7 +13,8 @@ export function CheckoutBatchImport({blocks}:{blocks:Block[]}){
  const router=useRouter();const [pending,startTransition]=useTransition();const [parsed,setParsed]=useState<Parsed|null>(null);const [error,setError]=useState("");const [result,setResult]=useState("");
  const blockMap=useMemo(()=>new Map(blocks.map(b=>[key(b.code),b.id])),[blocks]);
  async function selectFile(file:File|undefined){setError("");setResult("");setParsed(null);if(!file)return;try{
-   const book=XLSX.read(await file.arrayBuffer(),{type:"array"});const sheet=book.Sheets[book.SheetNames[0]];if(!sheet)throw new Error("This Excel file has no worksheet.");
+   const [XLSX, buffer] = await Promise.all([import("xlsx"), file.arrayBuffer()]);
+   const book=XLSX.read(buffer,{type:"array"});const sheet=book.Sheets[book.SheetNames[0]];if(!sheet)throw new Error("This Excel file has no worksheet.");
    const table=XLSX.utils.sheet_to_json<unknown[]>(sheet,{header:1,defval:"",raw:false});const headers=(table[0]||[]).map(key);const blockAt=headers.findIndex(h=>h==="block"||h==="blockcode");const roomAt=headers.findIndex(h=>["room","roomno","roomnumber","roomnum"].includes(h));const defectAt=headers.map((h,i)=>h.includes("defect")||h.includes("issue")?i:-1).filter(i=>i>=0);
    if(blockAt<0||roomAt<0||!defectAt.length)throw new Error("Excel first row must include Block, Room and at least one Defect column.");
    const rows:BatchCheckoutInput[]=[];let defectCount=0;table.slice(1).forEach((line,index)=>{const rawBlock=String(line[blockAt]??"").trim();const blockCode=key(rawBlock.replace(/^block\s*/i,""));const roomNo=String(line[roomAt]??"").trim();const defects=[...new Set(defectAt.flatMap(i=>splitDefects(line[i])))];if(!rawBlock&&!roomNo&&!defects.length)return;const blockId=blockMap.get(blockCode);if(!blockId)throw new Error("Row "+(index+2)+': Block "'+rawBlock+'" is not recognised.');if(!roomNo)throw new Error("Row "+(index+2)+": Room is missing.");if(!defects.length)throw new Error("Row "+(index+2)+": Add at least one defect.");rows.push({blockId,roomNo,defects});defectCount+=defects.length;});

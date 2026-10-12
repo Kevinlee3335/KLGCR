@@ -1,3 +1,4 @@
+import { signEvidencePhotos } from "@/lib/evidence-urls";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PriorityBadge, StatusBadge } from "@/components/phase2-ui";
@@ -22,30 +23,27 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
   if (error) throw new Error(`Unable to load maintenance job: ${error.message}`);
   if (!data) notFound();
   const job = data as unknown as JobRow;
-  const [{ data: appointmentRows }, { data: historyRows }, { data: materialRows }] = await Promise.all([
+  const [{ data: appointmentRows }, { data: historyRows }, { data: materialRows }, {data:staff}, {data:transfers}, {data:photos,error:photoError}] = await Promise.all([
     supabase.from("appointments").select("id,appointment_date,appointment_time,status,remarks,no_show_remarks,created_at,attended_at,attendee:profiles!appointments_attended_by_fkey(full_name),staff:profiles!appointments_assigned_staff_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
     supabase.from("job_status_history").select("id,previous_status,new_status,note,created_at,actor:profiles!job_status_history_changed_by_fkey(full_name)").eq("job_id", id).order("created_at", { ascending: true }),
     supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,reviewed_at,issued_at,requester:profiles!material_requests_requested_by_fkey(full_name),reviewer:profiles!material_requests_reviewed_by_fkey(full_name),issuer:profiles!material_requests_issued_by_fkey(full_name),items:material_request_items!material_request_items_request_id_fkey(other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items!material_request_items_inventory_item_id_fkey(item_code,description,unit))").eq("job_id", id).order("created_at", { ascending: true }),
+    supabase.from("profiles").select("id,full_name,profile_blocks(block_id)").eq("role","maintenance_staff").eq("is_active",true).is("deleted_at",null),
+    supabase.from("job_assignment_history").select("id,reason,created_at,previous:profiles!previous_staff(full_name),next:profiles!assigned_staff(full_name),actor:profiles!changed_by(full_name)").eq("job_id",id).order("created_at"),
+    supabase.from("maintenance_job_photos").select("id,storage_path,created_at").eq("job_id", id).order("created_at"),
   ]);
   const appointments = (appointmentRows || []) as unknown as AppointmentActivityRow[];
   const appointment = appointments.filter(({ status }) => !["cancelled", "no_show"].includes(status)).at(-1) ?? null;
   const events = buildJobActivity({ job, history: (historyRows || []) as unknown as JobHistoryRow[], materials: (materialRows || []) as unknown as MaterialRequestRow[], appointments });
-  const [{data:staff}, {data:transfers}] = await Promise.all([
-    supabase.from("profiles").select("id,full_name,profile_blocks(block_id)").eq("role","maintenance_staff").eq("is_active",true).is("deleted_at",null),
-    supabase.from("job_assignment_history").select("id,reason,created_at,previous:profiles!previous_staff(full_name),next:profiles!assigned_staff(full_name),actor:profiles!changed_by(full_name)").eq("job_id",id).order("created_at"),
-  ]);
   const relationName = (value: unknown) => (value as {full_name?:string}|null)?.full_name || "Unknown";
   for (const transfer of transfers || []) events.push({id:`transfer-${transfer.id}`,timestamp:transfer.created_at,action:"Job Transferred",actor:relationName(transfer.actor),remarks:`${relationName(transfer.previous)} → ${relationName(transfer.next)} · ${transfer.reason}`});
   if (transfers?.length) { const initial = events.find(event => event.id === "job-assigned"); if (initial) initial.actor = relationName(transfers[0].previous); }
   events.sort((a,b) => new Date(a.timestamp).getTime()-new Date(b.timestamp).getTime());
-  const { data: photos, error: photoError } = await supabase.from("maintenance_job_photos").select("id,storage_path,created_at").eq("job_id", id).order("created_at");
   const completedEvents = events.filter(event => event.action === "Completed");
-  let photoLoadFailed = Boolean(photoError);
-  for (const photo of photos || []) {
-    const { data: signed, error: signError } = await supabase.storage.from("maintenance-evidence").createSignedUrl(photo.storage_path, 3600);
-    if (signError) photoLoadFailed = true;
+  const signedPhotos = await signEvidencePhotos(supabase, "maintenance-evidence", photos || []);
+  const photoLoadFailed = Boolean(photoError) || signedPhotos.some(photo => photo.signError);
+  for (const photo of signedPhotos) {
     const event = completedEvents.find(event => new Date(event.timestamp).getTime() >= new Date(photo.created_at).getTime()) ?? completedEvents.at(-1);
-    if (signed && event) (event.photos ??= []).push({id:photo.id,url:signed.signedUrl});
+    if (photo.url && event) (event.photos ??= []).push({id:photo.id,url:photo.url});
   }
 
   return <AppShell profile={profile} title="Maintenance Job Detail">

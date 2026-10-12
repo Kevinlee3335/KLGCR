@@ -124,10 +124,10 @@ export function buildJobActivity({ job, history, materials, appointments }: Time
   return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime() || a.id.localeCompare(b.id));
 }
 
+const activityDateFormatter = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" });
+const activityTimeFormatter = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+
 export function formatMalaysiaActivity(timestamp: string) {
   const date = new Date(timestamp);
-  return {
-    date: new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(date),
-    time: new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }).format(date),
-  };
+  return { date: activityDateFormatter.format(date), time: activityTimeFormatter.format(date) };
 }

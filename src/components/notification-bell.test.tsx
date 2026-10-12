@@ -3,9 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NotificationBell } from "./notification-bell";
 
 const removeChannel = vi.fn().mockResolvedValue(undefined);
+const state = vi.hoisted(() => ({
+  items: [] as Array<{id:string;title:string;body:string;href:string;created_at:string;read_at:null}>,
+  update: vi.fn(),
+}));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [] }) }) }) }) }),
+    from: () => ({
+      select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: state.items }) }) }) }),
+      update: () => ({ in: () => ({ eq: (...args: unknown[]) => state.update(...args) }) }),
+    }),
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
     removeChannel,
   }),
@@ -14,6 +21,26 @@ vi.mock("@/lib/supabase/client", () => ({
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  state.items = [];
+});
+
+describe("notification read persistence", () => {
+  it("keeps notifications unread after a failed write, then permits retry", async () => {
+    state.items = [{id:"n1",title:"Task assigned",body:"Pump check",href:"/staff",created_at:"2026-10-12T01:00:00Z",read_at:null}];
+    state.update.mockResolvedValueOnce({error:{message:"offline"}}).mockResolvedValueOnce({error:null});
+    render(<NotificationBell userId="staff-read-test"/>);
+    fireEvent.click(screen.getByRole("button",{name:"Open notifications"}));
+    await screen.findByText("Task assigned");
+    const button = screen.getByRole("button",{name:"Mark all read"});
+    fireEvent.click(button);
+    await screen.findByRole("alert");
+    expect(screen.getByText("Task assigned").closest("a")).toHaveClass("unread");
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    await waitFor(()=>expect(button).toBeDisabled());
+    expect(screen.getByText("Task assigned").closest("a")).not.toHaveClass("unread");
+    expect(state.update).toHaveBeenCalledWith("recipient_id","staff-read-test");
+  });
 });
 
 describe("phone alert restoration", () => {

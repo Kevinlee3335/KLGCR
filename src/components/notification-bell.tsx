@@ -36,6 +36,8 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [enableError, setEnableError] = useState("");
+  const [readError, setReadError] = useState("");
+  const [markingRead, setMarkingRead] = useState(false);
   const [isBrowser, setIsBrowser] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [phoneAlerts, setPhoneAlerts] = useState<"checking" | "active" | "inactive">("checking");
@@ -145,11 +147,21 @@ export function NotificationBell({ userId }: { userId: string }) {
 
   async function markAllRead() {
     const ids = items.filter((item) => !item.read_at).map((item) => item.id);
-    if (!ids.length) return;
+    if (!ids.length || markingRead) return;
     const supabase = createClient();
     const readAt = new Date().toISOString();
-    setItems((current) => current.map((item) => ids.includes(item.id) ? { ...item, read_at: readAt } : item));
-    await supabase.from("app_notifications").update({ read_at: readAt }).in("id", ids).eq("recipient_id", userId);
+    setMarkingRead(true);
+    setReadError("");
+    try {
+      const { error } = await supabase.from("app_notifications").update({ read_at: readAt }).in("id", ids).eq("recipient_id", userId);
+      if (error) throw error;
+      const savedIds = new Set(ids);
+      setItems((current) => current.map((item) => savedIds.has(item.id) ? { ...item, read_at: readAt } : item));
+    } catch {
+      setReadError("Unable to mark notifications as read. Please try again.");
+    } finally {
+      setMarkingRead(false);
+    }
   }
 
   return <div className="app-notification-wrap">
@@ -157,7 +169,8 @@ export function NotificationBell({ userId }: { userId: string }) {
       <Bell size={19}/>{unread > 0 && <b>{unread > 9 ? "9+" : unread}</b>}
     </button>
     {open && <div className="app-notification-panel">
-      <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread}><CheckCheck size={16}/> Mark all read</button></div>
+      <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread || markingRead}><CheckCheck size={16}/> Mark all read</button></div>
+      {readError && <p className="app-notification-error" role="alert">{readError}</p>}
       {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <Link key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{formatTime(item.created_at)}</small></Link>)}</div>}
       {isBrowser && notificationPermission !== "unsupported" && phoneAlerts === "active" && <p className="app-notification-empty" role="status">Phone alerts active on this device.</p>}
       {isBrowser && notificationPermission !== "unsupported" && phoneAlerts !== "active" && <button type="button" className="app-notification-enable" disabled={phoneAlerts === "checking"} onClick={() => void enablePhoneAlerts()}>{phoneAlerts === "checking" ? "Checking phone alerts…" : notificationPermission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}

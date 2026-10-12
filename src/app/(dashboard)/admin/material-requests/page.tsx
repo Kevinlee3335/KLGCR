@@ -9,9 +9,10 @@ export default async function AdminMaterialRequestsPage({ searchParams }: { sear
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
-  const { data: requests, error } = await supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,job:maintenance_jobs!job_id(job_no,room_no,block:blocks!block_id(code)),staff:profiles!requested_by(full_name),items:material_request_items(id,other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,balance_qty,unit))").order("created_at", { ascending: false }).limit(100);
+  const requestsQuery = supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,job:maintenance_jobs!job_id(job_no,room_no,block:blocks!block_id(code)),staff:profiles!requested_by(full_name),items:material_request_items(id,other_item_name,requested_qty,approved_qty,issued_qty,item:inventory_items(item_code,description,balance_qty,unit))").order("created_at", { ascending: false }).limit(100);
+  const inventoryQuery = supabase.from("inventory_items").select("id,item_code,description").eq("is_active",true).order("item_code");
+  const [{data:requests,error},{data:inventory}] = await Promise.all([requestsQuery,inventoryQuery]);
   const rows = requests || [];
-  const {data:inventory} = await supabase.from("inventory_items").select("id,item_code,description").eq("is_active",true).order("item_code");
   const pending = rows.filter((request: any) => request.status === "pending");
   const approved = rows.filter((request: any) => request.status === "approved");
 
