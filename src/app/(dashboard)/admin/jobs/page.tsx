@@ -1,3 +1,4 @@
+import { parseRoomSearch, roomSearchFilter } from "@/lib/room-search";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { JobList } from "@/components/phase2-ui";
@@ -56,6 +57,14 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const profile = await requireRole(["admin", "management_viewer"]);
   const filters = await searchParams;
   const supabase = await createClient();
+  const roomSearch = parseRoomSearch(filters.search);
+  if (roomSearch) {
+    const { data: searchBlocks, error: blockError } = await supabase.from("blocks").select("id,code").order("code");
+    if (blockError) throw new Error(blockError.message);
+    const block = searchBlocks?.find(row => row.code.toUpperCase() === roomSearch.blockCode);
+    // An unknown block must never broaden the search to other buildings.
+    filters.block = block?.id || "00000000-0000-0000-0000-000000000000";
+  }
   const page = Math.max(1, Number(filters.page) || 1);
   const today = malaysiaToday();
   const archiveStatus = ["rejected","deleted"].includes(filters.status || "") ? filters.status! : "";
@@ -72,7 +81,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (filters.block) archiveQuery = archiveQuery.eq("block_id",filters.block);
   if (filters.priority) archiveQuery = archiveQuery.eq("priority",filters.priority);
   if (filters.date) archiveQuery = archiveQuery.gte("submitted_at",`${filters.date}T00:00:00+08:00`).lt("submitted_at",`${filters.date}T23:59:59.999+08:00`);
-  if (filters.search) { const term = JSON.stringify(`%${filters.search}%`); archiveQuery=archiveQuery.or(`complaint_no.ilike.${term},room_no.ilike.${term},description.ilike.${term}`); }
+  if (roomSearch) archiveQuery = archiveQuery.or(roomSearchFilter(roomSearch));
+  else if (filters.search) { const term = JSON.stringify(`%${filters.search}%`); archiveQuery=archiveQuery.or(`complaint_no.ilike.${term},room_no.ilike.${term},description.ilike.${term}`); }
   archiveQuery = archiveQuery.order(archiveStatus === "deleted" && sortBy === "created_at" ? "deleted_at" : "submitted_at", { ascending });
   const archived = archive ? await archiveQuery.range((page-1)*PAGE_SIZE,page*PAGE_SIZE) : null;
   const archiveRows = ((archived?.data || []).slice(0,PAGE_SIZE)) as unknown as ArchivedComplaintRow[];
@@ -94,7 +104,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (filters.assignedDate) query = query.gte("assigned_at", `${filters.assignedDate}T00:00:00+08:00`).lt("assigned_at", `${filters.assignedDate}T23:59:59.999+08:00`);
   if (filters.startedDate) query = query.gte("started_at", `${filters.startedDate}T00:00:00+08:00`).lt("started_at", `${filters.startedDate}T23:59:59.999+08:00`);
   if (filters.completedDate) query = query.gte("completed_at", `${filters.completedDate}T00:00:00+08:00`).lt("completed_at", `${filters.completedDate}T23:59:59.999+08:00`);
-  if (filters.search) query = query.or(`job_no.ilike.%${filters.search}%,room_no.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+  if (roomSearch) query = query.or(roomSearchFilter(roomSearch));
+  else if (filters.search) query = query.or(`job_no.ilike.%${filters.search}%,room_no.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
   if (sortBy === "work_date") query = query.order("scheduled_for", { ascending, nullsFirst: false });
   else query = query.order(sortBy, { ascending });
   query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -157,7 +168,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   return <AppShell profile={profile} title="Maintenance Jobs">
     <div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div>
     <form className="panel filter-bar">
-      <input name="search" defaultValue={filters.search} placeholder="Search job, room, description…" />
+      <input name="search" defaultValue={filters.search} placeholder="Search A421, B511, job, description…" />
       <select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select>
       <select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select>
       {archiveStatus && <input type="hidden" name="status" value={archiveStatus} />}

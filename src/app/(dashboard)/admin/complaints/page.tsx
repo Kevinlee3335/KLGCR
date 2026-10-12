@@ -1,3 +1,4 @@
+import { parseRoomSearch, roomSearchFilter } from "@/lib/room-search";
 import Link from "next/link";
 import { ComplaintSummary } from "@/components/complaint-summary";
 import { AppShell } from "@/components/app-shell";
@@ -54,6 +55,14 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const profile = await requireRole(["admin", "management_viewer"]);
   const q = await searchParams;
   const supabase = await createClient();
+  const roomSearch = parseRoomSearch(q.search);
+  if (roomSearch) {
+    const { data: searchBlocks, error: blockError } = await supabase.from("blocks").select("id,code").order("code");
+    if (blockError) throw new Error(blockError.message);
+    const block = searchBlocks?.find(row => row.code.toUpperCase() === roomSearch.blockCode);
+    // An unknown block must never broaden the search to other buildings.
+    q.block = block?.id || "00000000-0000-0000-0000-000000000000";
+  }
   const isDeleted = q.status === "deleted";
   const selectedStatuses = selectedComplaintStatuses(q);
   const statusesShownInMenu = selectedStatuses.length ? selectedStatuses : [...complaintStatuses];
@@ -65,7 +74,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     if (q.block) deletedQuery = deletedQuery.eq("block_id", q.block);
     if (q.priority) deletedQuery = deletedQuery.eq("priority", q.priority);
     if (q.date) deletedQuery = deletedQuery.gte("submitted_at", `${q.date}T00:00:00`).lt("submitted_at", `${q.date}T23:59:59.999`);
-    if (q.search) deletedQuery = deletedQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%`);
+    if (roomSearch) deletedQuery = deletedQuery.or(roomSearchFilter(roomSearch));
+    else if (q.search) deletedQuery = deletedQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%`);
   } else {
     if (selectedStatuses.length) activeQuery = activeQuery.in("status", selectedStatuses);
     if (q.needAppointment) activeQuery = activeQuery.eq("need_appointment", true);
@@ -77,7 +87,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     if (q.assigned === "unassigned") activeQuery = activeQuery.is("assigned_to", null);
     else if (q.assigned) activeQuery = activeQuery.eq("assigned_to", q.assigned);
     if (q.date) activeQuery = activeQuery.gte("submitted_at", `${q.date}T00:00:00`).lt("submitted_at", `${q.date}T23:59:59.999`);
-    if (q.search) activeQuery = activeQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%,complainant_name.ilike.%${q.search}%`);
+    if (roomSearch) activeQuery = activeQuery.or(roomSearchFilter(roomSearch));
+    else if (q.search) activeQuery = activeQuery.or(`complaint_no.ilike.%${q.search}%,room_no.ilike.%${q.search}%,description.ilike.%${q.search}%,complainant_name.ilike.%${q.search}%`);
     activeQuery = activeQuery.order(sort.sortBy, { ascending: sort.ascending });
   }
 
@@ -122,5 +133,5 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     assigned: <ColumnFilter label="Assigned" action="/admin/complaints" name="assigned" selectedValue={q.assigned} options={[{ value: "unassigned", label: "Unassigned" }, ...(staff || []).map((member) => ({ value: member.id, label: member.full_name }))]} preserved={preservedExcept("assigned")} />,
   };
 
-  return <AppShell profile={profile} title="New Complaints"><div className="section-head"><div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>{profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}</div><section className="metrics compact">{[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>)}</section><ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={blocks || []} filters={q} /><form className="panel filter-bar">{q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}{q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}{!isDeleted && selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}{!isDeleted && <input type="hidden" name="sort" value={sort.value} />}{q.category && <input type="hidden" name="category" value={q.category} />}{q.assigned && <input type="hidden" name="assigned" value={q.assigned} />}<input name="search" defaultValue={q.search} placeholder="Search complaint, room, name…" /><select name="status" defaultValue={q.status || ""}><option value="">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="block" defaultValue={q.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="priority" defaultValue={q.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><select name="source" defaultValue={q.source || ""} disabled={isDeleted}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select><input type="date" name="date" defaultValue={q.date} /><button className="button">Filter</button></form>{q.deleted && <p className="success">Complaint deleted.</p>}<section className="panel list-panel">{resultError ? <p className="error">{resultError.message}</p> : isDeleted ? <DeletedComplaintList rows={(deletedRows || []) as DeletedComplaint[]} blocks={blocks || []} /> : <ComplaintList rows={(data || []) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} statusFilter={statusFilter} columnFilters={columnFilters} />}</section></AppShell>;
+  return <AppShell profile={profile} title="New Complaints"><div className="section-head"><div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>{profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}</div><section className="metrics compact">{[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>)}</section><ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={blocks || []} filters={q} /><form className="panel filter-bar">{q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}{q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}{!isDeleted && selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}{!isDeleted && <input type="hidden" name="sort" value={sort.value} />}{q.category && <input type="hidden" name="category" value={q.category} />}{q.assigned && <input type="hidden" name="assigned" value={q.assigned} />}<input name="search" defaultValue={q.search} placeholder="Search A421, B511, complaint, name…" /><select name="status" defaultValue={q.status || ""}><option value="">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select><select name="block" defaultValue={q.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select><select name="priority" defaultValue={q.priority || ""}><option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}</select><select name="source" defaultValue={q.source || ""} disabled={isDeleted}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select><input type="date" name="date" defaultValue={q.date} /><button className="button">Filter</button></form>{q.deleted && <p className="success">Complaint deleted.</p>}<section className="panel list-panel">{resultError ? <p className="error">{resultError.message}</p> : isDeleted ? <DeletedComplaintList rows={(deletedRows || []) as DeletedComplaint[]} blocks={blocks || []} /> : <ComplaintList rows={(data || []) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} statusFilter={statusFilter} columnFilters={columnFilters} />}</section></AppShell>;
 }
