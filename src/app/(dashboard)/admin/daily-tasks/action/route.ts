@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createAppNotifications } from "@/lib/app-notifications";
+import { notifyDailyTaskAssigned, notifyDailyTaskCompleted } from "@/lib/daily-task-notifications";
 import { dailyTaskCategories, type DailyTaskCategory } from "@/lib/daily-tasks";
 
 function redirect(request:Request,date:string,error?:string,category?:string){
@@ -53,12 +53,12 @@ export async function POST(request: Request) {
       const{error}=await db.from("recurring_daily_tasks").insert({title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,frequency,day_number:day,starts_on:date,task_category:taskCategory});
       if(error)return redirect(request,date,error.message,taskCategory);
       const {error:generateError}=await db.rpc("materialize_recurring_tasks",{p_date:date});
-      try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"Repeating daily task assigned", body:`${title} repeats from ${date}.`, href:"/staff/daily-tasks", entityId:null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
+      try { await notifyDailyTaskAssigned({ recipientId:assignedTo, title, date, category:taskCategory, repeating:true }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
       return redirect(request,date,generateError?.message,taskCategory);
     }
     const{error}=await db.from("admin_daily_tasks").insert({task_date:date,title,notes:notes||null,assigned_to:assignedTo,created_by:profile.id,task_category:taskCategory});
     if(error)return redirect(request,date,error.message,taskCategory);
-    try { await createAppNotifications({ recipientIds:[assignedTo], type:"daily_task_assigned", title:"New daily task assigned", body:`${title} is due on ${date}.`, href:"/staff/daily-tasks", entityId:null }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
+    try { await notifyDailyTaskAssigned({ recipientId:assignedTo, title, date, category:taskCategory }); } catch(notificationError) { console.error("Unable to notify daily task assignee", notificationError); }
     return redirect(request,date,undefined,taskCategory);
   }
 
@@ -71,7 +71,13 @@ export async function POST(request: Request) {
     const id=Number(form.get("taskId"));
     const status=String(form.get("status")??"pending");
     const comment=String(form.get("comment")||"").trim()||null;
+    const {data:task,error:taskError}=await db.from("admin_daily_tasks").select("id,title,status,task_date,task_category").eq("id",id).maybeSingle();
+    if(taskError || !task)return redirect(request,date,taskError?.message || "Daily task not found",category);
     const{error}=await db.rpc("admin_update_daily_task",{p_id:id,p_status:status,p_comment:comment});
+    if (!error && status === "completed") {
+      try { await notifyDailyTaskCompleted(task, profile.full_name); }
+      catch (notificationError) { console.error("Unable to notify daily task completion", notificationError); }
+    }
     return error?redirect(request,date,error.message,category):redirect(request,date,undefined,category);
   }
 

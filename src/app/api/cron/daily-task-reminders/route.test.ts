@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const createAppNotifications = vi.fn();
+  const notifyDailyTaskAssigned = vi.fn();
   const taskList = { select: vi.fn(), eq: vi.fn(), not: vi.fn(), is: vi.fn() };
   const claim = { update: vi.fn(), eq: vi.fn(), is: vi.fn(), select: vi.fn(), maybeSingle: vi.fn() };
   Object.values(taskList).forEach((method) => vi.mocked(method).mockReturnValue(taskList as never));
@@ -12,10 +12,10 @@ const mocks = vi.hoisted(() => {
     rpc: vi.fn().mockResolvedValue({ error: null }),
     from: vi.fn().mockImplementationOnce(() => taskList).mockImplementation(() => claim),
   };
-  return { createAppNotifications, db };
+  return { notifyDailyTaskAssigned, db };
 });
 
-vi.mock("@/lib/app-notifications", () => ({ createAppNotifications: mocks.createAppNotifications }));
+vi.mock("@/lib/daily-task-notifications", () => ({ notifyDailyTaskAssigned: mocks.notifyDailyTaskAssigned }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => mocks.db) }));
 
 import { GET } from "./route";
@@ -29,10 +29,11 @@ describe("daily task reminders", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.db.rpc).toHaveBeenCalledWith("materialize_recurring_tasks", expect.objectContaining({ p_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }));
-    expect(mocks.createAppNotifications).toHaveBeenCalledWith(expect.objectContaining({
-      recipientIds: ["staff-id"],
-      title: "Daily task due today",
-      entityId: null,
+    expect(mocks.notifyDailyTaskAssigned).toHaveBeenCalledWith(expect.objectContaining({
+      recipientId: "staff-id",
+      title: "Check pump room",
+      taskId: 42,
+      reminder: true,
     }));
   });
 });

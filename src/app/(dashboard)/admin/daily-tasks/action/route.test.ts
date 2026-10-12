@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
     insert: vi.fn(), select: vi.fn(), single: vi.fn(),
   };
   Object.values(profileQuery).forEach((method) => vi.mocked(method).mockReturnValue(profileQuery as never));
-  profileQuery.maybeSingle.mockResolvedValue({ data: { id: "staff-id", daily_task_category: "operation" }, error: null });
+  profileQuery.maybeSingle.mockResolvedValue({ data: { id: "staff-id", daily_task_category: "operation", role: "maintenance_staff" }, error: null });
   Object.values(taskQuery).forEach((method) => vi.mocked(method).mockReturnValue(taskQuery as never));
   taskQuery.single.mockResolvedValue({ data: { id: 42 }, error: null });
   return { createAppNotifications, profileQuery, taskQuery };
@@ -19,6 +19,7 @@ vi.mock("@/lib/auth", () => ({
   requireRole: vi.fn().mockResolvedValue({ id: "admin-id", role: "admin" }),
 }));
 vi.mock("@/lib/app-notifications", () => ({ createAppNotifications: mocks.createAppNotifications }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: () => mocks.profileQuery }) }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     from: vi.fn((table: string) => table === "profiles" ? mocks.profileQuery : mocks.taskQuery),

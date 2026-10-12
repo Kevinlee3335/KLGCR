@@ -1,5 +1,6 @@
 "use server";
 
+import { notifyDailyTaskCompleted } from "@/lib/daily-task-notifications";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -32,14 +33,18 @@ export async function prepareDailyTaskEvidence(taskId: number, photoCount: numbe
 }
 
 export async function completeDailyTask(taskId: number, comment: string, paths: string[]) {
-  await requireRole(["maintenance_staff", "cleaner"]);
+  const profile = await requireRole(["maintenance_staff", "cleaner"]);
   const db = await createClient();
+  const { data: task, error: taskError } = await db.from("admin_daily_tasks").select("id,title,status,task_date,task_category").eq("id", taskId).eq("assigned_to", profile.id).maybeSingle();
+  if (taskError || !task) return { error: taskError?.message || "Daily task not found." };
   const { error } = await db.rpc("complete_assigned_daily_task", {
     p_id: taskId,
     p_comment: comment.trim() || null,
     p_paths: paths,
   });
   if (error) return { error: error.message };
+  try { await notifyDailyTaskCompleted(task, profile.full_name); }
+  catch (notificationError) { console.error("Unable to notify daily task completion", notificationError); }
   revalidatePath("/staff");
   revalidatePath("/staff/daily-tasks");
   revalidatePath(`/staff/daily-tasks/${taskId}`);

@@ -56,18 +56,27 @@ export function NotificationBell({ userId }: { userId: string }) {
 
     // Permission and subscriptions belong to this browser, but the server-side
     // subscription must be attached to the account that just signed in.
+    let restoring = false;
     const restorePhoneAlerts = async () => {
+      if (restoring) return;
       if (!("serviceWorker" in navigator)) {
         if (active) setPhoneAlerts("inactive");
         return;
       }
+      restoring = true;
       try {
         const registration = await navigator.serviceWorker.register("/sw.js");
         if (!("Notification" in window) || Notification.permission !== "granted") {
           if (active) setPhoneAlerts("inactive");
           return;
         }
-        const subscription = await registration.pushManager.getSubscription();
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          const response = await fetch("/api/push/subscribe", { cache: "no-store" });
+          const data = await response.json();
+          if (!response.ok || !data.publicKey) throw new Error(data.error || "Push notifications are not ready yet.");
+          subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(data.publicKey) });
+        }
         if (subscription && (!lastPushSave || lastPushSave.userId !== userId || lastPushSave.endpoint !== subscription.endpoint || Date.now() - lastPushSave.at > 60_000)) {
           await savePhoneSubscription(subscription);
           lastPushSave = { userId, endpoint: subscription.endpoint, at: Date.now() };
@@ -75,10 +84,18 @@ export function NotificationBell({ userId }: { userId: string }) {
         if (active) setPhoneAlerts(subscription ? "active" : "inactive");
       } catch {
         if (active) setPhoneAlerts("inactive");
-      }
+      } finally { restoring = false; }
     };
     setPhoneAlerts("checking");
     void restorePhoneAlerts();
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+        void restorePhoneAlerts();
+      }
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
     const channel = supabase.channel(`notifications-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_notifications", filter: `recipient_id=eq.${userId}` }, (event) => {
         const item = event.new as AppNotification;
@@ -90,7 +107,7 @@ export function NotificationBell({ userId }: { userId: string }) {
           }));
         }
       }).subscribe();
-    return () => { active = false; void supabase.removeChannel(channel); };
+    return () => { active = false; document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); void supabase.removeChannel(channel); };
   }, [userId]);
 
   async function enablePhoneAlerts() {
