@@ -1,0 +1,9 @@
+
+.documents-panel { display: grid; gap: 18px; }
+.document-upload, .document-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.document-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border, #e5e7eb); }
+.document-row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.document-row small { display: block; margin-top: 6px; color: #64748b; }
+.document-actions { flex-shrink: 0; }
+.document-actions .button { min-width: 96px; }
+@media (max-width: 700px) { .document-row { align-items: stretch; flex-direction: column; } }
