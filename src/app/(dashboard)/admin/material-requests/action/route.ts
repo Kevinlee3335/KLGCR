@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         const approved = action === "approve";
         await notifyMaterialRequestRecipients({
           recipientIds: [materialRequest.requested_by],
-          type: "material_request",
+          type: "material_request", pushType: "material_decision",
           title: approved ? "Material request approved" : "Material request rejected",
           body: materialRequest.request_no + " for " + (job?.job_no || "your maintenance job") + " · Room " + (job?.room_no || "—") + " was " + (approved ? "approved." : "rejected." + (reason ? " Reason: " + reason : "")),
           href: "/staff/material-request",

@@ -1,3 +1,4 @@
+import { recordSyncHealth } from "@/lib/sync-health";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formValue, roomAvailability, type GoogleFormPayload } from "@/lib/google-form";
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
+    await recordSyncHealth("google_form", "invalid-request", true, "Invalid JSON in authenticated webhook");
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
   const description = formValue(body, "REPORT DESCRIPTION");
   const sourceReference = text(body.source_reference);
   if (!block || !room || !description || !sourceReference) {
+    await recordSyncHealth("google_form", sourceReference || "missing-reference", true, "Missing required form fields");
     return NextResponse.json({ error: "Missing required form fields" }, { status: 400 });
   }
 
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (blockError || !blockRow) {
+    await recordSyncHealth("google_form", sourceReference, true, "Block lookup failed or block code was not recognised");
     return NextResponse.json({ error: "Unknown block" }, { status: 400 });
   }
 
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
     time: availabilityTimeValue,
   });
   if (!availability) {
+    await recordSyncHealth("google_form", sourceReference, true, "Missing or invalid room availability/access fields");
     return NextResponse.json({ error: "Missing or invalid room availability/access fields" }, { status: 400 });
   }
   const { accessPermission, availabilityDate, availabilityTime } = availability;
@@ -106,11 +111,13 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.from("complaints").insert(payload).select("id,complaint_no").single();
   if (error) {
-    if (error.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
+    if (error.code === "23505") { await recordSyncHealth("google_form", sourceReference, false, "Submission already exists in the system"); return NextResponse.json({ ok: true, duplicate: true }); }
     console.error("Google Form webhook insert failed", error);
+    await recordSyncHealth("google_form", sourceReference, true, `Complaint could not be saved (code ${error.code || "unknown"})`);
     return NextResponse.json({ error: "Insert failed", code: error.code, message: error.message }, { status: 500 });
   }
 
+  await recordSyncHealth("google_form", sourceReference, false, "Complaint saved successfully");
   await sendTransactionalEmail(reporterEmail, complaintReceivedEmail({
     reporterName, complaintNo: data.complaint_no, roomNo: room, description,
     submittedAt: payload.submitted_at,
@@ -125,7 +132,7 @@ export async function POST(request: NextRequest) {
     const recipientIds = (admins || []).map((admin) => admin.id);
     if (recipientIds.length) {
       await sendPushNotifications({
-        recipientIds,
+        type: "complaint_created", recipientIds,
         title: "New maintenance complaint",
         body: `Room ${room}: ${description.slice(0, 110)}`,
         href: `/admin/complaints/${data.id}`,

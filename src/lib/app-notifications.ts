@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushNotifications } from "@/lib/push";
 
+import type { NotificationKey } from "@/lib/notification-preferences";
+
 export type AppNotificationType =
   | "complaint_created"
   | "job_assigned"
@@ -15,6 +17,7 @@ export type AppNotificationType =
   | "material_request";
 
 type NotificationInput = {
+  pushType?: NotificationKey;
   recipientIds: string[];
   type: AppNotificationType;
   title: string;
@@ -39,7 +42,7 @@ export async function createAppNotifications(input: NotificationInput) {
     })),
   );
   if (error) throw new Error(`Unable to create notification: ${error.message}`);
-  await sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href });
+  await sendPushNotifications({ type: input.pushType || input.type, recipientIds, title: input.title, body: input.body, href: input.href });
 }
 
 export async function notifyActiveAdmins(input: Omit<NotificationInput, "recipientIds">) {

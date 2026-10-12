@@ -1,0 +1,13 @@
+# Per-employee phone notification controls and sync health
+
+Review branch based on 8774643. No production application merge is included.
+
+Admin Settings now selects any active employee and saves a master phone switch plus independent event switches. Defaults preserve original delivery. Admin/Operation/Housekeeping task assignment and completion, recurring reminders, material decisions, and integration failure/recovery switches are separate. Preferences filter only intended phone recipients; bell rows, emails, staff ownership and original recipients are retained. All event types are shown, with a note that a type applies only when the employee is an intended recipient.
+
+The additive migration adds phone_notification_preferences and integration_sync_health with RLS. Settings writes require an active Admin through the existing is_admin helper and record updated_by/time. Service-only record_integration_sync creates bell records and atomically deduplicates transitions by source and scope. Outbound inventory scopes are per item; inbound inventory scopes are per batch stream; form scopes are source references. A different item succeeding does not recover an unrelated failed item.
+
+Authenticated Google Form validation/insert failures and inbound/outbound Inventory failures produce failure alerts; a later successful retry of the same scope produces recovery alerts. Messages contain codes, time in Malaysia, and concise reasons, without secrets or complaint text. Unauthenticated requests are rejected without alerts. Form submissions which never reach the webhook, upstream Apps Script execution failures, total database unavailability and phone delivery failures cannot be detected/reported reliably by this server-side change. No upstream watchdog or automatic sync retry was added. VAPID keys and an allowed device subscription remain necessary.
+
+Migration was applied additively to the existing project to make preview Settings usable; existing profiles, tasks, subscriptions, stock and rules were not rewritten. Hosted checks confirmed both tables have RLS and ordinary authenticated users cannot execute the integration transition function. Security advisor did not report findings mentioning the new objects; existing unrelated advisor findings remain.
+
+Validation: production build, TypeScript and ESLint passed (four pre-existing image warnings). Tests verify push recipient filtering, master switch, independent categories, employee switching, defaults, SQL transition deduplication, scope-specific recovery and Admin-only preferences. SQL execution tests use isolated PGlite fixtures, never production stock or complaints. Actual subscribed-device delivery and signed-in hosted UI checks remain pending.
