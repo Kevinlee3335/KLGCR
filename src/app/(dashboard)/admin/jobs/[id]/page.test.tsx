@@ -58,10 +58,12 @@ const job = {
 };
 
 const queries = new Map<string, ReturnType<typeof query>>();
+const storage = vi.hoisted(() => ({ sign: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     from: vi.fn((table: string) => queries.get(table)),
+    storage: { from: () => ({ createSignedUrls: storage.sign }) },
   }),
 }));
 
@@ -70,6 +72,7 @@ import AdminJobDetail from "./page";
 describe("Admin Job Detail", () => {
   beforeEach(() => {
     queries.clear();
+    storage.sign.mockReset();
     queries.set("maintenance_jobs", query({ data: job, error: null }));
     queries.set("appointments", query({ data: [], error: { message: "relationship unavailable" } }));
     queries.set("job_status_history", query({ data: null, error: { message: "history unavailable" } }));
@@ -108,5 +111,38 @@ describe("Admin Job Detail", () => {
     expect(materialsSelect).toContain("material_requests_issued_by_fkey");
     expect(materialsSelect).toContain("material_request_items_request_id_fkey");
     expect(materialsSelect).toContain("material_request_items_inventory_item_id_fkey");
+  });
+
+  it("keeps completion evidence attached to the timeline in original order", async () => {
+    queries.set("maintenance_jobs",query({data:{...job,status:"completed",completed_at:"2026-10-12T03:00:00Z"},error:null}));
+    queries.set("maintenance_job_photos",query({data:[
+      {id:"photo-1",storage_path:"first.jpg",created_at:"2026-10-12T02:59:00Z"},
+      {id:"photo-2",storage_path:"second.jpg",created_at:"2026-10-12T02:59:30Z"},
+    ],error:null}));
+    storage.sign.mockResolvedValue({data:[
+      {path:"second.jpg",signedUrl:"https://evidence.example/second.jpg",error:null},
+      {path:"first.jpg",signedUrl:"https://evidence.example/first.jpg",error:null},
+    ],error:null});
+    const html=renderToStaticMarkup(await AdminJobDetail({params:Promise.resolve({id:job.id})}));
+    expect(html).toContain("Completed");
+    expect(html.indexOf('href="https://evidence.example/first.jpg"')).toBeGreaterThan(-1);
+    expect(html.indexOf('href="https://evidence.example/first.jpg"')).toBeLessThan(html.indexOf('href="https://evidence.example/second.jpg"'));
+    expect(html).not.toContain("Some completion photos could not be loaded");
+  });
+
+  it("reports a missing photo without hiding the job or its valid evidence", async () => {
+    queries.set("maintenance_jobs",query({data:{...job,status:"completed",completed_at:"2026-10-12T03:00:00Z"},error:null}));
+    queries.set("maintenance_job_photos",query({data:[
+      {id:"photo-1",storage_path:"missing.jpg",created_at:"2026-10-12T02:59:00Z"},
+      {id:"photo-2",storage_path:"valid.jpg",created_at:"2026-10-12T02:59:30Z"},
+    ],error:null}));
+    storage.sign.mockResolvedValue({data:[
+      {path:"missing.jpg",signedUrl:null,error:"not found"},
+      {path:"valid.jpg",signedUrl:"https://evidence.example/valid.jpg",error:null},
+    ],error:null});
+    const html=renderToStaticMarkup(await AdminJobDetail({params:Promise.resolve({id:job.id})}));
+    expect(html).toContain(job.job_no);
+    expect(html).toContain("Some completion photos could not be loaded");
+    expect(html).toContain('href="https://evidence.example/valid.jpg"');
   });
 });

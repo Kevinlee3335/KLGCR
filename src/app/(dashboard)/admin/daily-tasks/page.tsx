@@ -1,3 +1,4 @@
+import { signEvidencePhotos } from "@/lib/evidence-urls";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DailyTaskFilters } from "@/components/daily-task-filters";
 import { taskSearchFilter, taskFilterDate } from "@/lib/daily-task-filters";
@@ -88,10 +89,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   const { data: taskPhotos } = taskIds.length
     ? await db.from("daily_task_photos").select("id,task_id,storage_path,created_at").in("task_id", taskIds).order("created_at")
     : { data: [] as any[] };
-  const signedTaskPhotos = await Promise.all((taskPhotos || []).map(async (photo: any) => ({
-    ...photo,
-    url: (await db.storage.from("checkout-evidence").createSignedUrl(photo.storage_path, 3600)).data?.signedUrl,
-  })));
+  const signedTaskPhotos = await signEvidencePhotos(db, "checkout-evidence", (taskPhotos || []) as {id:string;task_id:number;storage_path:string;created_at:string}[]);
   const taskPhotosByTaskId = new Map<number, typeof signedTaskPhotos>();
   for (const photo of signedTaskPhotos) {
     const existing = taskPhotosByTaskId.get(Number(photo.task_id)) || [];
@@ -133,7 +131,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
             <div className="section-head"><div><h3>{task.title}</h3><p className="subtle">Work date · {task.task_date}</p><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
               {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
             </div>
-            {photos.length > 0 && <section className="checkout-evidence"><h4>Completion photos</h4><div className="photo-grid">{photos.map((photo) => photo.url && <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt="Daily task completion evidence" /><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(photo.created_at))}</span></a>)}</div></section>}
+            {photos.length > 0 && <section className="checkout-evidence"><h4>Completion photos</h4><div className="photo-grid">{photos.map((photo) => photo.url && <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img loading="lazy" decoding="async" src={photo.url} alt="Daily task completion evidence" /><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(photo.created_at))}</span></a>)}</div></section>}
             <details><summary>Timeline</summary>{task.activity?.length ? <ol className="activity-timeline">{task.activity.map((entry: any) => <li key={entry.id}><div className="activity-marker" /><time><strong>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date(entry.created_at))}</strong><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(entry.created_at))}</span></time><div className="activity-content"><strong>{entry.action}</strong>{entry.actor?.full_name && <span className="activity-actor">{entry.actor.full_name}</span>}{entry.comment && <p>{entry.comment}</p>}</div></li>)}</ol> : <p className="subtle">No progress update yet.</p>}</details>
           </article>;
         })}
