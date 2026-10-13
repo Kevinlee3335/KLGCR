@@ -4,6 +4,5 @@
       "path": "/api/cron/daily-task-reminders",
       "schedule": "0 1 * * *"
     }
-  ],
-  "buildCommand": "npm run build"
+  ]
 }
