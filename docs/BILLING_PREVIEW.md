@@ -14,6 +14,10 @@ client bundles. Test fixtures are anonymized. No operational records were edited
 - Utilities: October 2026 initially bills the September sample usage; edit the
   current reading, optionally upload a photo, check it and save. All readings must
   be confirmed before generation. Shared physical meters stay linked.
+- Each meter has separate camera and gallery buttons (native rear camera on phones; webcam preview on desktop). A captured/uploaded
+  photo saves automatically BEFORE OCR. The suggested reading then saves with
+  confirmation false. An OCR failure leaves the saved photo and clears the old
+  current reading. Changing the month carries the confirmed photo forward.
 - Photo AI uses the existing Gemini Preview key and conservative AI budget ledger.
   If configuration/quota is unavailable, manual entry remains available. Live OCR
   has not been verified on this billing branch.
@@ -37,8 +41,11 @@ integration before release. No claim is made that the preview reaches a LAN
 printer. Only a subset of the 2026 holiday calendar is prefilled; new years and
 special announcements need review. This first integration does not yet include
 the original tool's complete renewal/archive forms or full photo edit auditing.
-The test invoice layout keeps the billing fields but is not pixel-identical to
-the original Excel / HTML templates. Original Python and HTML files are untouched.
+Utility invoice and statement layouts now use sanitized vector backgrounds
+exported directly from the supplied Excel files. Original lines, logo positions,
+fonts and static text are retained. Dynamic fields are filled at the source
+coordinates. Rental invoices follow the supplied HTML template. Photo sheets
+show previous/current photos and readings in the original four-column structure. Original Python and HTML files are untouched.
 
 ## Validation
 
@@ -55,3 +62,8 @@ the original Excel / HTML templates. Original Python and HTML files are untouche
   require subsequent verification. All initial test settings remain disabled.
 
 Official holiday reference: https://www.johor.gov.my/rakyat/cuti-umum-2
+
+Additional checks: camera/gallery controls, save-before-OCR, successful auto-save,
+OCR failure retaining the photo, and original print templates are covered by five
+additional tests (16 billing tests total). Camera hardware and live OCR still need
+an actual phone test.
