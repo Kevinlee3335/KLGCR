@@ -74,7 +74,20 @@ export async function POST(req: NextRequest) {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body,
         signal: AbortSignal.timeout(30000), cache: "no-store",
       });
-      if (!response.ok) return reply({ error: response.status === 429 ? "Gemini quota reached. Try later." : "Gemini request failed. Check API access and quota." }, response.status === 429 ? 429 : 502);
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({}));
+        const code = String(failure.error?.status ?? "UNKNOWN").replace(/[^A-Z_]/g, "").slice(0, 50);
+        const reason = String(failure.error?.details?.find((detail: { reason?: string }) => detail.reason)?.reason ?? "").replace(/[^A-Z_]/g, "").slice(0, 60);
+        state = `provider_${response.status}_${code}_${reason}`;
+        console.error("AI provider rejected request", { status: response.status, code, reason });
+        const error = reason === "API_KEY_INVALID" ? "The Gemini API key is invalid. An administrator needs to replace the Preview API key."
+          : response.status === 403 ? "Google denied access to Gemini. Check API key restrictions and whether the Gemini API is enabled."
+          : response.status === 404 ? "The configured Gemini model is unavailable for this API project."
+          : response.status === 429 ? "Google's Gemini quota is exhausted. Please wait for the quota to reset."
+          : response.status === 400 ? "Google rejected the Gemini configuration. Please check the API key and project settings."
+          : "Gemini is temporarily unavailable. Please try again later.";
+        return reply({ error, providerStatus: response.status, providerCode: code, providerReason: reason }, response.status === 429 ? 429 : 502);
+      }
       const json = await response.json();
       const usage = json.usageMetadata ?? {};
       tokens = { prompt: usage.promptTokenCount ?? 0, output: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0), total: usage.totalTokenCount ?? 0 };

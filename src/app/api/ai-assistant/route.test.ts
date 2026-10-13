@@ -28,5 +28,11 @@ describe("AI endpoint", () => {
   it("pauses when durable budget is exhausted", async () => { mocks.rpc.mockResolvedValue({ error: { message: "RM20 budget reached" } }); expect((await POST(request())).status).toBe(429); expect(mocks.fetch).not.toHaveBeenCalled(); });
   it("fails closed if data/ledger cannot be read", async () => { mocks.snapshot.mockRejectedValue(new Error("Unable to read inventory_items. No analysis was sent.")); expect((await POST(request())).status).toBe(503); expect(mocks.rpc).not.toHaveBeenCalled(); expect(mocks.fetch).not.toHaveBeenCalled(); });
   it("keeps reservation and records failure on Gemini timeout", async () => { mocks.fetch.mockRejectedValue(new Error("timeout")); expect((await POST(request())).status).toBe(502); expect(mocks.rpc).toHaveBeenCalledWith("klgcr_ai_finish", expect.objectContaining({ p_state: "failed" })); });
+  it("returns a safe actionable invalid-key error without exposing provider messages", async () => {
+    mocks.fetch.mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: { status: "INVALID_ARGUMENT", message: "secret provider text", details: [{ reason: "API_KEY_INVALID" }] } }) });
+    const result = await POST(request()); expect(result.status).toBe(502);
+    const data = await result.json(); expect(data.providerReason).toBe("API_KEY_INVALID"); expect(data.error).toContain("API key is invalid"); expect(JSON.stringify(data)).not.toContain("secret provider text");
+    expect(mocks.rpc).toHaveBeenCalledWith("klgcr_ai_finish", expect.objectContaining({ p_state: "provider_400_INVALID_ARGUMENT_API_KEY_INVALID" }));
+  });
   it("rejects oversized database context before billing", async () => { mocks.snapshot.mockResolvedValue({ sources: [{ table: "a".repeat(80001), records: [] }] }); expect((await POST(request())).status).toBe(413); expect(mocks.rpc).not.toHaveBeenCalled(); });
 });
