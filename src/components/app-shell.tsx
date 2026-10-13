@@ -1,4 +1,4 @@
-import { previewEnabled } from "@/lib/ai-assistant";
+import { assistantEnabled } from "@/lib/ai-assistant";
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
 import { NotificationBell } from "./notification-bell";
@@ -55,7 +55,7 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
     {groups.slice(0, 2).map(renderGroup)}
     <Link href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></Link>
     {groups.slice(2).map(renderGroup)}
-    {previewEnabled() && <Link href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></Link>}
+    {assistantEnabled() && <Link href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></Link>}
   </nav>;
 }
 

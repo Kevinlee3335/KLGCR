@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AI_MODEL, previewEnabled, requestSchema, systemInstruction } from "@/lib/ai-assistant";
+import { AI_MODEL, assistantEnabled, requestSchema, systemInstruction } from "@/lib/ai-assistant";
 import { readAiSnapshot } from "@/lib/ai-assistant-data";
 export const runtime = "nodejs";
 export const preferredRegion = "sin1";
 export const maxDuration = 60;
 const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
 async function authorize() {
-  if (!previewEnabled()) return { error: "AI Assistant is available only on its test branch.", status: 404 };
+  if (!assistantEnabled()) return { error: "AI Assistant is unavailable in this environment.", status: 404 };
   const profile = await getSessionProfile();
   if (!profile) return { error: "Please sign in.", status: 401 };
   if (!["admin", "management_viewer"].includes(profile.role)) return { error: "Access denied.", status: 403 };

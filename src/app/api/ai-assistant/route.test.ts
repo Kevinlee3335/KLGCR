@@ -14,10 +14,11 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("AI endpoint", () => {
-  it("does not expose production API", async () => { vi.stubEnv("VERCEL_ENV", "production"); expect((await POST(request())).status).toBe(404); expect(mocks.profile).not.toHaveBeenCalled(); });
+  it("fails closed on an unapproved production branch", async () => { vi.stubEnv("VERCEL_ENV", "production"); expect((await POST(request())).status).toBe(404); expect(mocks.profile).not.toHaveBeenCalled(); });
   it.each(["cleaner", "maintenance_staff"])("denies %s before reading data or billing", async role => { mocks.profile.mockResolvedValue({ role }); expect((await POST(request())).status).toBe(403); expect(mocks.snapshot).not.toHaveBeenCalled(); expect(mocks.fetch).not.toHaveBeenCalled(); });
   it("requires login", async () => { mocks.profile.mockResolvedValue(null); expect((await GET()).status).toBe(401); });
   it("rejects cross-origin and malformed payloads", async () => { expect((await POST(request({}, "https://evil.example"))).status).toBe(403); expect((await POST(request({ question: " " }))).status).toBe(400); expect(mocks.snapshot).not.toHaveBeenCalled(); });
+  it("supports approved production with the same authorization checks", async () => { vi.stubEnv("VERCEL_ENV", "production"); vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main"); expect((await POST(request())).status).toBe(200); });
   it.each(["admin", "management_viewer"])("supports %s with current data and bounded history", async role => {
     mocks.profile.mockResolvedValue({ id: "user-id", role });
     const response = await POST(request({ question: "Follow up", history: [{ role: "user", text: "Earlier question" }, { role: "assistant", text: "Earlier answer" }] }));

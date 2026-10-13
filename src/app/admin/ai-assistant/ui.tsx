@@ -33,8 +33,8 @@ export default function AiAssistantClient() {
     finally { lock.current = false; setBusy(false); }
   }
   return <main className="ai-workspace">
-    <header className="ai-header"><div className="ai-brand"><div className="ai-icon"><Sparkles size={26}/></div><div><h1>KLGCR AI Assistant <span>V1.0 TEST</span></h1><p>Operations insights · Complaint / Jobs / Daily Task / Inventory / Material Usage</p></div></div><button className="ai-clear" onClick={() => { setMessages([]); setCoverage([]); setError(""); }} disabled={busy}><RotateCcw size={15}/> New chat</button></header>
-    <div className="ai-info"><span>Read-only · Admin & Management</span><span>{usage ? `Test allowance: ${Math.max(0, 40 - Math.ceil(Number(usage.reservedMyr) * 2))} requests remaining` : "Loading budget…"}</span></div>
+    <header className="ai-header"><div className="ai-brand"><div className="ai-icon"><Sparkles size={26}/></div><div><h1>KLGCR AI Assistant <span>V1.0</span></h1><p>Operations insights · Complaint / Jobs / Daily Task / Inventory / Material Usage</p></div></div><button className="ai-clear" onClick={() => { setMessages([]); setCoverage([]); setError(""); }} disabled={busy}><RotateCcw size={15}/> New chat</button></header>
+    <div className="ai-info"><span>Read-only · Admin & Management</span><span>{usage ? `Safety allowance: ${Math.max(0, 40 - Math.ceil(Number(usage.reservedMyr) * 2))} requests remaining` : "Loading budget…"}</span></div>
     <p className="ai-budget-note">This counter is a safety limit, not a bill. It includes failed attempts. Provider billing depends on your Google API plan. Chats stay in this tab.</p>
     <section className="ai-conversation" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
       {!messages.length && <div className="ai-welcome"><Bot size={42}/><h2>What needs your attention today?</h2><p>Ask about current work, stock levels or staff workload. Answers use records your account can read.</p><div className="ai-prompts">{prompts.map(prompt => <button disabled={busy} key={prompt} onClick={() => setQuestion(prompt)}>{prompt}<span>↗</span></button>)}</div></div>}
