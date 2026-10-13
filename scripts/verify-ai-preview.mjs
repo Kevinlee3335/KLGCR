@@ -17,14 +17,22 @@ try {
   const profiles = await db('profiles?select=id&role=eq.admin&is_active=eq.true&deleted_at=is.null&limit=1');
   if (!profiles[0]?.id) throw new Error('NO_ADMIN');
   reservation = await db('rpc/klgcr_ai_reserve', { p_user_id: profiles[0].id });
-  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+  const modelResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(15000) });
+  const modelData = await modelResponse.json();
+  const models = (modelData.models || []).filter(model => model.supportedGenerationMethods?.includes('generateContent')).map(model => model.name).filter(name => /^models\/gemini-[a-z0-9.-]+$/.test(name));
+  if (!models.length) { state = `probe_model_list_${modelResponse.status}`; throw new Error('NO_MODELS'); }
+  state = `available_models:${models.filter(name => name.includes('flash')).slice(0, 15).join(',')}`;
+  console.log(`AI_AVAILABLE_MODELS=${models.filter(name => name.includes('flash')).slice(0, 15).join(',')}`);
+  const chosen = models.find(name => /flash-lite$/.test(name)) || models.find(name => /flash$/.test(name));
+  if (!chosen) throw new Error('NO_FLASH_MODEL');
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${chosen}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply only OK in English.' }] }], generationConfig: { maxOutputTokens: 16, thinkingConfig: { thinkingBudget: 0 } } }), signal: AbortSignal.timeout(30000),
   });
   const json = await res.json(); usage = json.usageMetadata || {};
   const status = String(json.error?.status || 'UNKNOWN').replace(/[^A-Z_]/g, '').slice(0, 50);
   const reason = String(json.error?.details?.find(detail => detail.reason)?.reason || '').replace(/[^A-Z_]/g, '').slice(0, 60);
-  state = res.ok && json.candidates?.[0]?.content?.parts?.some(part => part.text?.includes('OK')) ? 'probe_ok' : `probe_${res.status}_${status}_${reason}`;
+  state = res.ok && json.candidates?.[0]?.content?.parts?.some(part => part.text?.includes('OK')) ? `probe_ok:${chosen}` : `probe_${res.status}_${status}_${reason}:${chosen}`;
   console.log(`AI_CONNECTION_CHECK=${state}`);
 } catch { console.log('AI_CONNECTION_CHECK=probe_transport_or_accounting_error'); }
 finally {
