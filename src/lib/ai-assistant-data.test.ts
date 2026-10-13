@@ -7,7 +7,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: (ta
 import { readAiSnapshot } from "./ai-assistant-data";
 beforeEach(() => { state.error = false; state.columns = []; });
 it("only selects explicit safe fields and declares partial coverage", async () => {
-  const snapshot = await readAiSnapshot("a421"); expect(snapshot.sources).toHaveLength(4); expect(snapshot.sources[0].records[0].complaint_no).toBe("CMP-X"); expect(snapshot.sources[0].truncated).toBe(true);
+  const snapshot = await readAiSnapshot("a421"); expect(snapshot.sources).toHaveLength(5); expect(snapshot.sources[0].records[0].complaint_no).toBe("CMP-X"); expect(snapshot.sources[0].truncated).toBe(true);
   expect(state.columns.join(",")).not.toMatch(/complainant|reporter|phone|email|contact|photo|notes|\*/);
 });
 it("does not substitute empty data for a failed source", async () => { state.error = true; await expect(readAiSnapshot("summary")).rejects.toThrow("Unable to read"); });
