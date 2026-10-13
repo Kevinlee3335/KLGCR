@@ -25,14 +25,24 @@ try {
   console.log(`AI_AVAILABLE_MODELS=${models.filter(name => name.includes('flash')).slice(0, 15).join(',')}`);
   const chosen = ['models/gemini-3.5-flash-lite', 'models/gemini-3.1-flash-lite', 'models/gemini-3.6-flash'].find(name => models.includes(name));
   if (!chosen) throw new Error('NO_FLASH_MODEL');
+  const [complaints, jobs, tasks, inventory] = await Promise.all([
+    db('complaints?select=status&limit=500'),
+    db('maintenance_jobs?select=status&limit=500'),
+    db('admin_daily_tasks?select=task_date,status&limit=500'),
+    db('inventory_items?select=balance_qty,reorder_level&is_active=eq.true&limit=1000'),
+  ]);
+  const totals = { complaints: complaints.length, maintenanceJobs: jobs.length, dailyTasks: tasks.length, inventoryItems: inventory.length, lowStock: inventory.filter(row => Number(row.balance_qty) <= Number(row.reorder_level)).length };
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${chosen}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply only OK in English.' }] }], generationConfig: { maxOutputTokens: 256 } }), signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: `Read-only verification. Return only the exact JSON object supplied here, with numeric values unchanged: ${JSON.stringify(totals)}` }] }], generationConfig: { maxOutputTokens: 256 } }), signal: AbortSignal.timeout(30000),
   });
   const json = await res.json(); usage = json.usageMetadata || {};
   const status = String(json.error?.status || 'UNKNOWN').replace(/[^A-Z_]/g, '').slice(0, 50);
   const reason = String(json.error?.details?.find(detail => detail.reason)?.reason || '').replace(/[^A-Z_]/g, '').slice(0, 60);
-  state = res.ok && json.candidates?.[0]?.content?.parts?.some(part => part.text?.includes('OK')) ? `probe_ok:${chosen}` : `probe_${res.status}_${status}_${reason}:${chosen}`;
+  const answer = json.candidates?.[0]?.content?.parts?.filter(part => !part.thought).map(part => part.text || '').join('') || '';
+  let matches = false;
+  try { const returned = JSON.parse(answer.match(/\{[\s\S]*\}/)?.[0] || 'null'); matches = returned && Object.entries(totals).every(([name, value]) => returned[name] === value); } catch {}
+  state = res.ok && matches ? `probe_data_ok:${chosen}` : `probe_${res.status}_${status}_${reason}:${chosen}`;
   console.log(`AI_CONNECTION_CHECK=${state}`);
 } catch { console.log('AI_CONNECTION_CHECK=probe_transport_or_accounting_error'); }
 finally {
