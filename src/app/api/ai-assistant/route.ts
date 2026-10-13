@@ -38,6 +38,13 @@ export async function POST(req: NextRequest) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) return reply({ error: "Gemini is not configured." }, 503);
     const snapshot = await readAiSnapshot(parsed.data.question);
+    // Keep accurate aggregates; fit details into a bounded context before adding history.
+    while (Buffer.byteLength(JSON.stringify(snapshot)) > 50000) {
+      const largest = [...snapshot.sources].sort((a, b) => JSON.stringify(b.records).length - JSON.stringify(a.records).length)[0];
+      if (!largest?.records.length) break;
+      largest.records.pop(); largest.detailCount = largest.records.length;
+      largest.detailScope = `Selected ${largest.records.length} details; summary covers all loaded records`;
+    }
     const payload = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [
@@ -46,7 +53,10 @@ export async function POST(req: NextRequest) {
       ],
       generationConfig: { maxOutputTokens: 2000, temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } },
     };
-    const body = JSON.stringify(payload);
+    let body = JSON.stringify(payload);
+    while (Buffer.byteLength(body) > 80000 && payload.contents.length > 1) {
+      payload.contents.shift(); body = JSON.stringify(payload);
+    }
     // Reject before charging/calling Gemini. UTF-8 bytes conservatively bound text tokens.
     if (Buffer.byteLength(body) > 80000) return reply({ error: "Analysis context is too large. No Gemini request was made." }, 413);
     const ledger = createAdminClient();
