@@ -12,7 +12,7 @@ describe("AI request boundaries", () => {
     vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main"); expect(previewEnabled()).toBe(false);
   });
   it("counts statuses without presenting absent statuses as records", () => {
-    expect(summarize([{ status: "assigned" }, { status: "completed" }, { status: "assigned" }])).toEqual({ loaded: 3, statuses: { assigned: 2, completed: 1 }, workload: {} });
+    expect(summarize([{ status: "assigned" }, { status: "completed" }, { status: "assigned" }])).toEqual({ loaded: 3, statuses: { assigned: 2, completed: 1 }, staffAccounts: [] });
   });
 });
 
@@ -36,4 +36,17 @@ it("computes monthly material totals/counts across days, excludes other months a
   expect(result.currentMonth.mostFrequentlyIssued?.itemCode).toBe("LED");
   expect(result.currentMonth.rankingsByUnit).toHaveLength(2);
   expect(result.currentMonth.rankingsByUnit.every(group => group.items.every(item => item.unit === group.unit))).toBe(true);
+});
+
+it("only flags balances at/below reorder and excludes the reported false positives", async () => {
+  const { inventoryStockSummary } = await import("./ai-assistant");
+  const summary = inventoryStockSummary([{ item_code: "HIGH11", balance_qty: 11, reorder_level: 0 }, { item_code: "HIGH99", balance_qty: 99, reorder_level: 1 }, { item_code: "ZERO", balance_qty: 0, reorder_level: 0 }, { item_code: "NEAR", balance_qty: 2, reorder_level: 2 }]);
+  expect(summary.lowStock).toBe(2); expect(summary.lowStockItems.map(row => row.item_code)).toEqual(["ZERO", "NEAR"]);
+  expect(summary.outOfStockCount).toBe(1); expect(summary.atOrBelowReorderCount).toBe(1);
+});
+it("keeps current and archived accounts separate by identity", () => {
+  const result = summarize([{ status: "completed", staff: { id: "current", full_name: "Abdullah", is_active: true } }, { status: "completed", staff: { id: "archived", full_name: "ABDULLAH", is_active: false } }, { status: "pending_material", staff: { id: "current", full_name: "Abdullah", is_active: true } }]);
+  expect(result.staffAccounts).toHaveLength(2);
+  expect(result.staffAccounts[0].statuses).toEqual({ completed: 1, pending_material: 1 });
+  expect(result.staffAccounts[1].isArchived).toBe(true);
 });

@@ -1,14 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
-import { summarize, complaintDateSummary, materialUsageSummary } from "./ai-assistant";
+import { summarize, complaintDateSummary, materialUsageSummary, inventoryStockSummary } from "./ai-assistant";
 // Only authenticated SELECT queries. Never invoke recurrence materialization or other operational RPCs.
 export async function readAiSnapshot(question: string) {
   const db = await createClient();
   const specs = [
     { table: "complaints", columns: "complaint_no,room_no,category,priority,status,submitted_at,assigned_at,block:blocks(code)", order: "submitted_at" },
-    { table: "maintenance_jobs", columns: "job_no,room_no,category,priority,status,work_state,assigned_at,started_at,completed_at,scheduled_for,block:blocks(code),staff:profiles!maintenance_jobs_assigned_to_fkey(full_name)", order: "assigned_at" },
-    { table: "admin_daily_tasks", columns: "id,title,task_date,status,task_category,created_at,started_at,completed_at,staff:profiles!admin_daily_tasks_assigned_to_fkey(full_name)", order: "task_date" },
+    { table: "maintenance_jobs", columns: "job_no,room_no,category,priority,status,work_state,assigned_at,started_at,completed_at,scheduled_for,block:blocks(code),staff:profiles!maintenance_jobs_assigned_to_fkey(id,full_name,is_active,deleted_at)", order: "assigned_at" },
+    { table: "admin_daily_tasks", columns: "id,title,task_date,status,task_category,created_at,started_at,completed_at,staff:profiles!admin_daily_tasks_assigned_to_fkey(id,full_name,is_active,deleted_at)", order: "task_date" },
     { table: "inventory_items", columns: "item_code,description,category,balance_qty,reorder_level,unit,updated_at,is_active", order: "item_code" },
-    { table: "inventory_issue_history", columns: "id,qty,issued_at,item:inventory_items(item_code,description,unit),job:maintenance_jobs(job_no,room_no),staff:profiles!inventory_issue_history_staff_id_fkey(full_name)", order: "issued_at" },
+    { table: "inventory_issue_history", columns: "id,qty,issued_at,item:inventory_items(item_code,description,unit),job:maintenance_jobs(job_no,room_no),staff:profiles!inventory_issue_history_staff_id_fkey(id,full_name,is_active,deleted_at)", order: "issued_at" },
   ];
   const sources = await Promise.all(specs.map(async spec => {
     let query = db.from(spec.table).select(spec.columns, { count: "exact" }).order(spec.order, { ascending: spec.table === "inventory_items" }).limit(spec.table === "inventory_items" ? 1000 : 500);
@@ -17,7 +17,7 @@ export async function readAiSnapshot(question: string) {
     if (error || count === null) throw new Error(`Unable to read ${spec.table}. No analysis was sent.`);
     const records = (data ?? []) as unknown as Record<string, unknown>[];
     const summary = spec.table === "inventory_items"
-      ? { loaded: records.length, lowStock: records.filter(row => Number(row.balance_qty) <= Number(row.reorder_level)).length }
+      ? inventoryStockSummary(records)
       : spec.table === "complaints" ? complaintDateSummary(records)
       : spec.table === "inventory_issue_history" ? materialUsageSummary(records)
       : summarize(records);

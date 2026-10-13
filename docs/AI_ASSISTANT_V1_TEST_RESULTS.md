@@ -61,3 +61,10 @@ Assistant output now renders headings, bold, emphasis, bullet lists and inline c
 ## Material monthly-total correction
 
 A second user-supplied live reply showed the model incorrectly adding day-level materials. SQL bounded to that reply’s exact snapshot (2026-10-13T07:51:41.954Z) verified FSL KLGCR-E00093=13 pcs/13 issue events, Bottle Trap KLGCR-PG0034=2 unit/2 events, Emergency Light KLGCR-E00050=2 unit/2 events. Added deterministic current-month per-item quantities, issue counts, most-frequently-issued item and quantity rankings separately per unit. The prompt requires copying these monthly values exactly; day summaries remain available for other periods. Added an explicitly labelled Malaysia-local capture time alongside the UTC ISO timestamp. No existing records or privileges are changed.
+
+
+## Low-stock and staff-account correction
+
+User reply falsely included balance 11/reorder 0 and balance 99/reorder 1. Added deterministic qualifying-item lists and out-of-stock/positive-balance reorder counts. Only qualifying rows are exposed in lowStockItems, with explicit sample size (30 out-of-stock + 20 at/below reorder maximum). General inventory records remain available for item-specific lookup but cannot be labelled low stock by the prompt.
+
+Database inspection confirmed Abdullah and ABDULLAH, and Faiz and FAIZ, are distinct profile IDs: current active accounts and deleted/inactive historical accounts. Counts now group by profile ID and include archived labels. No profiles or historical job assignments are rewritten, and identities are not silently merged. Regression tests cover both screenshot-reported inventory false positives and separate current/archived account counting.
