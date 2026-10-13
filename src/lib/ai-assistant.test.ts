@@ -26,3 +26,14 @@ it("sums issued quantities by date/item/unit without mixing quantities or balanc
   const row = { issued_at: "2026-10-01T01:00:00Z", item: { item_code: "P00003", description: "Pipe", unit: "pcs" }, balance_after: 99 };
   expect(materialUsageSummary([{ ...row, qty: "2.5" }, { ...row, qty: 1 }]).byDayItem[0]).toMatchObject({ quantityIssued: 3.5, issueCount: 2, unit: "pcs" });
 });
+it("computes monthly material totals/counts across days, excludes other months and ranks quantities per unit", async () => {
+  const { materialUsageSummary } = await import("./ai-assistant");
+  const rows = Array.from({ length: 13 }, (_, index) => ({ issued_at: `2026-10-${String(index+1).padStart(2,"0")}T01:00:00Z`, qty: 1, item: { item_code: "LED", unit: "pcs" } }));
+  rows.push({ issued_at: "2026-09-30T01:00:00Z", qty: 99, item: { item_code: "LED", unit: "pcs" } });
+  rows.push({ issued_at: "2026-10-03T01:00:00Z", qty: 20, item: { item_code: "PAINT", unit: "litre" } });
+  const result = materialUsageSummary(rows, new Date("2026-10-13T07:51:41Z"));
+  expect(result.currentMonth.items.find(item => item.itemCode === "LED")).toMatchObject({ quantityIssued: 13, issueCount: 13 });
+  expect(result.currentMonth.mostFrequentlyIssued?.itemCode).toBe("LED");
+  expect(result.currentMonth.rankingsByUnit).toHaveLength(2);
+  expect(result.currentMonth.rankingsByUnit.every(group => group.items.every(item => item.unit === group.unit))).toBe(true);
+});

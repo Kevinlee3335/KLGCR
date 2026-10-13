@@ -34,5 +34,6 @@ export async function readAiSnapshot(question: string) {
     const details = [...matching, ...records.filter(row => !matching.includes(row))].slice(0, 80);
     return { table: spec.table, visibleTotal: count, loaded: records.length, truncated: count > records.length, scope: spec.table === "inventory_items" ? "active items, first 1000 by item code" : "latest 500 records", summary, detailCount: Math.min(records.length, 80), detailScope: "First 80 of the loaded records; summary covers all loaded records", records: details };
   }));
-  return { capturedAt: new Date().toISOString(), timezone: "Asia/Kuala_Lumpur", sources };
+  const now = new Date();
+  return { capturedAt: now.toISOString(), capturedAtMalaysia: now.toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" }) + " MYT", timezone: "Asia/Kuala_Lumpur", sources };
 }

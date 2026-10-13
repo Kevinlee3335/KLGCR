@@ -56,3 +56,8 @@ A user-supplied live reply proved Gemini answers now reach the browser, but expo
 Added authenticated SELECT-only inventory_issue_history (52 hosted rows at verification), including issued date, quantity, item code/description/unit, job reference and staff. Day/item/unit aggregates separate issuance from actual consumption and do not mix measurement units. Verified Admin RLS reads for October material issuance: FSL 22W LED tube KLGCR-E00093 = 13 pcs across 13 issue entries. No privileges or business records were changed.
 
 Assistant output now renders headings, bold, emphasis, bullet lists and inline code as safe React elements, with model HTML remaining inert. UI/replies remain English. Twenty targeted tests passed, including date-zone boundaries, aggregate completeness beyond 80 detail rows, quantities and inert HTML; TypeScript and build passed. Existing four image warnings remain.
+
+
+## Material monthly-total correction
+
+A second user-supplied live reply showed the model incorrectly adding day-level materials. SQL bounded to that reply’s exact snapshot (2026-10-13T07:51:41.954Z) verified FSL KLGCR-E00093=13 pcs/13 issue events, Bottle Trap KLGCR-PG0034=2 unit/2 events, Emergency Light KLGCR-E00050=2 unit/2 events. Added deterministic current-month per-item quantities, issue counts, most-frequently-issued item and quantity rankings separately per unit. The prompt requires copying these monthly values exactly; day summaries remain available for other periods. Added an explicitly labelled Malaysia-local capture time alongside the UTC ISO timestamp. No existing records or privileges are changed.
