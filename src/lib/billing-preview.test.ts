@@ -1,0 +1,11 @@
+import fixture from "./billing-preview-fixture.json";
+import { describe,it,expect } from "vitest";
+import { defaultBillingConfig,configSchema,nextBillingDay,scheduleDecision,rentalLines,utilityLine,malaysiaClock,makeSnapshot } from "./billing-preview";
+const cfg=configSchema.parse({...defaultBillingConfig,...fixture});
+describe('billing preview',()=>{
+ it('skips Sunday, substitute holiday and consecutive holidays; permits Saturday',()=>{expect(nextBillingDay('2026-11',[])).toBe('2026-11-02');expect(nextBillingDay('2026-11',['2026-11-02'])).toBe('2026-11-03');expect(nextBillingDay('2026-11',['2026-11-02','2026-11-03'])).toBe('2026-11-04');expect(nextBillingDay('2026-08',[])).toBe('2026-08-01')});
+ it('requires reviewed holiday coverage and Malaysia execution time',()=>{const c={...cfg,enabled:true,holidays:['2026-11-02'],reviewedUntil:'2026-12-31'};expect(scheduleDecision({...c,reviewedUntil:''},{date:'2026-11-03',time:'09:00'}).status).toBe('calendar_review_required');expect(scheduleDecision(c,{date:'2026-11-02',time:'09:00'}).status).toBe('waiting');expect(scheduleDecision(c,{date:'2026-11-03',time:'08:59'}).status).toBe('waiting');expect(scheduleDecision(c,{date:'2026-11-03',time:'09:00'}).status).toBe('ready');expect(malaysiaClock(new Date('2026-11-03T01:00:00Z'))).toEqual({date:'2026-11-03',time:'09:00'})});
+ it('reproduces five rents and all ten source utility totals',()=>{expect(rentalLines('2026-11',cfg).reduce((s,l)=>s+l.amount,0)).toBe(5000);const expected=[107.7,684,1192.2,407.7,15.6,703.5,555.6,50129.3,44057.1,119.4];expect(cfg.utilityAccounts.map(a=>utilityLine(a,'2026-10').amount)).toEqual(expected)});
+ it('blocks unconfirmed, missing and backwards meter readings',()=>{const a=structuredClone(cfg.utilityAccounts[0]);a.meters[0].confirmed=false;expect(()=>utilityLine(a,'2026-10')).toThrow(/confirm/);a.meters[0].confirmed=true;a.meters[0].curr=1;expect(()=>utilityLine(a,'2026-10')).toThrow(/below/)});
+ it('preserves selected invoice date and prorates partial tenancy',()=>{const c=structuredClone(cfg);c.tenants=[{...c.tenants[0],s:'2026-11-16',rent:1000}];expect(rentalLines('2026-11',c)[0].amount).toBe(500);expect(makeSnapshot('rental','2026-11','2026-11-03',cfg,'Kevin').issueDate).toBe('2026-11-03')});
+});

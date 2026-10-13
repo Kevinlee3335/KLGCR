@@ -1,3 +1,4 @@
+import { billingPreviewEnabled } from "@/lib/billing-preview";
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
 import { NotificationBell } from "./notification-bell";
@@ -53,6 +54,7 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
     <Link href="/admin" aria-current={active("Dashboard") ? "page" : undefined}><Gauge size={18}/><span>Dashboard</span></Link>
     {groups.slice(0, 2).map(renderGroup)}
     <Link href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></Link>
+    {billingPreviewEnabled() && <Link href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></Link>}
     {groups.slice(2).map(renderGroup)}
   </nav>;
 }
