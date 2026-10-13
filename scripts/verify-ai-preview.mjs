@@ -2,7 +2,7 @@
 if (process.env.VERCEL_ENV !== 'preview' || process.env.VERCEL_GIT_COMMIT_REF !== 'feature/ai-assistant-v1') {
   console.log('AI_PROBE_SKIPPED_OUTSIDE_TEST_BRANCH'); process.exit(0);
 }
-const url = process.env.NEXT_PUBLIC_SB_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SB_URL;
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const key = process.env.GEMINI_API_KEY;
 if (!url || !service || !key) { console.log('AI_PROBE_MISSING_CONFIGURATION'); process.exit(0); }
