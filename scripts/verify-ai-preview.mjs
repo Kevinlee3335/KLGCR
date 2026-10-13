@@ -23,11 +23,11 @@ try {
   if (!models.length) { state = `probe_model_list_${modelResponse.status}`; throw new Error('NO_MODELS'); }
   state = `available_models:${models.filter(name => name.includes('flash')).slice(0, 15).join(',')}`;
   console.log(`AI_AVAILABLE_MODELS=${models.filter(name => name.includes('flash')).slice(0, 15).join(',')}`);
-  const chosen = models.find(name => /flash-lite$/.test(name)) || models.find(name => /flash$/.test(name));
+  const chosen = ['models/gemini-3.5-flash-lite', 'models/gemini-3.1-flash-lite', 'models/gemini-3.6-flash'].find(name => models.includes(name));
   if (!chosen) throw new Error('NO_FLASH_MODEL');
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${chosen}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply only OK in English.' }] }], generationConfig: { maxOutputTokens: 16, thinkingConfig: { thinkingBudget: 0 } } }), signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply only OK in English.' }] }], generationConfig: { maxOutputTokens: 256 } }), signal: AbortSignal.timeout(30000),
   });
   const json = await res.json(); usage = json.usageMetadata || {};
   const status = String(json.error?.status || 'UNKNOWN').replace(/[^A-Z_]/g, '').slice(0, 50);

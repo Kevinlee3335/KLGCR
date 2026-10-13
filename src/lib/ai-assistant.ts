@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const AI_MODEL = "gemini-2.5-flash";
+export const AI_MODEL = "gemini-3.5-flash-lite";
 export const requestSchema = z.object({
   question: z.string().trim().min(1).max(1500),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(6000) })).max(8).default([]),
