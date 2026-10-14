@@ -29,6 +29,9 @@ describe('camera upload and automatic meter reading',()=>{
    const saved=configSchema.parse(requests[0].body.config).utilityAccounts[0].meters[0];expect(saved.photo).toBe('data:image/jpeg;base64,YWJj');expect(saved.curr).toBeNull();expect(saved.confirmed).toBe(false);
    const result=configSchema.parse(requests[2].body.config).utilityAccounts[0].meters[0];expect(result.curr).toBe(71000);expect(result.confirmed).toBe(false);
  });
+ it('saves a manually shortened reading and confirms the entered integer for invoices',async()=>{
+   await open();const input=screen.getAllByLabelText('Current (whole digits only)')[0];fireEvent.change(input,{target:{value:'710009'}});fireEvent.change(input,{target:{value:'71000'}});expect(input).toHaveValue('71000');fireEvent.click(screen.getAllByRole('button',{name:'Save & confirm reading'})[0]);await screen.findByText(/Corrected reading saved and confirmed/);const meter=configSchema.parse(requests[0].body.config).utilityAccounts[0].meters[0];expect(meter.curr).toBe(71000);expect(meter.confirmed).toBe(true);
+ });
  it('retains the saved photo when OCR fails, without retaining an old reading',async()=>{
    failOcr=true;const camera=await open();fireEvent.change(camera,{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
    await screen.findByText(/Photo is saved.*AI unavailable/);
