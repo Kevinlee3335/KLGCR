@@ -1,4 +1,5 @@
 "use client";
+import { applyNewMeterPhoto } from "@/lib/billing-meter-photo";
 import { buildBillingPrintHtml } from "@/lib/billing-print-template";
 import { BillingRegistry } from "./billing-registry";
 import { MeterPhotoControl } from "./meter-photo-control";
@@ -34,7 +35,7 @@ const currentState=state;if(!currentState)throw Error("Billing is not loaded");
 if(!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error('Choose a JPG, PNG or WebP photo');
 const bitmap=await createImageBitmap(file);const scale=Math.min(1,900/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);canvas.getContext('2d')!.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();let quality=.65;let data=canvas.toDataURL('image/jpeg',quality);while(data.length>64000&&quality>.25){quality-=.1;data=canvas.toDataURL('image/jpeg',quality)}if(data.length>64000)throw Error('Photo is too large. Take a closer photo of the meter digits.');
 setMessage('Saving meter photo…');
-const updated={...config,utilityAccounts:config.utilityAccounts.map(a=>({...a,meters:a.meters.map(m=>m.id===id?{...m,photo:data,currentDate:state.clock.date,curr:null,confirmed:false}:m)}))};
+const updated={...config,utilityAccounts:config.utilityAccounts.map(a=>({...a,meters:a.meters.map(m=>m.id===id?applyNewMeterPhoto({...m,currentDate:m.currentDate||config.utilityPeriod+"-01"},data,state.clock.date):m)}))};
 const saved=await api({action:'save',config:updated,revision:currentState.revision});
 const next={...currentState,config:updated,revision:saved.revision};setState(next);
 await readPhoto(next,id);
