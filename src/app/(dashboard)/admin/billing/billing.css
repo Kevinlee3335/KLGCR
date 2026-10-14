@@ -18,3 +18,9 @@
 .billing-toolbar>button{min-height:44px;font-size:13px;box-sizing:border-box}
 .billing-fields select{width:100%;min-height:40px;box-sizing:border-box}
 @media(max-width:850px){.billing-account-heading{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-account-heading h3{grid-column:1/-1}.billing-account-heading>button{white-space:normal}}
+
+.billing-module .billing-preview{position:fixed;inset:20px;z-index:1000;margin:0;padding:18px;max-width:none;overflow:auto;box-shadow:0 0 0 100vmax rgba(0,0,0,.65);background:#fff}
+.billing-preview>.billing-toolbar{position:sticky;top:-18px;z-index:1;background:#fff;margin:-18px -18px 12px;padding:16px 18px;border-bottom:1px solid #e5decc}
+.billing-preview>.billing-toolbar h3{margin:0;margin-right:auto}
+.billing-preview .billing-invoice-frame{height:calc(100dvh - 190px);min-height:400px}
+@media(max-width:700px){.billing-module .billing-preview{inset:8px;padding:12px}.billing-preview>.billing-toolbar{top:-12px;margin:-12px -12px 12px;padding:12px}.billing-preview>.billing-toolbar h3{flex-basis:100%;font-size:15px}.billing-preview .billing-invoice-frame{height:calc(100dvh - 200px)}}
