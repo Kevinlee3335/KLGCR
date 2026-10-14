@@ -3815,3 +3815,13 @@ button.calendar-item {
 }
 
 .calendar-compact .calendar-item strong { display: inline; font-size: 10px; }
+
+/* +more opens the selected-day details on desktop as well as mobile. */
+.calendar-compact .calendar-day-details { display: block; border-top: 1px solid var(--line); background: #fcfbf8; }
+.calendar-compact .calendar-day-details > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; }
+.calendar-compact .calendar-day-details h3 { margin: 3px 0 0; font-size: 1rem; }
+.calendar-compact .calendar-day-detail-list { display: grid; gap: 8px; padding: 0 18px 18px; }
+.calendar-compact .calendar-day-detail { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; align-items: start; padding: 11px 12px; border-radius: 10px; background: #e7efff; color: #254d93; }
+.calendar-compact .calendar-day-detail div span, .calendar-compact .calendar-day-detail div small { display: block; overflow-wrap: anywhere; }
+.calendar-compact .calendar-day-detail div span { font-weight: 700; }
+.calendar-compact .calendar-day-detail div small { margin-top: 4px; }
