@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { notifyDailyTaskAssigned, notifyDailyTaskCompleted } from "@/lib/daily-task-notifications";
-import { dailyTaskCategories, type DailyTaskCategory } from "@/lib/daily-tasks";
+import { resolveDailyTaskCategory } from "@/lib/daily-tasks";
 
 function redirect(request:Request,date:string,error?:string,category?:string){
   const url=new URL("/admin/daily-tasks",request.url);
@@ -42,10 +42,11 @@ export async function POST(request: Request) {
     if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date))return redirect(request,date,"invalid daily task",category);
     const assignedTo=String(form.get("assignedTo")||"");
     const frequency=String(form.get("frequency")||"once");
-    const {data:employee}=await db.from("profiles").select("id,daily_task_category").eq("id",assignedTo).eq("is_active",true).is("deleted_at",null).maybeSingle();
-    const taskCategory=String(employee?.daily_task_category||"") as DailyTaskCategory;
+    const {data:employee,error:employeeError}=await db.from("profiles").select("id,daily_task_category,role,full_name").eq("id",assignedTo).eq("is_active",true).is("deleted_at",null).maybeSingle();
+    if(employeeError)return redirect(request,date,"Unable to load employee details. Please try again.",category);
+    const taskCategory=employee ? resolveDailyTaskCategory(employee) : null;
     if(!employee || !["once","weekly","biweekly","monthly"].includes(frequency))return redirect(request,date,"Choose an active employee and valid recurrence",category);
-    if(!dailyTaskCategories.includes(taskCategory))return redirect(request,date,"The selected employee does not have a Daily Task category.",category);
+    if(!taskCategory)return redirect(request,date,"The selected employee does not have a Daily Task category.",category);
     if(frequency!=="once"){
       const monthlyDate=String(form.get("monthlyDate")||"");
       const day=frequency==="monthly" ? Number(monthlyDate.slice(8,10)) : Number(form.get("dayNumber"));
