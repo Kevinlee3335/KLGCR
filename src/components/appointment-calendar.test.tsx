@@ -9,3 +9,19 @@ it("shows one grouped event in the month and all recipient names on selecting th
   expect(screen.getByText("Meeting · Kevin, Fikri, Nouril, Syafiqa, Faiz")).toBeInTheDocument();
   expect(screen.getByText("1 item")).toBeInTheDocument();
 });
+
+it("limits compact cells to three, shows all five below, and filters by category without dropping records",()=>{
+  const items=Array.from({length:5},(_,i)=>({id:`event-${i}`,date:"2026-10-16",time:"09:00",label:`Task ${i+1}`,detail:`Employee ${i+1}`,href:i===0?"/admin/jobs/job-1":null,kind:i===0?"maintenance" as const:"daily_task" as const}));
+  const {container}=render(<AppointmentCalendar month="2026-10" items={items} compact />);
+  expect(container.querySelectorAll(".calendar-item")).toHaveLength(3);
+  expect(screen.getByRole("button",{name:/Show all 5 items/})).toHaveTextContent("+2 more");
+  fireEvent.click(screen.getByRole("button",{name:/Show all 5 items/}));
+  expect(container.querySelectorAll(".calendar-day-detail")).toHaveLength(5);
+  expect(screen.getByRole("link",{name:/Task 1 Employee 1/})).toHaveAttribute("href","/admin/jobs/job-1");
+  fireEvent.click(screen.getByRole("button",{name:"Daily Task"}));
+  expect(screen.getByRole("button",{name:"Daily Task"})).toHaveAttribute("aria-pressed","true");
+  expect(container.querySelectorAll(".calendar-item")).toHaveLength(3);
+  expect(container.querySelectorAll(".calendar-day-detail")).toHaveLength(4);
+  fireEvent.click(screen.getByRole("button",{name:"All"}));
+  expect(container.querySelectorAll(".calendar-day-detail")).toHaveLength(5);
+});

@@ -89,8 +89,8 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const recurringTasks = (recurrenceResult.data || []) as unknown as RecurringTask[];
   const dailyTasks = (dailyTaskResult.data || []) as unknown as DailyTask[];
   const items: CalendarItem[] = [
-    ...appointments.map((a) => ({ id: `appointment-${a.id}`, date: a.appointment_date, time: a.appointment_time, label: `Block ${a.complaint?.block?.code || "–"} · ${a.complaint?.room_no || "–"}`, detail: `${a.staff?.full_name || "Unassigned"} · ${a.job?.job_no || a.complaint?.category || "Appointment"}`, href: a.job_id ? `/admin/jobs/${a.job_id}` : null, tone: `calendar-${a.status}` })),
-    ...jobs.map((job) => ({ id: `job-${job.id}`, date: job.scheduled_for, time: "09:00", label: `Block ${job.block?.code || "–"} · ${job.room_no}`, detail: `${job.assignee?.full_name || "Unassigned"} · ${job.job_no}`, href: `/admin/jobs/${job.id}`, tone: "calendar-work" })),
+    ...appointments.map((a) => ({ id: `appointment-${a.id}`, date: a.appointment_date, time: a.appointment_time, label: `Block ${a.complaint?.block?.code || "–"} · ${a.complaint?.room_no || "–"}`, detail: `${a.staff?.full_name || "Unassigned"} · ${a.job?.job_no || a.complaint?.category || "Appointment"}`, href: a.job_id ? `/admin/jobs/${a.job_id}` : null, kind: "maintenance" as const, tone: `calendar-${a.status}` })),
+    ...jobs.map((job) => ({ id: `job-${job.id}`, date: job.scheduled_for, time: "09:00", label: `Block ${job.block?.code || "–"} · ${job.room_no}`, detail: `${job.assignee?.full_name || "Unassigned"} · ${job.job_no}`, href: `/admin/jobs/${job.id}`, kind: "maintenance" as const, tone: "calendar-work" })),
     ...eventGroups.flatMap(group => {
       const event=group.event;
       const recipients=calendarRecipients(group.members);
@@ -100,24 +100,24 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
         id:`event-${group.key}-${date}`,date,time:index===0?malaysiaTime(event.starts_at):"All day",
         label:event.event_type==="leave"&&event.subject ? `${event.subject.full_name} · ${event.title}` : event.title,
         detail:`${prefix}${group.members.length>1 ? `${group.members.length} employees` : recipients}${notes}`,
-        expandedDetail:`${prefix}${recipients}${notes}`,href:null,tone:`calendar-${event.event_type}`,
+        expandedDetail:`${prefix}${recipients}${notes}`,href:null,kind:(event.event_type === "meeting" ? "meeting" : event.event_type === "leave" ? "leave" : "other") as CalendarItem["kind"],tone:`calendar-${event.event_type}`,
       }));
     }),
-    ...recurringTasks.flatMap(task=>recurringDates(task,start,end).map(date=>({id:`daily-${task.id}-${date}`,date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${date}`,tone:"calendar-work"}))),
-    ...dailyTasks.filter(task=>!task.recurrence_id).map(task=>({id:`daily-once-${task.id}`,date:task.task_date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task · ${String(task.status).replaceAll("_"," ")}${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${task.task_date}`,tone:"calendar-work"})),
+    ...recurringTasks.flatMap(task=>recurringDates(task,start,end).map(date=>({id:`daily-${task.id}-${date}`,date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${date}`,kind:"daily_task" as const,tone:"calendar-work"}))),
+    ...dailyTasks.filter(task=>!task.recurrence_id).map(task=>({id:`daily-once-${task.id}`,date:task.task_date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task · ${String(task.status).replaceAll("_"," ")}${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${task.task_date}`,kind:"daily_task" as const,tone:"calendar-work"})),
   ];
   const loadError = appointmentResult.error || jobResult.error || eventResult.error || recurrenceResult.error || dailyTaskResult.error;
 
   return <AppShell profile={profile} title="Calendar">
-    {profile.role === "admin" && <section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><CalendarEventForm staff={(staffResult.data || []).map((staff) => ({ id: staff.id, full_name: staff.full_name }))} action={createCalendarEvent}/></section>}
+    {profile.role === "admin" && <details className="calendar-tools"><summary>Add calendar item</summary><section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><CalendarEventForm staff={(staffResult.data || []).map((staff) => ({ id: staff.id, full_name: staff.full_name }))} action={createCalendarEvent}/></section></details>}
     {query.error && <p className="error">{query.error}</p>}
-    {profile.role === "admin" && <section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{savedEventGroups.length} items</span></header>{savedEventGroups.length ? <div className="calendar-settings-list">{savedEventGroups.map(group => {
+    {profile.role === "admin" && <details className="calendar-tools"><summary>Calendar Settings ({savedEventGroups.length})</summary><section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{savedEventGroups.length} items</span></header>{savedEventGroups.length ? <div className="calendar-settings-list">{savedEventGroups.map(group => {
       const event=group.event;
       const deleteForm=(member: CalendarEvent)=><form action={deleteCalendarEvent}><input type="hidden" name="event_id" value={member.id}/><button className="delete-calendar-event" type="submit">Delete</button></form>;
       return <article key={group.key} className="calendar-setting-row"><div><strong>{event.title}</strong><span>{eventLabels[event.event_type]} · {malaysiaDate(event.starts_at)}{event.ends_at && malaysiaDate(event.ends_at) !== malaysiaDate(event.starts_at) ? ` to ${malaysiaDate(event.ends_at)}` : ""}</span><small>Publish: {group.members.length>1 ? `${group.members.length} employees` : calendarRecipients(group.members)}{event.subject ? ` · On leave: ${event.subject.full_name}` : ""}{event.notes ? ` · ${event.notes}` : ""}</small>
         {group.members.length>1 && <details><summary>View employees ({group.members.length})</summary>{group.members.map(member=><div className="list-row" key={member.id}><span>{member.staff?.full_name || "Selected staff"}</span>{deleteForm(member)}</div>)}</details>}
       </div>{group.members.length===1 && deleteForm(event)}</article>;
-    })}</div> : <p className="subtle">No calendar settings yet.</p>}</section>}
-    {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items}/>}
+    })}</div> : <p className="subtle">No calendar settings yet.</p>}</section></details>}
+    {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items} compact/>}
   </AppShell>;
 }

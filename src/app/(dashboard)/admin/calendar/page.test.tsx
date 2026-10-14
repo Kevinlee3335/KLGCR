@@ -21,7 +21,9 @@ it("groups calendar and saved settings, retaining ten independent employee event
   expect(screen.getByText("View employees (10)")).toBeInTheDocument();
   const ids=Array.from(container.querySelectorAll<HTMLInputElement>('input[name="event_id"]')).map(input=>input.value);
   expect(ids).toEqual(mocks.events.map(event=>event.id));
-  expect(container.querySelectorAll("details")).toHaveLength(1);
+  expect(container.querySelectorAll("details")).toHaveLength(3);
+  expect(screen.getByText("Add calendar item").closest("details")?.open).toBe(false);
+  expect(screen.getByText("Calendar Settings (1)").closest("details")?.open).toBe(false);
   expect(container.querySelector("details")?.open).toBe(false);
   const props=mocks.calendar.mock.calls[0][0];
   expect(props.items).toHaveLength(1);
