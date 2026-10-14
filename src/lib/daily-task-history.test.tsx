@@ -6,7 +6,7 @@ vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: 
 vi.mock("@/components/daily-task-form", () => ({ DailyTaskForm: () => null }));
 vi.mock("@/components/admin-daily-task-controls", () => ({ AdminDailyTaskControls: () => null }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
-  rpc: async () => ({ error: null }),
+  rpc: async (name: string, args: unknown) => { mocks.calls.push({ table: "rpc", method: name, args: [args] }); return { error: null }; },
   from: (table: string) => {
     const chain: Record<string, unknown> = {};
     for (const method of ["select", "eq", "in", "is", "not", "or", "order", "limit", "gte", "lte"]) chain[method] = (...args: unknown[]) => { mocks.calls.push({ table, method, args }); return chain; };
@@ -27,6 +27,7 @@ describe("Daily Task history visibility", () => {
   });
   it("honors an explicit historical date", async () => {
     renderToStaticMarkup(await AdminTasks({ searchParams: Promise.resolve({ category: "admin", date: "2026-10-08" }) }));
+    expect(mocks.calls[0]).toEqual({ table: "rpc", method: "materialize_recurring_tasks", args: [{ p_date: "2026-10-08" }] });
     expect(dateCalls()[0].args).toEqual(["task_date", "2026-10-08"]);
   });
   it("reports query errors instead of saying there are no tasks", async () => {

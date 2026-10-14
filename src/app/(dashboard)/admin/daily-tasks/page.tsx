@@ -48,8 +48,11 @@ function selectedDailyTaskStatuses(filters: Record<string, string | undefined>) 
 export default async function DailyTasksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const filters = await searchParams;
-  const date = filters.date || myDate();
+  const date = taskFilterDate(filters.date) || myDate();
   const db: any = await createClient();
+  const { error: materializeError } = profile.role === "admin"
+    ? await db.rpc("materialize_recurring_tasks", { p_date: date })
+    : { error: null };
   const category = dailyTaskCategories.includes(filters.category as DailyTaskCategory) ? filters.category as DailyTaskCategory : undefined;
   const categoryLabel = category ? dailyTaskCategoryLabel[category] : "Daily Tasks";
   const selectedStatuses = selectedDailyTaskStatuses(filters);
@@ -75,7 +78,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   if (selectedStatuses.length) taskQuery = taskQuery.in("status", selectedStatuses);
   taskQuery = taskQuery.order(category ? (sortBy === "work_date" ? "task_date" : sortBy) : "created_at", { ascending: category ? ascending : true });
 
-  const [{ data: jobs, error }, { data: adminTasks, error: taskError }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
+  const [{ data: jobs, error }, { data: adminTasks, error: taskQueryError }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
     db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status", "in", '("completed","cancelled")').order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
     taskQuery,
     db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
@@ -83,6 +86,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     recurrenceQuery,
   ]);
 
+  const taskError = materializeError || taskQueryError;
   const isAdmin = profile.role === "admin";
   const dailyTaskRows = (adminTasks ?? []) as any[];
   const taskIds = dailyTaskRows.map((task) => Number(task.id)).filter(Number.isSafeInteger);

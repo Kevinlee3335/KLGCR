@@ -12,7 +12,7 @@ type AppointmentRow = { id: string; job_id: string | null; appointment_date: str
 type JobRow = { id: string; job_no: string; room_no: string; category: string; scheduled_for: string; status: string; block: { code: string } | null; assignee: { full_name: string } | null; };
 type CalendarEvent = GroupableCalendarEvent & { id: string; title: string; notes: string | null; starts_at: string; ends_at: string | null; event_type: "work" | "leave" | "no_leave" | "meeting" | "other"; audience: "individual" | "all_staff"; staff: { full_name: string } | null; subject: { full_name: string } | null; };
 type RecurringTask = { id: string; title: string; notes: string | null; frequency: "weekly" | "biweekly" | "monthly"; day_number: number; starts_on: string; assignee: { full_name: string } | null; };
-type DailyTask = { id: number; title: string; notes: string | null; task_date: string; status: string; recurrence_id: string | null; assignee: { full_name: string } | null; };
+type DailyTask = { id: number; title: string; notes: string | null; task_date: string; status: string; recurrence_id: string | null; calendar_event_id: string | null; assignee: { full_name: string } | null; };
 
 function currentMonth() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit" }).format(new Date()); }
 function monthRange(month: string) { const [year, value] = month.split("-").map(Number); const lastDay = new Date(year, value, 0).getDate(); return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}`, next: `${value === 12 ? year + 1 : year}-${String(value === 12 ? 1 : value + 1).padStart(2, "0")}-01` }; }
@@ -35,7 +35,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     supabase.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null).order("full_name"),
     supabase.from("calendar_events").select("id,assigned_to,created_by,subject_staff_id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").order("starts_at", { ascending: false }),
     supabase.from("recurring_daily_tasks").select("id,title,notes,frequency,day_number,starts_on,assignee:profiles!assigned_to(full_name)").eq("is_active",true).lte("starts_on",end),
-    supabase.from("admin_daily_tasks").select("id,title,notes,task_date,status,recurrence_id,assignee:profiles!assigned_to(full_name)").gte("task_date",start).lte("task_date",end),
+    supabase.from("admin_daily_tasks").select("id,title,notes,task_date,status,recurrence_id,calendar_event_id,assignee:profiles!assigned_to(full_name)").gte("task_date",start).lte("task_date",end),
   ]);
 
   async function createCalendarEvent(formData: FormData) {
@@ -58,6 +58,13 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     const eventRows: (typeof values & {audience:string;assigned_to:string|null})[] = audience === "all_staff" ? [{...values,audience:"all_staff",assigned_to:null}] : recipients.map(id => ({...values,audience:"individual",assigned_to:id}));
     const { data: saved, error } = await db.from("calendar_events").insert(eventRows).select("id,assigned_to");
     if (error) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent(error.message)}`);
+    if (eventType === "work") {
+      const { error: syncError } = await db.rpc("materialize_recurring_tasks", { p_date: eventDate });
+      if (syncError) redirect(`/admin/calendar?month=${month}&error=${encodeURIComponent("Calendar saved; Daily Task sync failed: " + syncError.message)}`);
+      revalidatePath("/admin/daily-tasks");
+      revalidatePath("/staff/daily-tasks");
+      revalidatePath("/staff");
+    }
     try {
       const targets = (activeStaff || []).filter(person => audience === "all_staff" || recipients.includes(person.id));
       await Promise.all(targets.map(person => createAppNotifications({recipientIds:[person.id],type:"calendar_event",title,body:`${eventDate} ${startTime}${notes ? ` · ${notes}` : ""}`,href:person.role === "admin" || person.role === "management_viewer" ? "/admin/calendar" : "/staff/calendar",entityId:saved?.find(event => event.assigned_to === person.id)?.id || saved?.[0]?.id})));
@@ -100,11 +107,11 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
         id:`event-${group.key}-${date}`,date,time:index===0?malaysiaTime(event.starts_at):"All day",
         label:event.event_type==="leave"&&event.subject ? `${event.subject.full_name} · ${event.title}` : event.title,
         detail:`${prefix}${group.members.length>1 ? `${group.members.length} employees` : recipients}${notes}`,
-        expandedDetail:`${prefix}${recipients}${notes}`,href:null,kind:(event.event_type === "meeting" ? "meeting" : event.event_type === "leave" ? "leave" : "other") as CalendarItem["kind"],tone:`calendar-${event.event_type}`,
+        expandedDetail:`${prefix}${recipients}${notes}`,href:event.event_type === "work" ? `/admin/daily-tasks?date=${date}` : null,kind:(event.event_type === "meeting" ? "meeting" : event.event_type === "leave" ? "leave" : "other") as CalendarItem["kind"],tone:`calendar-${event.event_type}`,
       }));
     }),
     ...recurringTasks.flatMap(task=>recurringDates(task,start,end).map(date=>({id:`daily-${task.id}-${date}`,date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${date}`,kind:"daily_task" as const,tone:"calendar-work"}))),
-    ...dailyTasks.filter(task=>!task.recurrence_id).map(task=>({id:`daily-once-${task.id}`,date:task.task_date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task · ${String(task.status).replaceAll("_"," ")}${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${task.task_date}`,kind:"daily_task" as const,tone:"calendar-work"})),
+    ...dailyTasks.filter(task=>!task.recurrence_id && !task.calendar_event_id).map(task=>({id:`daily-once-${task.id}`,date:task.task_date,time:"09:00",label:task.title,detail:`${task.assignee?.full_name||"Unassigned"} · Daily Task · ${String(task.status).replaceAll("_"," ")}${task.notes?` · ${task.notes}`:""}`,href:`/admin/daily-tasks?date=${task.task_date}`,kind:"daily_task" as const,tone:"calendar-work"})),
   ];
   const loadError = appointmentResult.error || jobResult.error || eventResult.error || recurrenceResult.error || dailyTaskResult.error;
 

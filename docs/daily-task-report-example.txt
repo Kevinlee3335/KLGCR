@@ -1,0 +1,55 @@
+TEST EXAMPLE — synthetic assignments, not production data.
+This section appears in both the 9:30 AM and 4:50 PM reports.
+Existing maintenance/material sections remain in place.
+
+📋 DAILY TASKS
+Today + overdue unfinished + earlier tasks completed today
+Total: 6 | Completed: 2 | Not completed: 4
+
+ADMIN TASK
+Pending (1)
+• Prepare tenant notice | Syafiqa | Work date: 14/10/2026
+
+Accepted (0)
+None
+
+In Progress (0)
+None
+
+Completed (0)
+None
+
+KIV (1)
+• Follow up quotation | Syafiqa | Work date: 14/10/2026
+
+OPERATION TASK
+Pending (0)
+None
+
+Accepted (1)
+• Check pump room | Faiz | Work date: 14/10/2026
+
+In Progress (1)
+• Inspect lighting | Abdullah | Work date: 13/10/2026 | Overdue
+
+Completed (1)
+• Repair door | Abdullah | Work date: 12/10/2026
+
+KIV (0)
+None
+
+HOUSEKEEPING TASK
+Pending (0)
+None
+
+Accepted (0)
+None
+
+In Progress (0)
+None
+
+Completed (1)
+• Clean lobby | Nancy | Work date: 14/10/2026
+
+KIV (0)
+None

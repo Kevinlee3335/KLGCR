@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-const mocks=vi.hoisted(()=>({calendar:vi.fn(),events:Array.from({length:10},(_,i)=>({id:`event-${i}`,assigned_to:`staff-${i}`,created_by:"admin",subject_staff_id:null,title:"Operation Meeting",notes:"Office",starts_at:"2026-10-16T08:30:00Z",ends_at:"2026-10-16T15:59:59Z",event_type:"meeting",audience:"individual",staff:{full_name:`Employee ${i+1}`},subject:null}))}));
+const mocks=vi.hoisted(()=>({calendar:vi.fn(),dailyTasks:[] as unknown[],events:Array.from({length:10},(_,i)=>({id:`event-${i}`,assigned_to:`staff-${i}`,created_by:"admin",subject_staff_id:null,title:"Operation Meeting",notes:"Office",starts_at:"2026-10-16T08:30:00Z",ends_at:"2026-10-16T15:59:59Z",event_type:"meeting",audience:"individual",staff:{full_name:`Employee ${i+1}`},subject:null}))}));
 vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
 vi.mock("next/navigation",()=>({redirect:vi.fn()}));
 vi.mock("@/lib/auth",()=>({requireRole:vi.fn().mockResolvedValue({id:"admin",role:"admin"})}));
@@ -10,10 +10,11 @@ vi.mock("@/components/calendar-event-form",()=>({CalendarEventForm:()=>null}));
 vi.mock("@/components/appointment-calendar",()=>({AppointmentCalendar:mocks.calendar}));
 vi.mock("@/lib/app-notifications",()=>({createAppNotifications:vi.fn()}));
 vi.mock("@/lib/supabase/server",()=>({createClient:async()=>({from:(table:string)=>{
-  const query={select:()=>query,gte:()=>query,lte:()=>query,lt:()=>query,not:()=>query,order:()=>query,eq:()=>query,is:()=>query,then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==="calendar_events"?mocks.events:[],error:null}).then(resolve)};
+  const query={select:()=>query,gte:()=>query,lte:()=>query,lt:()=>query,not:()=>query,order:()=>query,eq:()=>query,is:()=>query,then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==="calendar_events"?mocks.events:table==="admin_daily_tasks"?mocks.dailyTasks:[],error:null}).then(resolve)};
   return query;
 }})}));
 import AdminCalendar from "./page";
+beforeEach(()=>{mocks.calendar.mockClear();mocks.dailyTasks=[];});
 it("groups calendar and saved settings, retaining ten independent employee event IDs",async()=>{
   mocks.calendar.mockReturnValue(<div>Calendar</div>);
   const {container}=render(await AdminCalendar({searchParams:Promise.resolve({month:"2026-10"})}));
@@ -29,4 +30,15 @@ it("groups calendar and saved settings, retaining ten independent employee event
   expect(props.items).toHaveLength(1);
   expect(props.items[0]).toMatchObject({label:"Operation Meeting",detail:"Meeting · 10 employees · Office"});
   for(const event of mocks.events)expect(props.items[0].expandedDetail).toContain(event.staff.full_name);
+});
+
+it("links Calendar Work to Daily Tasks without displaying the synchronized copy twice",async()=>{
+ const original=mocks.events;
+ mocks.events=[{...original[0],event_type:"work",title:"SPKA"}];
+ mocks.dailyTasks=[{id:1,title:"SPKA",task_date:"2026-10-16",recurrence_id:null,calendar_event_id:original[0].id,status:"pending"}];
+ try {
+  render(await AdminCalendar({searchParams:Promise.resolve({month:"2026-10"})}));
+  expect(mocks.calendar.mock.calls[0][0].items).toHaveLength(1);
+  expect(mocks.calendar.mock.calls[0][0].items[0]).toMatchObject({label:"SPKA",href:"/admin/daily-tasks?date=2026-10-16"});
+ } finally {mocks.events=original;}
 });
