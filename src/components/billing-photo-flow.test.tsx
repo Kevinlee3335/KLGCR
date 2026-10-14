@@ -21,6 +21,7 @@ describe('camera upload and automatic meter reading',()=>{
  });
  afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
  async function open(){render(<BillingPanel/>);await screen.findByRole('button',{name:'Utility readings'});fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));return screen.getAllByLabelText('Camera photo for Meter 1')[0] as HTMLInputElement}
+ it('shows server-provided billing data without a second initial request',()=>{render(<BillingPanel initialData={{config:configSchema.parse({...defaultBillingConfig,...fixture}),photosLoaded:false,revision:0,runs:[],clock:{date:'2026-10-13',time:'09:00'}}}/>);expect(screen.getByRole('button',{name:'Utility readings'})).toBeInTheDocument();expect(fetch).not.toHaveBeenCalled()});
  it('offers rear camera separately from gallery and saves photo before OCR, then saves unconfirmed reading',async()=>{
    const camera=await open();expect(camera.getAttribute('capture')).toBe('environment');expect(screen.getAllByLabelText('Photo file for Meter 1')[0]).not.toHaveAttribute('capture');
    fireEvent.change(camera,{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
