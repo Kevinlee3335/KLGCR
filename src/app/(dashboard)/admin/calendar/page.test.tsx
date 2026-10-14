@@ -1,0 +1,32 @@
+import { render, screen } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+const mocks=vi.hoisted(()=>({calendar:vi.fn(),events:Array.from({length:10},(_,i)=>({id:`event-${i}`,assigned_to:`staff-${i}`,created_by:"admin",subject_staff_id:null,title:"Operation Meeting",notes:"Office",starts_at:"2026-10-16T08:30:00Z",ends_at:"2026-10-16T15:59:59Z",event_type:"meeting",audience:"individual",staff:{full_name:`Employee ${i+1}`},subject:null}))}));
+vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
+vi.mock("next/navigation",()=>({redirect:vi.fn()}));
+vi.mock("@/lib/auth",()=>({requireRole:vi.fn().mockResolvedValue({id:"admin",role:"admin"})}));
+vi.mock("@/components/app-shell",()=>({AppShell:({children}:{children:ReactNode})=><div>{children}</div>}));
+vi.mock("@/components/calendar-event-form",()=>({CalendarEventForm:()=>null}));
+vi.mock("@/components/appointment-calendar",()=>({AppointmentCalendar:mocks.calendar}));
+vi.mock("@/lib/app-notifications",()=>({createAppNotifications:vi.fn()}));
+vi.mock("@/lib/supabase/server",()=>({createClient:async()=>({from:(table:string)=>{
+  const query={select:()=>query,gte:()=>query,lte:()=>query,lt:()=>query,not:()=>query,order:()=>query,eq:()=>query,is:()=>query,then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==="calendar_events"?mocks.events:[],error:null}).then(resolve)};
+  return query;
+}})}));
+import AdminCalendar from "./page";
+it("groups calendar and saved settings, retaining ten independent employee event IDs",async()=>{
+  mocks.calendar.mockReturnValue(<div>Calendar</div>);
+  const {container}=render(await AdminCalendar({searchParams:Promise.resolve({month:"2026-10"})}));
+  expect(screen.getAllByText("Operation Meeting")).toHaveLength(1);
+  expect(screen.getByText("View employees (10)")).toBeInTheDocument();
+  const ids=Array.from(container.querySelectorAll<HTMLInputElement>('input[name="event_id"]')).map(input=>input.value);
+  expect(ids).toEqual(mocks.events.map(event=>event.id));
+  expect(container.querySelectorAll("details")).toHaveLength(3);
+  expect(screen.getByText("Add calendar item").closest("details")?.open).toBe(false);
+  expect(screen.getByText("Calendar Settings (1)").closest("details")?.open).toBe(false);
+  expect(container.querySelector("details")?.open).toBe(false);
+  const props=mocks.calendar.mock.calls[0][0];
+  expect(props.items).toHaveLength(1);
+  expect(props.items[0]).toMatchObject({label:"Operation Meeting",detail:"Meeting · 10 employees · Office"});
+  for(const event of mocks.events)expect(props.items[0].expandedDetail).toContain(event.staff.full_name);
+});

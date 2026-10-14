@@ -3792,3 +3792,36 @@ button.calendar-item {
 .complaint-summary-content > p { margin: 10px 0 0; font-size: .78rem; line-height: 1.4; }
 @media (max-width: 1100px) { .complaint-summary .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .complaint-summary .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .complaint-summary .metric { min-height: 70px; } .complaint-summary-toggle { font-size: .72rem; } }
+
+/* Compact Admin Calendar: full records remain in the selected-day view. */
+.calendar-tools { margin-bottom: 12px; border: 1px solid #e6ddcd; border-radius: 12px; background: #fff; padding: 12px 16px; }
+.calendar-tools > summary { cursor: pointer; font-weight: 600; }
+.calendar-tools[open] > summary { margin-bottom: 16px; }
+.calendar-type-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 16px; }
+.calendar-type-filters .button { min-width: 100px; }
+.calendar-type-filters .calendar-filter-active { background: #c69a34; color: #fff; border-color: #c69a34; }
+.calendar-compact .calendar-day { min-height: 148px; }
+.calendar-compact .calendar-item { font-size: 12px; padding: 6px 8px; }
+.calendar-compact .calendar-item small { display: none; }
+.calendar-compact .calendar-item span { font-size: 12px; font-weight: 600; }
+.calendar-more { border: 0; background: transparent; color: #78571c; text-align: left; padding: 5px 8px; cursor: pointer; font-weight: 600; }
+.calendar-day-details { scroll-margin-top: 100px; }
+@media (max-width: 760px) {
+  .calendar-type-filters { padding: 0 10px 12px; gap: 6px; }
+  .calendar-type-filters .button { min-width: 88px; }
+  .calendar-compact .calendar-day { min-height: 132px; }
+  .calendar-compact .calendar-item span { font-size: 10px; }
+  .calendar-more { font-size: 10px; padding: 4px; }
+}
+
+.calendar-compact .calendar-item strong { display: inline; font-size: 10px; }
+
+/* +more opens the selected-day details on desktop as well as mobile. */
+.calendar-compact .calendar-day-details { display: block; border-top: 1px solid var(--line); background: #fcfbf8; }
+.calendar-compact .calendar-day-details > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; }
+.calendar-compact .calendar-day-details h3 { margin: 3px 0 0; font-size: 1rem; }
+.calendar-compact .calendar-day-detail-list { display: grid; gap: 8px; padding: 0 18px 18px; }
+.calendar-compact .calendar-day-detail { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; align-items: start; padding: 11px 12px; border-radius: 10px; background: #e7efff; color: #254d93; }
+.calendar-compact .calendar-day-detail div span, .calendar-compact .calendar-day-detail div small { display: block; overflow-wrap: anywhere; }
+.calendar-compact .calendar-day-detail div span { font-weight: 700; }
+.calendar-compact .calendar-day-detail div small { margin-top: 4px; }
