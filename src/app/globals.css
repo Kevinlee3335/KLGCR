@@ -3813,3 +3813,5 @@ button.calendar-item {
   .calendar-compact .calendar-item span { font-size: 10px; }
   .calendar-more { font-size: 10px; padding: 4px; }
 }
+
+.calendar-compact .calendar-item strong { display: inline; font-size: 10px; }
