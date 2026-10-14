@@ -10,3 +10,7 @@ describe('billing preview authorization',()=>{
  it('disables the API in production',async()=>{vi.stubEnv('VERCEL_ENV','production');mocks.profile={id:'test',role:'admin',full_name:'Test'};expect((await GET()).status).toBe(403);expect(mocks.db).not.toHaveBeenCalled()});
  it.each(['admin','management_viewer'])('rejects cross-origin writes for %s',async role=>{mocks.profile={id:'test',role,full_name:'Test'};const req=new NextRequest('https://example.test/api/billing-preview',{method:'POST',headers:{origin:'https://other.test'},body:'{}'});expect((await POST(req)).status).toBe(403);expect(mocks.db).not.toHaveBeenCalled()});
 });
+describe('billing read failures',()=>{
+ it('returns JSON when stored meter fields are incomplete',async()=>{vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('VERCEL_GIT_COMMIT_REF','feature/rental-utility-billing-test');mocks.profile={id:'test',role:'admin',full_name:'Test'};mocks.db.mockResolvedValue({from:()=>({select(){return this},eq(){return this},order(){return this},single:async()=>({data:{config:{utilityAccounts:[{meters:[{photo:'data:image/jpeg;base64,YQ=='}]}]},revision:1},error:null}),limit:async()=>({data:[],error:null})})});const response=await GET();expect(response.status).toBe(422);expect((await response.json()).error).toMatch(/repair/)});
+ it('returns JSON when database access throws',async()=>{mocks.db.mockRejectedValueOnce(Error('Connection unavailable'));const response=await GET();expect(response.status).toBe(503);expect((await response.json()).error).toMatch(/load billing/)});
+});
