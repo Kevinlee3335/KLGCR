@@ -79,7 +79,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status", "in", '("completed","cancelled")').order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
     taskQuery,
     db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
-    db.from("profiles").select("id,full_name").eq("is_active", true).is("deleted_at", null).order("full_name"),
+    db.from("profiles").select("id,full_name,role,daily_task_category").eq("is_active", true).is("deleted_at", null).order("full_name"),
     recurrenceQuery,
   ]);
 

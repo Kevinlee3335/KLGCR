@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { resolveDailyTaskCategory } from "@/lib/daily-tasks";
 import { requireRole } from "@/lib/auth";
 
 export type UserActionState = { ok?: string; error?: string };
@@ -75,6 +76,7 @@ export async function createUser(
         full_name: parsed.data.fullName,
         username: parsed.data.username,
         role: parsed.data.role,
+        daily_task_category: resolveDailyTaskCategory({ role: parsed.data.role, full_name: parsed.data.fullName }),
       })
       .eq("id", created.user.id);
     if (profileError) {
@@ -118,14 +120,14 @@ export async function updateUserRole(data: FormData) {
   const admin = adminClient();
   const { data: target, error: targetError } = await admin
     .from("profiles")
-    .select("role")
+    .select("role,full_name,daily_task_category")
     .eq("id", id)
     .single();
   if (targetError) throw new Error(targetError.message);
 
   const { error } = await admin
     .from("profiles")
-    .update({ role: parsedRole.data })
+    .update({ role: parsedRole.data, daily_task_category: resolveDailyTaskCategory({ ...target, role: parsedRole.data }) })
     .eq("id", id);
   if (error) throw new Error(error.message);
 
