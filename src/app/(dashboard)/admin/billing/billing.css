@@ -9,3 +9,12 @@
 .billing-module .billing-replace-photo{padding:8px;border:1px solid #d8ceb5;border-radius:7px;background:#fff;color:#5f491b}.billing-replace-photo input{max-width:100%;font-size:11px}
 
 .billing-upload-fieldset>.billing-card{content-visibility:auto;contain-intrinsic-size:auto 800px}.billing-manual-print{font-size:12px;color:#765815;background:#f7efd9;border-radius:6px;padding:6px 10px}
+
+/* Keep account actions in fixed columns, independent of company-name length. */
+.billing-account-heading{display:grid;grid-template-columns:minmax(0,1fr) 150px 170px;gap:12px;align-items:center}
+.billing-account-heading h3{min-width:0;overflow-wrap:anywhere;line-height:1.45}
+.billing-account-heading>button{width:100%;min-height:44px;box-sizing:border-box;white-space:nowrap;font-size:13px;padding:10px 12px}
+.billing-account-heading>button[aria-expanded=true]{background:#211f18;color:#e5c76e;border-color:#c6a34b}
+.billing-toolbar>button{min-height:44px;font-size:13px;box-sizing:border-box}
+.billing-fields select{width:100%;min-height:40px;box-sizing:border-box}
+@media(max-width:850px){.billing-account-heading{grid-template-columns:repeat(2,minmax(0,1fr))}.billing-account-heading h3{grid-column:1/-1}.billing-account-heading>button{white-space:normal}}
