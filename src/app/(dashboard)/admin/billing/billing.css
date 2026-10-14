@@ -24,3 +24,10 @@
 .billing-preview>.billing-toolbar h3{margin:0;margin-right:auto}
 .billing-preview .billing-invoice-frame{height:calc(100dvh - 190px);min-height:400px}
 @media(max-width:700px){.billing-module .billing-preview{inset:8px;padding:12px}.billing-preview>.billing-toolbar{top:-12px;margin:-12px -12px 12px;padding:12px}.billing-preview>.billing-toolbar h3{flex-basis:100%;font-size:15px}.billing-preview .billing-invoice-frame{height:calc(100dvh - 200px)}}
+
+.billing-module .billing-replace-photo{gap:8px;padding:12px;border:1px solid #e3d6b6;border-radius:10px;background:#fffdf7;font-weight:600}
+.billing-module .billing-replace-photo input[type=file]{width:100%;padding:0;border:0;border-radius:0;background:transparent;font-size:12px;font-weight:400;color:#716b5d;overflow:hidden}
+.billing-module input[type=file]::file-selector-button{margin-right:10px;padding:10px 14px;min-height:40px;border:1px solid #c6a34b;border-radius:8px;background:#f7efd9;color:#5f491b;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+.billing-module input[type=file]::file-selector-button:hover{background:#eddfb8;border-color:#a47d24}
+.billing-module input[type=file]:disabled::file-selector-button{opacity:.5;cursor:wait}
+.billing-photo-controls>button{min-height:42px}
