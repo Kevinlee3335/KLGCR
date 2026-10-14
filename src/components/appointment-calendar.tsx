@@ -9,6 +9,7 @@ export type CalendarItem = {
   time: string;
   label: string;
   detail: string;
+  expandedDetail?: string;
   href: string | null;
   tone?: string;
 };
@@ -88,7 +89,7 @@ export function AppointmentCalendar({ month, items }: { month: string; items: Ca
     <section className="calendar-day-details" aria-live="polite">
       <header><div><p className="eyebrow">Selected day</p><h3>{fullDate(selectedDate)}</h3></div><span>{selectedItems.length} {selectedItems.length === 1 ? "item" : "items"}</span></header>
       {selectedItems.length ? <div className="calendar-day-detail-list">{selectedItems.map(item => {
-        const content = <><strong>{displayTime(item.time)}</strong><div><span>{item.label}</span><small>{item.detail}</small></div></>;
+        const content = <><strong>{displayTime(item.time)}</strong><div><span>{item.label}</span><small>{item.expandedDetail || item.detail}</small></div></>;
         return item.href ? <Link href={item.href} className={`calendar-day-detail ${item.tone || ""}`} key={item.id}>{content}</Link> : <article className={`calendar-day-detail ${item.tone || ""}`} key={item.id}>{content}</article>;
       })}</div> : <p className="calendar-day-empty">No calendar items for this day.</p>}
     </section>
