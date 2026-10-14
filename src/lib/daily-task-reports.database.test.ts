@@ -75,3 +75,14 @@ it("new helper obeys RLS and does not grant anonymous access",async()=>{
  await expect(db.query("select daily_task_report_text($1)",[today])).rejects.toThrow(/permission denied/);
  await db.exec('reset role;');
 });
+
+it("adds readable department/status icons and compacts empty statuses without changing scope",async()=>{
+ const before=(await db.query<{text:string}>("select daily_task_report_text($1) text",[today])).rows[0].text;
+ await db.exec(readFileSync("supabase/migrations/20261014084847_daily_task_report_readability.sql","utf8"));
+ const after=(await db.query<{text:string}>("select daily_task_report_text($1) text",[today])).rows[0].text;
+ for(const heading of ['🏢 ADMIN TASK','🛠️ OPERATION TASK','🧹 HOUSEKEEPING TASK','⏳ Pending','👤 Accepted','🔵 In Progress','✅ Completed Today','⏸️ KIV','⚠️ Overdue'])expect(after).toContain(heading);
+ expect(after).toContain('📊 Total: 17 | ✅ Completed: 4 | ⏳ Not completed: 13');
+ expect(after.split('\n').filter(line=>line.startsWith('• '))).toEqual(before.split('\n').filter(line=>line.startsWith('• ')).map(line=>line.replace(' | Overdue',' | ⚠️ Overdue')));
+ const empty=(await db.query<{text:string}>("select daily_task_report_text('2000-01-01') text")).rows[0].text;
+ expect(empty).toContain('⏳ Pending: 0');expect(empty).toContain('✅ Completed Today: 0');expect(empty).not.toContain('None');
+});
