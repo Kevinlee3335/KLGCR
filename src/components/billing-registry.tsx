@@ -1,4 +1,5 @@
 "use client";
+import {orderedUtilityAccounts} from "@/lib/billing-account-order";
 import {useState} from 'react';
 import type {BillingConfig,UtilityAccount} from '@/lib/billing-preview';
 import {finalUtilityPeriod,malaysiaClock} from '@/lib/billing-preview';
@@ -7,7 +8,7 @@ const empty:Registry={unit:'',contact:'',phone:'',deposit:0,start:'',end:'',rema
 export function BillingRegistry({config,busy,onSave}:{config:BillingConfig;busy:boolean;onSave:(c:BillingConfig)=>Promise<void>}){
  const [filter,setFilter]=useState('active'),[edit,setEdit]=useState<UtilityAccount|null>(null),[error,setError]=useState('');
  const today=malaysiaClock().date;
- const list=config.utilityAccounts.filter(a=>filter==='all'||(filter==='active'?!a.termination:!!a.termination));
+ const list=orderedUtilityAccounts(config.utilityAccounts).filter(a=>filter==='all'||(filter==='active'?!a.termination:!!a.termination));
  const status=(a:UtilityAccount)=>{if(a.termination)return 'Terminated';if(!a.registry?.end)return 'No end date';const days=Math.round((+new Date(a.registry.end)-+new Date(today))/864e5);return days<0?'Lapsed, still active':days<=60?`Ends in ${days} days`:'Active'};
  const update=(a:UtilityAccount)=>onSave({...config,utilityAccounts:config.utilityAccounts.some(v=>v.id===a.id)?config.utilityAccounts.map(v=>v.id===a.id?a:v):[...config.utilityAccounts,a]});
  const download=()=>{const rows=[['Tenant','Unit','Contact','Phone','Contract start','Contract end','Deposit RM','Status','Termination date','Outstanding RM','Remarks'],...list.map(a=>[a.name,a.registry?.unit,a.registry?.contact,a.registry?.phone,a.registry?.start,a.registry?.end,a.registry?.deposit,status(a),a.termination?.date,a.termination?.amount,a.registry?.remarks])];const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='tenant-registry-'+today+'.csv';link.click();URL.revokeObjectURL(url)};
