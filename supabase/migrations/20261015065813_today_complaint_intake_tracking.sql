@@ -47,11 +47,12 @@ begin
  if new.payload ? 'complaint_intake' then return new; end if;
  summary := public.complaint_intake_summary(new.report_date,new.block_group);
  new.payload := coalesce(new.payload,'{}'::jsonb) || jsonb_build_object('complaint_intake',summary);
- new.whatsapp_text := coalesce(new.whatsapp_text,'') || E'\n\n📥 COMPLAINTS RECEIVED TODAY\n'
-   || format(E'Total received: %s\nDispatched (includes completed): %s\nCompleted: %s\nUnder Monitoring: %s\nPending Material: %s\nIn Progress: %s\nAssigned / not started: %s\nUnassigned / Under Review: %s\nRejected: %s\nCancelled: %s\nOnly complaints received on %s (MYT). Statuses at report generation.',
-     summary->>'total',summary->>'dispatched',summary->>'completed',summary->>'under_monitoring',
-     summary->>'pending_material',summary->>'in_progress',summary->>'assigned',summary->>'unassigned',
-     summary->>'rejected',summary->>'cancelled',new.report_date);
+ if position('Scheduled Today:' in coalesce(new.whatsapp_text,'')) > 0 then
+   new.whatsapp_text := replace(new.whatsapp_text,'Scheduled Today:',
+     'Complaints received today: ' || (summary->>'total') || E'\nScheduled Today:');
+ else
+   new.whatsapp_text := coalesce(new.whatsapp_text,'') || E'\nComplaints received today: ' || (summary->>'total');
+ end if;
  return new;
 end
 $capture$;

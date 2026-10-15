@@ -24,7 +24,7 @@ it('captures both scheduled times and manual reports, leaving previous snapshots
  for(const type of ['morning_tasks','daily_summary'])await db.query("insert into report_snapshots(report_type,report_date,block_group,payload,whatsapp_text) values($1,'2026-10-15','AB','{}','Existing report')",[type]);
  await db.exec("update maintenance_jobs set status='completed' where id=8;");
  const {rows}=await db.query<{payload:{complaint_intake:{total:number;completed:number}};whatsapp_text:string}>("select payload,whatsapp_text from report_snapshots order by id");
- expect(rows).toHaveLength(2);for(const r of rows){expect(r.payload.complaint_intake).toMatchObject({total:10,completed:6});expect(r.whatsapp_text).toContain('Total received: 10\nDispatched (includes completed): 8');expect(r.whatsapp_text).toContain('Existing report');}
+ expect(rows).toHaveLength(2);for(const r of rows){expect(r.payload.complaint_intake).toMatchObject({total:10,completed:6});expect(r.whatsapp_text).toContain('Complaints received today: 10');expect(r.whatsapp_text).toContain('Existing report');}
  const live=await db.query<{s:{total:number;completed:number}}>("select complaint_intake_summary('2026-10-15','AB') s");expect(live.rows[0].s).toMatchObject({total:10,completed:7});
  await db.exec("insert into report_snapshots(report_type,report_date,block_group,payload,whatsapp_text) values('inventory_report','2026-10-15','ALL','{}','Inventory');");
  expect((await db.query<{whatsapp_text:string}>("select whatsapp_text from report_snapshots where report_type='inventory_report'")).rows[0].whatsapp_text).toBe('Inventory');

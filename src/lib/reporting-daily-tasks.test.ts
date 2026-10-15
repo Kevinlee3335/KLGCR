@@ -16,8 +16,8 @@ it.each(['morning_tasks','daily_summary'] as const)('uses the shared department/
  expect(rpc.mock.calls).toEqual([['materialize_recurring_tasks',{p_date:date}],['daily_task_report_text',{p_date:date}],['complaint_intake_summary',{p_date:date,p_group:'AB'}]]);
  expect(report.whatsappText).toContain('OPERATION TASK');expect(report.whatsappText).toContain('Completed (2)');
  expect(report.whatsappText).not.toContain('📋 ADMIN TASKS');
- expect(report.whatsappText).toContain('Total received: 10');
- expect(report.whatsappText).toContain('Dispatched (includes completed): 8');
+ expect(report.whatsappText).toContain("📊 TODAY'S SUMMARY\nComplaints received today: 10\nScheduled:");
+ expect(report.whatsappText).not.toContain('COMPLAINTS RECEIVED TODAY');
  expect(report.payload.complaint_intake).toMatchObject({total:10,completed:6});
  expect(report.payload.admin_tasks).toHaveLength(1);
  expect(report.payload.admin_tasks[0].title).toBe('Old completed today');
