@@ -51,3 +51,14 @@ it("keeps current and archived accounts separate by identity", () => {
   expect(result.staffAccounts[0].statuses).toEqual({ completed: 1, pending_material: 1 });
   expect(result.staffAccounts[1].isArchived).toBe(true);
 });
+
+it("preserves pending-material details beyond the sample and separates active staff workload", async () => {
+ const { outstandingJobSummary } = await import("./ai-assistant");
+ const rows = Array.from({length:100},(_,i)=>({job_no:`DONE-${i}`,status:"completed"}));
+ const pending={job_no:"WAIT-1",room_no:"126",block:{code:"B"},status:"pending_material",staff:{id:"faiz",full_name:"Faiz",is_active:true}};
+ const summary=outstandingJobSummary([...rows,pending,{...pending,job_no:"WAIT-2",staff:{id:"abdullah",full_name:"Abdullah",is_active:true}}]);
+ expect(summary.pendingMaterialCount).toBe(2);expect(summary.outstandingCount).toBe(2);
+ expect(summary.pendingMaterialJobs.map(job=>job.jobNo)).toEqual(["WAIT-1","WAIT-2"]);
+ expect(summary.pendingMaterialJobs[0]).toMatchObject({roomNo:"126",staff:{name:"Faiz"}});
+ expect(summary.pendingMaterialDetailsTruncated).toBe(false);
+});

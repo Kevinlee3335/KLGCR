@@ -87,3 +87,10 @@ Validation: 349 tests across 70 files passed; typecheck/build passed (four pre-e
 ## Approved history release — 2026-10-15
 
 User approved immediate production release. Integrated with current main f6a2d4a, preserving the Rental & Utilities billing release without changes to its files. Integration verification: 387 tests / 80 files, typecheck and build passed. Existing image/hook warnings remain outside this change. Previously installed isolated chat tables and ownership RLS are reused; no business data is changed.
+
+
+## Pending-material detail preservation — preview, 2026-10-15
+
+A user reply counted two pending-material jobs but could not identify them after general details were compacted to eight rows. Verified live SELECTs identified JOB-2026-0071 (A / COMMERCIAL CENTER / Faiz) and JOB-2026-0130 (A / Common Bathroom · Lv 6 wing B / Abdullah). Active outstanding counts match Abdullah=3 (2 assigned + 1 pending material), Faiz=2 (1 monitoring + 1 pending material); archived accounts have no outstanding jobs.
+
+Added compact pending-material and outstanding job identities to the preserved maintenance summary, with explicit truncation flags above 80 qualifying jobs. General maintenance details now prioritize pending-material and unfinished rows. Prompts require using these protected lists. Regression tests cover pending jobs beyond the first 100 completed rows and retention of identities under the API context byte cap. 28 relevant tests, typecheck and build passed. No operational writes; production is unchanged for this follow-up preview.

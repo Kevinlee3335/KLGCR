@@ -53,3 +53,9 @@ it("uses owned server history when continuing a saved conversation", async () =>
 it("returns the answer with an explicit unsaved flag if persistence fails", async () => {
  mocks.save.mockRejectedValue(new Error("database unavailable"));const res=await POST(request());expect(res.status).toBe(200);expect(await res.json()).toMatchObject({historySaved:false,answer:"CMP-1 needs review."});
 });
+
+it("retains compact pending-material job identities when large general details are removed", async () => {
+ mocks.snapshot.mockResolvedValue({capturedAt:"2026-10-15T03:44:00Z",sources:[{table:"maintenance_jobs",summary:{pendingMaterialJobs:[{jobNo:"WAIT-1",roomNo:"126",staff:{name:"Faiz"}}]},records:Array.from({length:80},()=>({description:"x".repeat(3000)}))}]});
+ expect((await POST(request())).status).toBe(200);
+ const body=mocks.fetch.mock.calls[0][1].body;expect(body).toContain("WAIT-1");expect(body).toContain("Faiz");expect(body.length).toBeLessThan(80000);
+});

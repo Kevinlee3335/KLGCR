@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { summarize, complaintDateSummary, materialUsageSummary, inventoryStockSummary } from "./ai-assistant";
+import { summarize, complaintDateSummary, materialUsageSummary, inventoryStockSummary, outstandingJobSummary } from "./ai-assistant";
 // Only authenticated SELECT queries. Never invoke recurrence materialization or other operational RPCs.
 export async function readAiSnapshot(question: string) {
   const db = await createClient();
@@ -20,7 +20,7 @@ export async function readAiSnapshot(question: string) {
       ? inventoryStockSummary(records)
       : spec.table === "complaints" ? complaintDateSummary(records)
       : spec.table === "inventory_issue_history" ? materialUsageSummary(records)
-      : summarize(records);
+      : spec.table === "maintenance_jobs" ? outstandingJobSummary(records) : summarize(records);
     const room = question.match(/\b([a-d])\s*([0-9]{3,4})\b/i);
     const item = question.match(/\b[A-Z][0-9]{5}\b/i);
     const matching = records.filter(row => {
@@ -31,7 +31,9 @@ export async function readAiSnapshot(question: string) {
       if (item && spec.table === "inventory_items") return String(row.item_code).toLowerCase() === item[0].toLowerCase();
       return false;
     });
-    const details = [...matching, ...records.filter(row => !matching.includes(row))].slice(0, 80);
+    const remaining = records.filter(row => !matching.includes(row));
+    if (spec.table === "maintenance_jobs") remaining.sort((a,b) => Number(b.status === "pending_material") - Number(a.status === "pending_material") || Number(a.status === "completed") - Number(b.status === "completed"));
+    const details = [...matching, ...remaining].slice(0, 80);
     return { table: spec.table, visibleTotal: count, loaded: records.length, truncated: count > records.length, scope: spec.table === "inventory_items" ? "active items, first 1000 by item code" : "latest 500 records", summary, detailCount: Math.min(records.length, 80), detailScope: "First 80 of the loaded records; summary covers all loaded records", records: details };
   }));
   const now = new Date();
