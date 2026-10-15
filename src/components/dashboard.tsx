@@ -13,6 +13,7 @@ type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under
 
 export type AdminDashboardData = {
   kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number };
+  complaintIntake?: { date: string; total: number; dispatched: number; completed: number; under_monitoring: number; pending_material: number; in_progress: number; assigned: number; unassigned: number; rejected: number; cancelled: number } | null;
   tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
@@ -32,6 +33,7 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const kpis = [
     { title: "New Complaints", value: data.kpis.newComplaints, subtitle: "Needs triage", href: "/admin/complaints?status=new", icon: ShieldAlert, tone: "blue" },
+    { title: "Today's Complaints", value: data.complaintIntake?.total ?? "—", subtitle: "Received today · includes completed", href: `/admin/complaints?summaryFrom=${data.complaintIntake?.date ?? ""}&summaryTo=${data.complaintIntake?.date ?? ""}`, icon: ShieldAlert, tone: "blue" },
     { title: "Tenant Not Available", value: data.kpis.tenantNotAvailable, subtitle: "Needs rescheduling", href: "/admin/notifications#tenant-not-available", icon: UserX, tone: "danger" },
     { title: "Today's Jobs", value: data.kpis.todayJobs, subtitle: "Assigned today", href: "/admin/jobs?scope=today-active", icon: ClipboardList, tone: "gold" },
     { title: "In Progress", value: data.kpis.inProgress, subtitle: "Active now", href: "/admin/jobs?status=in_progress", icon: PlayCircle, tone: "violet" },

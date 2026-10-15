@@ -6,6 +6,7 @@ describe("role dashboards", () => {
   it("shows live admin overview with navigable cards", () => {
     render(<Dashboard kind="admin" name="KLG Admin" data={{
       kpis: { tenantNotAvailable: 0, newComplaints: 2, todayJobs: 3, inProgress: 4, pendingMaterial: 1, underMonitoring: 2, completedToday: 5, completionPhotos: 5 },
+      complaintIntake: { date: "2026-10-15", total: 10, dispatched: 8, completed: 6, under_monitoring: 1, pending_material: 1, in_progress: 0, assigned: 0, unassigned: 2, rejected: 0, cancelled: 0 },
       jobs: { assigned: 3, in_progress: 4, pending_material: 1, under_monitoring: 2, completed: 5 },
       complaints: [], tasks: [], tenantNoShows: [], inventory: { outOfStock: 1, nearReorder: 2 },
     }}/>)
@@ -13,6 +14,11 @@ describe("role dashboards", () => {
     expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveAttribute("href", "/admin/jobs?scope=completed-today");
     expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveTextContent("5");
     expect(screen.getByText("Operations Command Centre")).toBeInTheDocument();
+    const intake = screen.getByRole("link", { name: /Today's Complaints/i });
+    expect(intake).toHaveTextContent("10");
+    expect(intake).toHaveClass("kpi-card");
+    expect(intake).toHaveAttribute("href", "/admin/complaints?summaryFrom=2026-10-15&summaryTo=2026-10-15");
+    expect(screen.queryByRole("region", { name: "Complaints received today" })).not.toBeInTheDocument();
     expect(screen.getByText("15")).toBeInTheDocument();
   });
 
