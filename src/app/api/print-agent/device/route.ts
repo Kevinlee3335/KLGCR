@@ -1,0 +1,32 @@
+import {NextRequest,NextResponse} from 'next/server';
+import {z} from 'zod';
+import {createAdminClient} from '@/lib/supabase/admin';
+import {tokenHash,rentalPeriodsDue,parsePrintConfig} from '@/lib/print-agent';
+import {makeSnapshot,malaysiaClock,isBlocked,type BillingSnapshot} from '@/lib/billing-preview';
+import {buildBillingPrintHtml} from '@/lib/billing-print-template';
+export const dynamic='force-dynamic';
+const reply=(v:unknown,status=200)=>NextResponse.json(v,{status,headers:{'Cache-Control':'no-store'}});
+const testHtml='<!doctype html><html><meta charset="utf-8"><style>@page{size:A4;margin:20mm}body{font:20px Arial;color:#111}</style><h1>KLG Print Agent</h1><h2>TEST PAGE — NOT AN INVOICE</h2><p>Office printer connection test.</p><p>Check that this page prints once, on the correct printer, at A4 size.</p><p>Utilities are never printed automatically.</p></html>';
+export async function POST(req:NextRequest){try{
+ const token=req.headers.get('authorization')?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];if(!token)return reply({error:'Invalid device token'},401);
+ const hash=tokenHash(token),db=createAdminClient();const {data:device,error:deviceError}=await db.from('klg_print_device').select('*').eq('id',1).eq('token_hash',hash).maybeSingle();if(deviceError)throw Error();if(!device)return reply({error:'Device revoked or not connected'},401);
+ const raw=await req.text();if(raw.length>3000)return reply({error:'Request too large'},413);const j=JSON.parse(raw);const now=new Date().toISOString();
+ if(j.action==='ack'){const a=z.object({id:z.string().uuid(),attempt:z.number().int().positive(),status:z.enum(['submitted','failed']),printer:z.string().max(300),error:z.string().max(500).optional()}).parse(j);const {data,error}=await db.from('klg_print_jobs').update({status:a.status,completed_at:now,printer:a.printer,error:a.error||null}).eq('id',a.id).eq('attempt',a.attempt).eq('device_hash',hash).eq('status','claimed').select('id').maybeSingle();if(error)throw Error();if(!data){const {data:old}=await db.from('klg_print_jobs').select('status').eq('id',a.id).eq('attempt',a.attempt).eq('device_hash',hash).maybeSingle();if(old?.status!==a.status)return reply({error:'Job no longer belongs to this delivery'},409)}return reply({ok:true})}
+ if(!['poll','hello'].includes(j.action))return reply({error:'Unknown action'},400);
+ const printer=z.string().trim().min(1).max(300).parse(j.printer);const {error:heartbeat}=await db.from('klg_print_device').update({last_seen:now,printer}).eq('id',1).eq('token_hash',hash);if(heartbeat)throw Error();if(j.action==='hello')return reply({ok:true});
+ const {data:settings,error:settingsError}=await db.from('billing_preview_settings').select('config').eq('id',1).single();if(settingsError)throw Error();const config=parsePrintConfig(settings.config),clock=malaysiaClock();
+ const eligible=device.auto_enabled&&!isBlocked(clock.date,config.holidays)&&config.reviewedUntil&&clock.date<=config.reviewedUntil&&config.enabled&&clock.time>=config.time;
+ if(device.auto_enabled&&device.enabled_from){for(const period of rentalPeriodsDue(config,device.enabled_from,clock)){
+   const {data:existing,error:readError}=await db.from('billing_preview_runs').select('snapshot').eq('kind','rental').eq('period',period).maybeSingle();if(readError)throw Error();
+   let snapshot=existing?.snapshot as BillingSnapshot|undefined;
+   if(!snapshot){snapshot=makeSnapshot('rental',period,clock.date,config,'KLG Print Agent');if(!snapshot.lines.length)continue;const {error:saveError}=await db.from('billing_preview_runs').insert({kind:'rental',period,issue_date:snapshot.issueDate,total:snapshot.total,snapshot,created_by:device.created_by});if(saveError){if(saveError.code!=='23505')throw Error();const {data:winner,error:winnerError}=await db.from('billing_preview_runs').select('snapshot').eq('kind','rental').eq('period',period).single();if(winnerError)throw Error();snapshot=winner.snapshot as BillingSnapshot}}
+   if(snapshot.kind!=='rental')throw Error();
+   // A period has one immutable automatic print job across reconnection and restarts.
+   const {error}=await db.from('klg_print_jobs').insert({dedupe_key:'rental:'+period,kind:'rental',period,snapshot});if(error&&error.code!=='23505')throw Error();
+ }}
+ let query=db.from('klg_print_jobs').select('*').eq('status','queued').order('created_at').limit(1);if(!eligible)query=query.eq('kind','test');
+ const {data:jobs,error:jobsError}=await query;if(jobsError)throw Error();const job=jobs?.[0];if(!job)return reply({job:null,autoEnabled:device.auto_enabled,calendarReady:!!config.reviewedUntil&&clock.date<=config.reviewedUntil});
+ let html=testHtml;if(job.kind==='rental'){const snapshot=job.snapshot as BillingSnapshot;if(snapshot?.kind!=='rental'||!snapshot.lines?.length)throw Error();html=buildBillingPrintHtml(snapshot,new URL('/billing/logo.jpg',req.url).href).replace(/<div class="toolbar">[\s\S]*?<\/div>/,'')}
+ const {data:claimed,error:claimError}=await db.from('klg_print_jobs').update({status:'claimed',claimed_at:now,device_hash:hash,printer}).eq('id',job.id).eq('status','queued').eq('attempt',job.attempt).select('id').maybeSingle();if(claimError)throw Error();if(!claimed)return reply({job:null});
+ return reply({job:{id:job.id,attempt:job.attempt,kind:job.kind,period:job.period,html}});
+ }catch(e){return reply({error:e instanceof z.ZodError?'Invalid device input':'Print service unavailable; no automatic retry of claimed jobs'},503)}}
