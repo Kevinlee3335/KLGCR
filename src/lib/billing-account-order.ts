@@ -1,0 +1,2 @@
+const order=['bungalow-l3','bungalow-l2','emma-omar','laundrette','umart','norhenany','mmf-cafe','utm','flextronics','medicassemblage'];
+export function orderedUtilityAccounts<T extends {id:string}>(accounts:T[]):T[]{return accounts.map((a,i)=>({a,i})).sort((x,y)=>{const rank=(id:string)=>{const n=order.indexOf(id);return n<0?order.length:n};return rank(x.a.id)-rank(y.a.id)||x.i-y.i}).map(v=>v.a)}

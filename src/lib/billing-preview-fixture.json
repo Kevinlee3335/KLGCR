@@ -1,0 +1,450 @@
+{
+  "tenants": [
+    {
+      "id": 2,
+      "name": "Sample tenant 1",
+      "reg": "",
+      "addr": [],
+      "lot": "Sample lot 1",
+      "rent": 800,
+      "s": "2025-08-01",
+      "e": "2027-07-31",
+      "ord": 1,
+      "dl": "Commercial premises"
+    },
+    {
+      "id": 4,
+      "name": "Sample tenant 2",
+      "reg": "",
+      "addr": [],
+      "lot": "Sample lot 2",
+      "rent": 1500,
+      "s": "2026-05-01",
+      "e": "2027-04-30",
+      "ord": 2,
+      "dl": "Commercial premises"
+    },
+    {
+      "id": 3,
+      "name": "Sample tenant 3",
+      "reg": "",
+      "addr": [],
+      "lot": "Sample lot 3",
+      "rent": 450,
+      "s": "2026-06-01",
+      "e": "2027-05-31",
+      "ord": 3,
+      "dl": "Commercial premises"
+    },
+    {
+      "id": 1,
+      "name": "Sample tenant 4",
+      "reg": "",
+      "addr": [],
+      "lot": "Sample lot 4",
+      "rent": 1000,
+      "s": "2026-10-01",
+      "e": "2028-09-30",
+      "ord": 4,
+      "dl": "Commercial premises"
+    },
+    {
+      "id": 50,
+      "name": "Sample tenant 5",
+      "reg": "",
+      "addr": [],
+      "lot": "Sample lot 5",
+      "rent": 1250,
+      "s": "2025-10-01",
+      "e": "2027-09-30",
+      "ord": 5,
+      "dl": "Commercial premises"
+    }
+  ],
+  "utilityAccounts": [
+    {
+      "id": "sample-1",
+      "seq": 1,
+      "name": "Sample account 1",
+      "addr": [],
+      "title": "Sample account 1",
+      "subsidy": 150.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-1-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 70351.0,
+          "curr": 70764.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-1-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 2477.0,
+          "curr": 2480.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-2",
+      "seq": 2,
+      "name": "Sample account 2",
+      "addr": [],
+      "title": "Sample account 2",
+      "subsidy": 0.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-2-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 82841.0,
+          "curr": 83981.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-3",
+      "seq": 3,
+      "name": "Sample account 3",
+      "addr": [],
+      "title": "Sample account 3",
+      "subsidy": 0.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-3-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 51201.0,
+          "curr": 51979.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-3-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 8484.0,
+          "curr": 8681.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-3-meter-3",
+          "label": "Meter 3",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 9938.0,
+          "curr": 10122.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-4",
+      "seq": 4,
+      "name": "Sample account 4",
+      "addr": [],
+      "title": "Sample account 4",
+      "subsidy": 0.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-4-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 10733.0,
+          "curr": 11352.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-4-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 1883.0,
+          "curr": 1894.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-5",
+      "seq": 5,
+      "name": "Sample account 5",
+      "addr": [],
+      "title": "Sample account 5",
+      "subsidy": 150.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-5-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 44045.0,
+          "curr": 44266.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-5-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 3303.0,
+          "curr": 3313.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-6",
+      "seq": 6,
+      "name": "Sample account 6",
+      "addr": [],
+      "title": "Sample account 6",
+      "subsidy": 0.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-6-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 46061.0,
+          "curr": 47063.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-6-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 1702.0,
+          "curr": 1733.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-7",
+      "seq": 7,
+      "name": "Sample account 7",
+      "addr": [],
+      "title": "Sample account 7",
+      "subsidy": 0.0,
+      "kind": "invoice",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-7-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 48266.0,
+          "curr": 48939.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-7-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 1298.0,
+          "curr": 1344.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-8",
+      "seq": 0,
+      "name": "Sample account 8",
+      "addr": [],
+      "title": "Sample account 8",
+      "subsidy": 0.0,
+      "kind": "statement",
+      "cap": 23000.0,
+      "meters": [
+        {
+          "id": "sample-8-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 1836900.0,
+          "curr": 1930000.0,
+          "confirmed": true,
+          "role": "capped"
+        },
+        {
+          "id": "sample-8-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 359358.0,
+          "curr": 366065.0,
+          "confirmed": true,
+          "role": "capped"
+        },
+        {
+          "id": "sample-8-meter-3",
+          "label": "Meter 3",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 1430124.0,
+          "curr": 1473836.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-8-meter-4",
+          "label": "Meter 4",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 191742.0,
+          "curr": 197145.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-8-meter-5",
+          "label": "Meter 5",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 763061.0,
+          "curr": 773393.0,
+          "confirmed": true,
+          "role": "deduct"
+        },
+        {
+          "id": "sample-8-meter-6",
+          "label": "Meter 6",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 693657.0,
+          "curr": 711538.0,
+          "confirmed": true,
+          "role": "deduct"
+        }
+      ]
+    },
+    {
+      "id": "sample-9",
+      "seq": 0,
+      "name": "Sample account 9",
+      "addr": [],
+      "title": "Sample account 9",
+      "subsidy": 0.0,
+      "kind": "statement",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-9-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 1430124.0,
+          "curr": 1473836.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-9-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 191742.0,
+          "curr": 197145.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    },
+    {
+      "id": "sample-10",
+      "seq": 0,
+      "name": "Sample account 10",
+      "addr": [],
+      "title": "Sample account 10",
+      "subsidy": 0.0,
+      "kind": "statement",
+      "cap": null,
+      "meters": [
+        {
+          "id": "sample-10-meter-1",
+          "label": "Meter 1",
+          "serial": "",
+          "unit": "kWh",
+          "rate": 0.6,
+          "prev": 36343.0,
+          "curr": 36487.0,
+          "confirmed": true,
+          "role": "charge"
+        },
+        {
+          "id": "sample-10-meter-2",
+          "label": "Meter 2",
+          "serial": "",
+          "unit": "m\u00b3",
+          "rate": 3.3,
+          "prev": 1379.0,
+          "curr": 1389.0,
+          "confirmed": true,
+          "role": "charge"
+        }
+      ]
+    }
+  ]
+}

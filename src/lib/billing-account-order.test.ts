@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';
+import {orderedUtilityAccounts} from './billing-account-order';
+it('uses the requested tenant order without dropping added accounts or changing invoice numbers',()=>{const ids=['medicassemblage','umart','mmf-cafe','bungalow-l2','norhenany','flextronics','laundrette','utm','emma-omar','bungalow-l3','new'];const input=ids.map((id,seq)=>({id,seq}));expect(orderedUtilityAccounts(input).map(a=>a.id)).toEqual(['bungalow-l3','bungalow-l2','emma-omar','laundrette','umart','norhenany','mmf-cafe','utm','flextronics','medicassemblage','new']);expect(input[0].id).toBe('medicassemblage');expect(orderedUtilityAccounts(input)[0].seq).toBe(9)});
