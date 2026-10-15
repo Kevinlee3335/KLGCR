@@ -43,6 +43,8 @@ begin
  if new.report_type::text not in ('morning_tasks','daily_summary','midday_update','progress_snapshot') then
    return new;
  end if;
+ -- The preview/manual builder already captures this same cohort.
+ if new.payload ? 'complaint_intake' then return new; end if;
  summary := public.complaint_intake_summary(new.report_date,new.block_group);
  new.payload := coalesce(new.payload,'{}'::jsonb) || jsonb_build_object('complaint_intake',summary);
  new.whatsapp_text := coalesce(new.whatsapp_text,'') || E'\n\n📥 COMPLAINTS RECEIVED TODAY\n'
