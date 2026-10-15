@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-const mocks = vi.hoisted(() => ({ profile: vi.fn(), snapshot: vi.fn(), rpc: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ profile: vi.fn(), snapshot: vi.fn(), rpc: vi.fn(), fetch: vi.fn(), prepare: vi.fn(), save: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getSessionProfile: mocks.profile }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: mocks.rpc }) }));
 vi.mock("@/lib/ai-assistant-data", () => ({ readAiSnapshot: mocks.snapshot }));
+vi.mock("@/lib/ai-assistant-history", () => ({ prepareConversation: mocks.prepare, saveConversationTurn: mocks.save, ConversationNotFound: class extends Error {} }));
 import { GET, POST } from "./route";
 function request(body: unknown = { question: "What needs attention?" }, origin = "https://test.example") { return new NextRequest("https://test.example/api/ai-assistant", { method: "POST", headers: { "origin": origin, "content-type": "application/json" }, body: JSON.stringify(body) }); }
 beforeEach(() => {
-  vi.clearAllMocks(); vi.stubEnv("VERCEL_ENV", "preview"); vi.stubEnv("VERCEL_GIT_COMMIT_REF", "feature/ai-assistant-v1"); vi.stubEnv("GEMINI_API_KEY", "test-key");
+  vi.clearAllMocks(); mocks.prepare.mockResolvedValue({ id: "chat-1", history: [] }); mocks.save.mockResolvedValue(undefined); vi.stubEnv("VERCEL_ENV", "preview"); vi.stubEnv("VERCEL_GIT_COMMIT_REF", "feature/ai-assistant-v1"); vi.stubEnv("GEMINI_API_KEY", "test-key");
   mocks.profile.mockResolvedValue({ id: "admin-id", role: "admin" }); mocks.snapshot.mockResolvedValue({ capturedAt: "2026-10-13T00:00:00Z", sources: [{ table: "complaints", loaded: 1, records: [{ complaint_no: "CMP-1" }] }] });
   mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "klgcr_ai_reserve" ? { id: "req-1", reservedMyr: .5, budgetMyr: 20 } : { reservedMyr: .5 }, error: null }));
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: "CMP-1 needs review." }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20, totalTokenCount: 120 } }) }); vi.stubGlobal("fetch", mocks.fetch);
@@ -36,4 +37,19 @@ describe("AI endpoint", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("klgcr_ai_finish", expect.objectContaining({ p_state: "provider_400_INVALID_ARGUMENT_API_KEY_INVALID" }));
   });
   it("rejects oversized database context before billing", async () => { mocks.snapshot.mockResolvedValue({ sources: [{ table: "a".repeat(80001), records: [] }] }); expect((await POST(request())).status).toBe(413); expect(mocks.rpc).not.toHaveBeenCalled(); });
+});
+
+it("saves a successful question and answer before returning", async () => {
+ const result = await POST(request()); const data = await result.json();
+ expect(data).toMatchObject({ conversationId: "chat-1", historySaved: true });
+ expect(mocks.save).toHaveBeenCalledWith("admin-id","chat-1","What needs attention?","CMP-1 needs review.","2026-10-13T00:00:00Z");
+});
+it("uses owned server history when continuing a saved conversation", async () => {
+ const id="10000000-0000-4000-8000-000000000001";
+ mocks.prepare.mockResolvedValue({id,history:[{role:"user",text:"Saved question"},{role:"assistant",text:"Saved answer"}]});
+ await POST(request({question:"Continue",conversationId:id,history:[{role:"user",text:"untrusted client history"}]}));
+ const sent=JSON.parse(mocks.fetch.mock.calls[0][1].body); expect(sent.contents[0].parts[0].text).toBe("Saved question"); expect(JSON.stringify(sent)).not.toContain("untrusted client history");
+});
+it("returns the answer with an explicit unsaved flag if persistence fails", async () => {
+ mocks.save.mockRejectedValue(new Error("database unavailable"));const res=await POST(request());expect(res.status).toBe(200);expect(await res.json()).toMatchObject({historySaved:false,answer:"CMP-1 needs review."});
 });

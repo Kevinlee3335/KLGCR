@@ -73,3 +73,17 @@ Database inspection confirmed Abdullah and ABDULLAH, and Faiz and FAIZ, are dist
 ## Approved production release — 2026-10-13
 
 User approved production release and requested a larger chat frame. Assistant-only layout now uses the available page width, 68vh desktop / 62dvh mobile conversation height, and 16px answer text. Safe Markdown tables support escaped pipes and blank lines, with keyboard-accessible horizontal scrolling. Production main and the exact feature preview are enabled; role authorization and the existing shared safety budget remain unchanged. Gemini secret target extended to production without changing the secret or provider billing. Full suite: 228 tests across 56 files passed; typecheck and build passed with only four pre-existing image warnings. User live preview verified low-stock filtering and current/archived staff separation; authenticated production chat still requires live verification. No business-data migration or operational writes performed.
+
+
+## Account chat history — preview, 2026-10-15
+
+Added private account-owned conversations and complete question/answer turns with original snapshot timestamps. History lists and message pages load 25 at a time; earlier chats/messages remain available. Fresh page mounts restore the latest chat. New chat preserves existing records. Continuing a saved chat uses its last four stored turns, not client-provided history, and still reads fresh operational data. Successful answers are saved before response; a persistence failure returns the answer with an explicit unsaved warning. Failed provider attempts do not create saved answer turns. No browser storage or cross-account shared history is used.
+
+Two new isolated public tables have RLS. Authenticated users receive SELECT only, scoped to their own ID and active Admin/Management profile. Server inserts use verified account IDs and a composite conversation/account foreign key. No DELETE privileges are granted and no existing business table/schema/policy is changed. Hosted SQL rollback verification confirmed owner visibility and foreign-account denial; verification rows were rolled back (0 retained), anonymous reads and client inserts are denied. Security advisors reported no notices referencing the new tables.
+
+Validation: 349 tests across 70 files passed; typecheck/build passed (four pre-existing image warnings). Includes fresh-mount restore, opening historical chats, continuing the selected conversation, New chat preservation, API ownership scoping, stale client history rejection, unsaved-answer warning, role/anonymous denials and database RLS isolation. Built on current main c414e66 to preserve later Daily Tasks fixes. Only feature/ai-assistant-v1 is released; production app code remains unchanged pending approval. Authenticated hosted browser chat remains a manual preview verification step.
+
+
+## Approved history release — 2026-10-15
+
+User approved immediate production release. Integrated with current main f6a2d4a, preserving the Rental & Utilities billing release without changes to its files. Integration verification: 387 tests / 80 files, typecheck and build passed. Existing image/hook warnings remain outside this change. Previously installed isolated chat tables and ownership RLS are reused; no business data is changed.

@@ -1,0 +1,15 @@
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+const mocks = vi.hoisted(() => ({ profile: vi.fn(), list: vi.fn(), read: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getSessionProfile: mocks.profile }));
+vi.mock("@/lib/ai-assistant-history", () => ({ listConversations: mocks.list, readConversation: mocks.read, ConversationNotFound: class extends Error {} }));
+import { GET } from "./route";
+import { ConversationNotFound } from "@/lib/ai-assistant-history";
+const id="10000000-0000-4000-8000-000000000001";
+const request=(query="") => new NextRequest(`https://test.example/api/ai-assistant/history${query}`);
+beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("VERCEL_ENV","preview");vi.stubEnv("VERCEL_GIT_COMMIT_REF","feature/ai-assistant-v1");mocks.profile.mockResolvedValue({ id:"owner",role:"admin" });mocks.list.mockResolvedValue([{id,title:"Saved chat"}]);mocks.read.mockResolvedValue({conversation:{id},turns:[]}); });
+afterEach(() => vi.unstubAllEnvs());
+it("requires login and an allowed role before reading", async () => { mocks.profile.mockResolvedValue(null); expect((await GET(request())).status).toBe(401);mocks.profile.mockResolvedValue({role:"cleaner"});expect((await GET(request())).status).toBe(403);expect(mocks.list).not.toHaveBeenCalled(); });
+it("lists only the verified owner with bounded pagination and no cache", async () => {const res=await GET(request("?offset=25"));expect(res.status).toBe(200);expect(res.headers.get("Cache-Control")).toBe("no-store");expect(mocks.list).toHaveBeenCalledWith("owner",25);});
+it("opens only the verified owner's conversation", async () => {expect((await GET(request(`?conversationId=${id}`))).status).toBe(200);expect(mocks.read).toHaveBeenCalledWith("owner",id,0);});
+it("rejects bad identifiers/offsets and hides missing or foreign chats", async () => {expect((await GET(request("?conversationId=bad"))).status).toBe(400);expect((await GET(request("?offset=-1"))).status).toBe(400);mocks.read.mockRejectedValue(new ConversationNotFound());expect((await GET(request(`?conversationId=${id}`))).status).toBe(404);});
