@@ -65,7 +65,6 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),activity:daily_task_activity(id,action,comment,created_at,actor:profiles!daily_task_activity_actor_id_fkey(full_name))");
   if (!allRecords) taskQuery = taskQuery.eq("task_date", date);
   const search = taskSearchFilter(filters.q);
-  if (search) taskQuery = taskQuery.or(search);
   if (taskFilterDate(filters.from)) taskQuery = taskQuery.gte("task_date", filters.from);
   if (taskFilterDate(filters.to)) taskQuery = taskQuery.lte("task_date", filters.to);
   if (/^[0-9a-f-]{36}$/i.test(filters.assignedTo || "")) taskQuery = taskQuery.eq("assigned_to", filters.assignedTo);
@@ -75,7 +74,16 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     taskQuery = taskQuery.eq("task_category", category);
     recurrenceQuery = recurrenceQuery.eq("task_category", category);
   }
-  if (selectedStatuses.length) taskQuery = taskQuery.in("status", selectedStatuses);
+  if (selectedStatuses.length) {
+    taskQuery = taskQuery.in("status", selectedStatuses);
+    if (search) taskQuery = taskQuery.or(search);
+  } else {
+    // Malaysia midnight: retain today's completions; older completed records
+    // remain accessible through an explicit Completed status filter.
+    const today = myDate();
+    const visibility = `status.neq.completed,completed_at.gte.${today}T00:00:00+08:00,and(completed_at.is.null,task_date.gte.${today})`;
+    taskQuery = taskQuery.or(search ? `and(or(${search}),or(${visibility}))` : visibility);
+  }
   taskQuery = taskQuery.order(category ? (sortBy === "work_date" ? "task_date" : sortBy) : "created_at", { ascending: category ? ascending : true });
 
   const [{ data: jobs, error }, { data: adminTasks, error: taskQueryError }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
@@ -121,12 +129,12 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
       <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up tasks. Previous records remain available." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
-      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link>{category && <Link className="button secondary" href={`/admin/daily-tasks?category=${category}`}>All Records</Link>}</div>
+      <div className="actions"><Link className="button secondary" href={`/admin/daily-tasks?status=completed${category ? `&category=${category}` : ""}`}>Completed</Link><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link>{category && <Link className="button secondary" href={`/admin/daily-tasks?category=${category}`}>All Records</Link>}</div>
     </div>
     <DailyTaskFilters filters={filters} category={category} staff={employees || []} sort={sort.value} />
     {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}{taskError && <p className="error">Unable to load task records: {taskError.message}</p>}
     <section className="panel">
-      <div className="section-head"><div><h3>{categoryLabel} · {allRecords ? "All Records" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
+      <div className="section-head"><div><h3>{categoryLabel} · {allRecords ? "All Records" : date}</h3><p className="subtle">Older completed tasks are available under Completed. Today’s completions remain visible until the next Malaysia day.</p></div>{statusFilter}</div>
       {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
       <div className="daily-task-list">
         {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => {
