@@ -1,0 +1,19 @@
+import {NextRequest,NextResponse} from 'next/server';
+import {z} from 'zod';
+import {getSessionProfile} from '@/lib/auth';
+import {createAdminClient} from '@/lib/supabase/admin';
+import {newDeviceToken,tokenHash} from '@/lib/print-agent';
+import {monthSchema,malaysiaClock} from '@/lib/billing-preview';
+export const dynamic='force-dynamic';
+const reply=(v:unknown,status=200)=>NextResponse.json(v,{status,headers:{'Cache-Control':'no-store'}});
+async function admin(){const p=await getSessionProfile();return p&&['admin','management_viewer'].includes(p.role)?p:null}
+export async function GET(){if(!await admin())return reply({error:'Access denied'},403);try{const db=createAdminClient();const [device,jobs]=await Promise.all([db.from('klg_print_device').select('name,auto_enabled,enabled_from,last_seen,printer').eq('id',1).maybeSingle(),db.from('klg_print_jobs').select('id,kind,period,status,attempt,created_at,claimed_at,completed_at,printer,error,retry_reason').order('created_at',{ascending:false}).limit(50)]);if(device.error||jobs.error)throw Error();return reply({device:device.data,jobs:jobs.data})}catch{return reply({error:'Print Agent storage is unavailable'},503)}}
+export async function POST(req:NextRequest){const p=await admin();if(!p)return reply({error:'Access denied'},403);if(req.headers.get('origin')!==req.nextUrl.origin)return reply({error:'Invalid origin'},403);try{
+ const raw=await req.text();if(raw.length>3000)return reply({error:'Request too large'},413);const j=JSON.parse(raw),db=createAdminClient();
+ if(j.action==='connect'){const token=newDeviceToken();const {error}=await db.from('klg_print_device').upsert({id:1,token_hash:tokenHash(token),name:z.string().trim().min(1).max(100).parse(j.name),auto_enabled:false,enabled_from:null,last_seen:null,printer:null,created_by:p.id,created_at:new Date().toISOString()});if(error)throw Error();return reply({token})}
+ if(j.action==='revoke'){const {error}=await db.from('klg_print_device').delete().eq('id',1);if(error)throw Error();return reply({ok:true})}
+ if(j.action==='test'){const {error}=await db.from('klg_print_jobs').insert({dedupe_key:'test:'+crypto.randomUUID(),kind:'test',created_by:p.id});if(error)throw Error();return reply({ok:true})}
+ if(j.action==='auto'){const enabled=z.boolean().parse(j.enabled);if(enabled){if(j.testChecked!==true)return reply({error:'Check the printed test page before enabling'},400);const {data:current}=await db.from('klg_print_device').select('token_hash,printer').eq('id',1).maybeSingle();if(!current?.token_hash||!current.printer)return reply({error:'Connect the office PC first'},409);const {data,error}=await db.from('klg_print_jobs').select('id').eq('kind','test').eq('status','submitted').eq('device_hash',current.token_hash).eq('printer',current.printer).limit(1);if(error||!data?.length)return reply({error:'Complete a test print first'},409)}const {data,error}=await db.from('klg_print_device').update({auto_enabled:enabled,...(enabled?{enabled_from:monthSchema.parse(j.from||malaysiaClock().date.slice(0,7))}:{})}).eq('id',1).select('id').maybeSingle();if(error||!data)return reply({error:'Connect the office PC first'},409);return reply({ok:true})}
+ if(j.action==='retry'){const id=z.string().uuid().parse(j.id),attempt=z.number().int().positive().parse(j.attempt),reason=z.string().trim().min(5).max(500).parse(j.reason);const {data,error}=await db.from('klg_print_jobs').update({status:'queued',attempt:attempt+1,device_hash:null,claimed_at:null,completed_at:null,error:null,retry_reason:reason}).eq('id',id).eq('attempt',attempt).in('status',['failed','claimed']).select('id').maybeSingle();if(error||!data)return reply({error:'Job changed; refresh before retrying'},409);return reply({ok:true})}
+ return reply({error:'Unknown action'},400);
+ }catch(e){return reply({error:e instanceof z.ZodError?'Invalid input':'Unable to update Print Agent'},400)}}
