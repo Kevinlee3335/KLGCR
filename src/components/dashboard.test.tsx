@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Dashboard } from "./dashboard";
 
@@ -14,10 +14,11 @@ describe("role dashboards", () => {
     expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveAttribute("href", "/admin/jobs?scope=completed-today");
     expect(screen.getByRole("link", { name: /Completed Today/i })).toHaveTextContent("5");
     expect(screen.getByText("Operations Command Centre")).toBeInTheDocument();
-    const intake = screen.getByRole("region", { name: "Complaints received today" });
-    expect(within(intake).getByText("10")).toBeInTheDocument();
-    expect(within(intake).getByText("8")).toBeInTheDocument();
-    expect(within(intake).getByRole("link", { name: /View summary/ })).toHaveAttribute("href", "/admin/complaints?summaryFrom=2026-10-15&summaryTo=2026-10-15");
+    const intake = screen.getByRole("link", { name: /Today's Complaints/i });
+    expect(intake).toHaveTextContent("10");
+    expect(intake).toHaveClass("kpi-card");
+    expect(intake).toHaveAttribute("href", "/admin/complaints?summaryFrom=2026-10-15&summaryTo=2026-10-15");
+    expect(screen.queryByRole("region", { name: "Complaints received today" })).not.toBeInTheDocument();
     expect(screen.getByText("15")).toBeInTheDocument();
   });
 
