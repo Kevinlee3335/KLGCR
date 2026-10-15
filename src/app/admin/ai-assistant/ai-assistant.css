@@ -20,3 +20,5 @@
 .ai-answer tr:last-child td{border-bottom:0}
 .ai-compose textarea{min-height:90px;font-size:16px}
 @media(max-width:640px){.content:has(.ai-workspace){padding:12px}.ai-conversation{padding:12px;height:62dvh;min-height:360px}.ai-message p,.ai-answer li{font-size:16px}.ai-answer table{font-size:14px}.ai-answer th,.ai-answer td{padding:10px}.ai-message{padding:12px}}
+
+.ai-history{margin:14px 0;border:1px solid #d9e5de;border-radius:12px;padding:12px;background:white}.ai-history summary{cursor:pointer;font-size:14px;font-weight:600}.ai-history-list{display:flex;gap:8px;overflow-x:auto;max-height:170px;padding-top:12px}.ai-history-list button{flex:0 0 220px;border:1px solid #dce5df;border-radius:9px;padding:10px;text-align:left;background:#f6f9f7;color:#244638}.ai-history-list button[aria-pressed=true]{border-color:#256e50;background:#e3f1e8}.ai-history-list button span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ai-history-list small{display:block;font-size:11px;margin-top:6px;color:#607869}
