@@ -12,7 +12,7 @@ export default async function AdminPage() {
   const profile = await requireRole(["admin", "management_viewer"]);
   const supabase = await createClient();
   const today = malaysiaToday();
-  const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{count:completionPhotos},{data:noShowRows,error:noShowError}] = await Promise.all([
+  const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{count:completionPhotos},{data:noShowRows,error:noShowError},{data:complaintIntake,error:intakeError}] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
     supabase.from("maintenance_jobs").select("status").in("status", ["assigned", "in_progress", "pending_material", "under_monitoring", "completed"]),
     supabase.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)").order("submitted_at", { ascending: false }).limit(5),
@@ -25,7 +25,9 @@ export default async function AdminPage() {
       .select("id,job_id,appointment_date,appointment_time,attended_at,no_show_remarks,attendee:profiles!appointments_attended_by_fkey(full_name),job:maintenance_jobs!appointments_job_id_fkey(id,job_no,status,room_no,block:blocks!block_id(code))")
       .eq("status","no_show")
       .order("attended_at",{ascending:false}),
+    supabase.rpc("complaint_intake_summary", { p_date: today, p_group: "ALL" }),
   ]);
+  if (intakeError) console.error("Complaint intake summary failed", intakeError.message);
   if (countError) console.error("admin_dashboard_counts failed", countError.message);
   if (noShowError) console.error("Dashboard tenant no-shows could not be loaded", noShowError.message);
   const noShows=(noShowRows??[]) as unknown as TenantNoShowNotification[];
@@ -40,6 +42,7 @@ export default async function AdminPage() {
   const stock = (inventory ?? []).reduce((summary, item) => { const balance = Number(item.balance_qty); const reorder = Number(item.reorder_level); if (balance <= 0) summary.outOfStock++; else if (balance <= reorder) summary.nearReorder++; return summary; }, { outOfStock: 0, nearReorder: 0 });
   const data: AdminDashboardData = {
     kpis: { tenantNotAvailable: tenantNoShows.length, newComplaints: Number(counts?.new_complaints ?? 0), todayJobs: Number(counts?.today_tasks ?? 0), inProgress: jobs.in_progress, pendingMaterial: jobs.pending_material, underMonitoring: jobs.under_monitoring, completedToday: Number(counts?.completed_today ?? 0),completionPhotos:completionPhotos||0,todayAppointments:todayAppointments||0,pendingAppointments:pendingAppointments||0 },
+    complaintIntake: intakeError ? null : complaintIntake,
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
   return <AppShell profile={profile} title="Dashboard"><Dashboard kind="admin" name={profile.full_name} data={data}/></AppShell>;

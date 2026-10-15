@@ -13,6 +13,7 @@ type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under
 
 export type AdminDashboardData = {
   kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number };
+  complaintIntake?: { date: string; total: number; dispatched: number; completed: number; under_monitoring: number; pending_material: number; in_progress: number; assigned: number; unassigned: number; rejected: number; cancelled: number } | null;
   tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
@@ -61,6 +62,12 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
       <div className="command-time"><Clock3 size={17}/><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit", hour12: true }).format(now)} MYT</span></div>
     </section>
     <section className="admin-kpis" aria-label="Operational summary">{kpis.map(({ icon: Icon, ...kpi }) => <Link className={`kpi-card kpi-${kpi.tone}`} href={kpi.href} key={kpi.title}><span className="kpi-icon"><Icon size={20}/></span><div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0}}><span className="kpi-title" style={{display:"block"}}>{kpi.title}</span><strong style={{display:"block",fontSize:"1.8rem",lineHeight:1.1,marginTop:"5px"}}>{kpi.value}</strong><small style={{display:"block",marginTop:"5px"}}>{kpi.subtitle}</small></div><ArrowRight className="kpi-arrow" size={16}/></Link>)}</section>
+    <section className="dashboard-card" aria-label="Complaints received today" style={{ marginBottom: 20 }}>
+      <div className="dashboard-section-title"><div><span>Complaints Received Today</span><small>All complaints received today (MYT), including completed complaints</small></div><Link href={`/admin/complaints?summaryFrom=${data.complaintIntake?.date ?? ""}&summaryTo=${data.complaintIntake?.date ?? ""}`}>View summary <ArrowRight size={14}/></Link></div>
+      {data.complaintIntake ? <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px" }}>
+        {[["Total received", data.complaintIntake.total], ["Dispatched (includes completed)", data.complaintIntake.dispatched], ["Completed", data.complaintIntake.completed], ["Under Monitoring", data.complaintIntake.under_monitoring], ["Pending Material", data.complaintIntake.pending_material], ["In Progress", data.complaintIntake.in_progress], ["Assigned / not started", data.complaintIntake.assigned], ["Unassigned / Under Review", data.complaintIntake.unassigned], ["Rejected", data.complaintIntake.rejected], ["Cancelled", data.complaintIntake.cancelled]].map(([label, value]) => <div key={String(label)}><small>{label}</small><strong style={{ display: "block", fontSize: "1.6rem" }}>{value}</strong></div>)}
+      </div> : <p className="error">Today&apos;s complaint summary is unavailable. Please refresh or contact Admin.</p>}
+    </section>
     {data.tenantNoShows.length > 0 && <section className="tenant-dashboard-alert" aria-label="Tenant not available alerts">
       <div className="tenant-alert-heading">
         <span className="tenant-alert-icon"><UserX size={22}/></span>
