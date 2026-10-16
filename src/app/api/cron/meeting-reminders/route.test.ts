@@ -24,6 +24,15 @@ describe("meeting reminders", () => {
     expect(mocks.notify).toHaveBeenCalledTimes(1);
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({recipientIds:["kevin"],entityId:"meeting",expiresAt:"2026-10-16T16:30:00+08:00",href:"/admin/calendar"}));
   });
+  it("allows authorized one-time catch-up only on rollout date", async () => {
+    vi.setSystemTime(new Date("2026-10-16T15:00:00+08:00"));
+    await GET(new Request("https://example.com/api/cron/meeting-reminders?catchup=2026-10-16", {headers:{authorization:"Bearer test"}}) as never);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    mocks.notify.mockClear();
+    vi.setSystemTime(new Date("2026-10-17T15:00:00+08:00"));
+    await GET(new Request("https://example.com/api/cron/meeting-reminders?catchup=2026-10-16", {headers:{authorization:"Bearer test"}}) as never);
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
   it("rejects unauthenticated requests", async () => {
     expect((await GET(new Request("https://example.com") as never)).status).toBe(401);
     expect(mocks.from).not.toHaveBeenCalled();

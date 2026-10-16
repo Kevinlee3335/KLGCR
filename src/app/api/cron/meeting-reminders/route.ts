@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const now = new Date();
-  if (!meetingReminderSlot(now)) return NextResponse.json({ ok: true, sent: 0 });
   const date = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const catchUp = new URL(request.url).searchParams.get("catchup") === "2026-10-16" && date === "2026-10-16";
+  if (!catchUp && !meetingReminderSlot(now)) return NextResponse.json({ ok: true, sent: 0 });
   const db = createAdminClient();
   const { data: events, error } = await db.from("calendar_events")
     .select("id,title,notes,starts_at,audience,assigned_to")
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   const slotStart = `${date}T09:00:00+08:00`;
   let sent = 0;
   for (const event of events || []) {
-    if (!meetingReminderDue(event.starts_at, now) || !meetingIsUpcoming(event.starts_at, new Date(), date)) continue;
+    if ((!catchUp && !meetingReminderDue(event.starts_at, now)) || !meetingIsUpcoming(event.starts_at, new Date(), date)) continue;
     const recipients = (profiles || []).filter(person => event.audience === "all_staff" || person.id === event.assigned_to);
     const { data: existing, error: existingError } = await db.from("app_notifications").select("recipient_id")
       .eq("type", "calendar_event").eq("entity_id", event.id).eq("title", "Meeting reminder")
