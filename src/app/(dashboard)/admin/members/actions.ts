@@ -18,7 +18,10 @@ export async function reviewPayment(form: FormData) {
  const {error} = await createAdminClient().rpc("review_membership_payment",{p_payment:payment,p_actor:profile.id,p_approve:approve,p_note:note});
  if (error) { console.error("Membership review failed",error); redirect("/admin/members?error=review"); }
  // Approval and email queuing commit atomically. Failed email can be retried without approving twice.
- try { await deliverMembershipEmails(); } catch (error) { console.error("Membership email retry pending",error); }
+ try {
+  const {data: reviewedPayment} = await createAdminClient().from("membership_payments").select("member_id").eq("id",payment).single();
+  if (reviewedPayment) await deliverMembershipEmails(reviewedPayment.member_id);
+ } catch (error) { console.error("Membership email retry pending",error); }
  revalidatePath("/admin/members");
  redirect("/admin/members?success=reviewed");
 }

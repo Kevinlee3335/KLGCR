@@ -6,12 +6,10 @@ import { openToken } from "@/lib/membership-secrets";
 /** Durable email queue. Concurrent workers claim each row once; failed deliveries remain retryable. */
 export async function deliverMembershipEmails(memberId?: string) {
   const db = createAdminClient();
-  let query = db.from("membership_emails").select("id,member_id,kind,period_start,attempts").eq("status","pending").order("created_at").limit(500);
-  if (memberId) query = query.eq("member_id",memberId);
-  const {data: queue,error} = await query;
-  if (error) throw new Error("Unable to load membership email queue.");
   let sent = 0;
-  async function deliver(item: NonNullable<typeof queue>[number]) {
+  const deadline = Date.now() + 240_000;
+  type QueuedEmail = {id:string;member_id:string;kind:string;period_start:string;attempts:number};
+  async function deliver(item: QueuedEmail) {
     const {data: claim,error: claimError} = await db.from("membership_emails").update({status:"sending",claimed_at:new Date().toISOString(),attempts:item.attempts+1}).eq("id",item.id).eq("status","pending").select("id").maybeSingle();
     if (claimError) throw new Error("Unable to claim membership email.");
     if (!claim) return;
@@ -39,9 +37,20 @@ export async function deliverMembershipEmails(memberId?: string) {
       if (retryError) console.error("Unable to release membership email",item.id);
     }
   }
-  const items = queue || [];
-  for (let index = 0; index < items.length; index += 10) {
-    await Promise.all(items.slice(index, index + 10).map(deliver));
+  let cursor: string | null = null;
+  while (Date.now() < deadline) {
+    let query = db.from("membership_emails").select("id,member_id,kind,period_start,attempts").eq("status","pending").order("id").limit(500);
+    if (memberId) query = query.eq("member_id",memberId);
+    if (cursor) query = query.gt("id",cursor);
+    const {data: queue,error} = await query;
+    if (error) throw new Error("Unable to load membership email queue.");
+    if (!queue?.length) break;
+    for (let index = 0; index < queue.length && Date.now() < deadline; index += 20) {
+      const batch = queue.slice(index, index + 20);
+      await Promise.all(batch.map(deliver));
+      cursor = batch[batch.length - 1].id;
+    }
+    if (queue.length < 500) break;
   }
   return sent;
 }

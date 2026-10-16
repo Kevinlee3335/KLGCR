@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { appOrigin, membershipEnabled, memberStatus, malaysiaDay } from "@/lib/membership";
 import { reviewPayment, retryMembershipEmails } from "./actions";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 export default async function MembersPage({searchParams}:{searchParams:Promise<{q?:string;status?:string;page?:string;id?:string;error?:string;success?:string}>}) {
  const profile = await requireRole(["admin"]);
  if (!membershipEnabled()) return <AppShell profile={profile} title="Membership"><section className="panel"><h2>Membership setup</h2><p>The membership module is awaiting database and email configuration. Public registration is disabled until setup is verified.</p></section></AppShell>;
