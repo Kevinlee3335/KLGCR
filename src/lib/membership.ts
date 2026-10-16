@@ -12,7 +12,8 @@ export function membershipToken() { return randomBytes(32).toString("hex"); }
 export function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
 export function validToken(token: string) { return /^[a-f0-9]{64}$/.test(token); }
 export function appOrigin() {
-  const value = process.env.NEXT_PUBLIC_APP_URL;
+  const value = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}` : process.env.NEXT_PUBLIC_APP_URL;
   if (!value) throw new Error("NEXT_PUBLIC_APP_URL is required for membership links.");
   const url = new URL(value);
   if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error("Membership URL must use HTTPS.");

@@ -2,7 +2,7 @@
 import { useActionState, useState } from "react";
 import { SubmitButton } from "./submit-button";
 import { registerMember, submitMemberRequest } from "@/app/membership/actions";
-export function MembershipForm({ token, period, fee }: { token?: string; period?: string; fee?: number }) {
+export function MembershipForm({ token, period, fee, submissionEnabled = true }: { token?: string; period?: string; fee?: number; submissionEnabled?: boolean }) {
   const [type, setType] = useState("resident");
   const [state, action] = useActionState(token ? submitMemberRequest : registerMember, { error: "" });
   return <form action={action} className="membership-form">
@@ -23,6 +23,6 @@ export function MembershipForm({ token, period, fee }: { token?: string; period?
     <label className="wide">Payment receipt<input name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required/><small>JPG, PNG or PDF, up to 3 MB. Payment is verified by Admin.</small></label>
     <label className="wide member-consent"><input type="checkbox" name="consent" value="yes" required/>I confirm my details and payment receipt are accurate. I agree to the use of these details for membership administration.</label>
     <div hidden aria-hidden="true"><input name="website" tabIndex={-1} autoComplete="off"/></div>
-    <div className="wide"><SubmitButton pendingText="Submitting…">{token ? "Submit renewal for verification" : "Submit registration"}</SubmitButton></div>
+    <div className="wide">{submissionEnabled ? <SubmitButton pendingText="Submitting…">{token ? "Submit renewal for verification" : "Submit registration"}</SubmitButton> : <button type="button" className="button" disabled>Registration opens after setup</button>}</div>
   </form>;
 }

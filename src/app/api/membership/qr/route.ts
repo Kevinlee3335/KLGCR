@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { appOrigin, membershipEnabled } from "@/lib/membership";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
- if (!membershipEnabled()) return new NextResponse("Not available", {status:404});
  const card = request.nextUrl.searchParams.get("card");
+ if (card && !membershipEnabled()) return new NextResponse("Not available", {status:404});
  if (card && !/^[a-f0-9-]{36}$/.test(card)) return new NextResponse("Invalid card", {status:400});
  const url = `${appOrigin()}/membership/${card ? `card/${card}` : "register"}`;
  const png = await QRCode.toBuffer(url,{type:"png",width:720,margin:4,errorCorrectionLevel:"M"});
