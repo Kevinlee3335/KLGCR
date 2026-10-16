@@ -4,20 +4,21 @@ import { meetingIsUpcoming, meetingReminderDue, meetingReminderSlot } from "@/li
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Server-side helper. Callers must authenticate: cron bearer token or admin server action.
-export async function sendMeetingReminders(oneTimeCatchUp = false) {
+export async function sendMeetingReminders(oneTimeCatchUp = false, calendarClient?: ReturnType<typeof createAdminClient>) {
   const now = new Date();
   const date = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const catchUp = oneTimeCatchUp && date === "2026-10-16";
   if (!catchUp && !meetingReminderSlot(now)) return NextResponse.json({ ok: true, sent: 0 });
   const db = createAdminClient();
-  const { data: events, error } = await db.from("calendar_events")
+  const calendarDb = calendarClient || db;
+  const { data: events, error } = await calendarDb.from("calendar_events")
     .select("id,title,notes,starts_at,audience,assigned_to")
     .eq("event_type", "meeting").gt("starts_at", now.toISOString())
     .lte("starts_at", `${date}T23:59:59.999+08:00`);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const { data: profiles, error: profileError } = await db.from("profiles").select("id,role")
+  if (error) return NextResponse.json({ error: "Load meetings: " + error.message }, { status: 500 });
+  const { data: profiles, error: profileError } = await calendarDb.from("profiles").select("id,role")
     .eq("is_active", true).is("deleted_at", null);
-  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
+  if (profileError) return NextResponse.json({ error: "Load participants: " + profileError.message }, { status: 500 });
   const slotStart = `${date}T09:00:00+08:00`;
   let sent = 0;
   for (const event of events || []) {
@@ -26,7 +27,7 @@ export async function sendMeetingReminders(oneTimeCatchUp = false) {
     const { data: existing, error: existingError } = await db.from("app_notifications").select("recipient_id")
       .eq("type", "calendar_event").eq("entity_id", event.id).eq("title", "Meeting reminder")
       .gte("created_at", slotStart);
-    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+    if (existingError) return NextResponse.json({ error: "Check previous reminders: " + existingError.message }, { status: 500 });
     const notified = new Set((existing || []).map(row => row.recipient_id));
     for (const person of recipients) {
       if (notified.has(person.id) || !meetingIsUpcoming(event.starts_at, new Date(), date)) continue;

@@ -81,9 +81,9 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     "use server";
     await requireRole(["admin"]);
     if (malaysiaDate(new Date().toISOString()) !== "2026-10-16") redirect("/admin/calendar?error=This+one-time+reminder+has+expired");
-    const response = await sendMeetingReminders(true);
-    if (!response.ok) redirect("/admin/calendar?error=Unable+to+send+meeting+reminders");
+    const response = await sendMeetingReminders(true, await createClient());
     const result = await response.json();
+    if (!response.ok) redirect(`/admin/calendar?error=${encodeURIComponent("Meeting reminder failed — " + (result.error || "Unknown error"))}`);
     revalidatePath("/admin/calendar");
     redirect(`/admin/calendar?reminders=${Number(result.sent) || 0}`);
   }

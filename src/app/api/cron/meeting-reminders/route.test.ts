@@ -34,6 +34,21 @@ describe("meeting reminders", () => {
     await sendMeetingReminders(true);
     expect(mocks.notify).not.toHaveBeenCalled();
   });
+  it("uses the authenticated Calendar client for manual meeting and participant reads", async () => {
+    vi.setSystemTime(new Date("2026-10-16T15:00:00+08:00"));
+    const calendarFrom = vi.fn(mocks.from);
+    await sendMeetingReminders(true, { from: calendarFrom } as never);
+    expect(calendarFrom.mock.calls.map(call => call[0])).toEqual(["calendar_events", "profiles"]);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+  it("returns the actual failed query stage", async () => {
+    vi.setSystemTime(new Date("2026-10-16T15:00:00+08:00"));
+    const query = { select:()=>query, eq:()=>query, gt:()=>query, lte:()=>Promise.resolve({data:null,error:{message:"permission denied for table calendar_events"}}) };
+    const response = await sendMeetingReminders(true, { from:()=>query } as never);
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toBe("Load meetings: permission denied for table calendar_events");
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
   it("rejects unauthenticated requests", async () => {
     expect((await GET(new Request("https://example.com") as never)).status).toBe(401);
     expect(mocks.from).not.toHaveBeenCalled();
