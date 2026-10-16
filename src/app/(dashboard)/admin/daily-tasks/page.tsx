@@ -1,7 +1,7 @@
 import { signEvidencePhotos } from "@/lib/evidence-urls";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DailyTaskFilters } from "@/components/daily-task-filters";
-import { taskSearchFilter, taskFilterDate } from "@/lib/daily-task-filters";
+import { taskSearchFilter, taskFilterDate, showDailyTaskInDefaultList } from "@/lib/daily-task-filters";
 import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
@@ -88,7 +88,10 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
 
   const taskError = materializeError || taskQueryError;
   const isAdmin = profile.role === "admin";
-  const dailyTaskRows = (adminTasks ?? []) as any[];
+  const includeCompletedHistory = selectedStatuses.includes("completed");
+  const dailyTaskRows = ((adminTasks ?? []) as any[]).filter((task) =>
+    includeCompletedHistory || showDailyTaskInDefaultList(task, myDate())
+  );
   const taskIds = dailyTaskRows.map((task) => Number(task.id)).filter(Number.isSafeInteger);
   const { data: taskPhotos } = taskIds.length
     ? await db.from("daily_task_photos").select("id,task_id,storage_path,created_at").in("task_id", taskIds).order("created_at")
@@ -121,12 +124,12 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
       <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up tasks. Previous records remain available." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
-      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link>{category && <Link className="button secondary" href={`/admin/daily-tasks?category=${category}`}>All Records</Link>}</div>
+      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><Link className="button secondary" href={`/admin/daily-tasks?${category ? `category=${category}&` : ""}status=completed`}>Completed</Link></div>
     </div>
     <DailyTaskFilters filters={filters} category={category} staff={employees || []} sort={sort.value} />
     {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}{taskError && <p className="error">Unable to load task records: {taskError.message}</p>}
     <section className="panel">
-      <div className="section-head"><div><h3>{categoryLabel} · {allRecords ? "All Records" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
+      <div className="section-head"><div><h3>{categoryLabel} · {selectedStatuses.length === 1 && includeCompletedHistory ? "Completed" : allRecords ? "Current Tasks" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
       {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
       <div className="daily-task-list">
         {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => {
