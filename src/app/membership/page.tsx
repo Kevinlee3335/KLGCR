@@ -1,2 +1,1 @@
-import { redirect } from "next/navigation";
-export default function MembershipPage() { redirect("/membership/register"); }
+export { default } from "./register/page";
