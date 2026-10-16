@@ -55,6 +55,7 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
     {groups.slice(0, 2).map(renderGroup)}
     <Link href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></Link>
     {groups.slice(2).map(renderGroup)}
+    <Link href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></Link>
     <Link href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></Link>
     {assistantEnabled() && <Link href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></Link>}
   </nav>;

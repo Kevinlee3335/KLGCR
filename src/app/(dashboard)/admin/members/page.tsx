@@ -1,0 +1,49 @@
+import Link from "next/link";
+import { AppShell } from "@/components/app-shell";
+import { SubmitButton } from "@/components/submit-button";
+import { requireRole } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { appOrigin, membershipEnabled, memberStatus, malaysiaDay } from "@/lib/membership";
+import { reviewPayment, retryMembershipEmails } from "./actions";
+export const dynamic = "force-dynamic";
+export default async function MembersPage({searchParams}:{searchParams:Promise<{q?:string;status?:string;page?:string;id?:string;error?:string;success?:string}>}) {
+ const profile = await requireRole(["admin"]);
+ if (!membershipEnabled()) return <AppShell profile={profile} title="Membership"><section className="panel"><h2>Membership setup</h2><p>The membership module is awaiting database and email configuration. Public registration is disabled until setup is verified.</p></section></AppShell>;
+ const search = await searchParams;
+ const page = Math.max(1,Math.min(100000,Number(search.page)||1));
+ const q = (search.q || "").replace(/[^\p{L}\p{N}@.\s-]/gu,"").slice(0,100);
+ const today = malaysiaDay();
+ const db = createAdminClient();
+ let query = db.from("memberships").select("id,full_name,email,room_no,member_type,status,created_at,expires_on",{count:"exact"}).order("created_at",{ascending:false});
+ if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,room_no.ilike.%${q}%`);
+ if (search.status === "block") query = query.or(`status.eq.cancelled,and(status.eq.active,expires_on.lt.${today})`);
+ else if (search.status === "active") query = query.eq("status","active").gte("expires_on",today);
+ else if (["pending","cancelled"].includes(search.status || "")) query = query.eq("status",search.status!);
+ const [members, pending, emails] = await Promise.all([
+  query.range((page-1)*50,page*50-1),
+  db.from("membership_payments").select("id,member_id,period_start,amount,receipt_path,created_at,memberships(full_name,room_no,email)",{count:"exact"}).eq("status","pending_verification").order("created_at").limit(50),
+  db.from("membership_emails").select("id,last_error",{count:"exact"}).eq("status","pending").limit(5),
+ ]);
+ if (members.error || pending.error || emails.error) return <AppShell profile={profile} title="Membership"><p className="error">Unable to load membership records. Confirm the database setup and refresh.</p></AppShell>;
+ const receiptLinks = await Promise.all((pending.data||[]).map(async payment => {
+  const {data} = await db.storage.from("membership-receipts").createSignedUrl(payment.receipt_path,300);
+  return {payment,url:data?.signedUrl};
+ }));
+ const selected = search.id && /^[a-f0-9-]{36}$/.test(search.id) ? search.id : null;
+ const detail = selected ? await db.from("memberships").select("full_name,email,id_type,identification,gender,nationality,room_no,student_id,address,member_type").eq("id",selected).maybeSingle() : null;
+ const history = selected ? await db.from("membership_activity").select("id,event,created_at,actor_id,details").eq("member_id",selected).order("created_at",{ascending:false}).limit(100) : null;
+ const registerUrl = `${appOrigin()}/membership/register`;
+ const pageUrl = (p:number) => `/admin/members?${new URLSearchParams({q,status:search.status||"",page:String(p)})}`;
+ const errorText = search.error === "verify" ? "Confirm payment was received before approving." : search.error === "reason" ? "Enter a reason before rejecting." : "Review could not be saved. The payment may already be reviewed, the membership may be cancelled, or its payment month has passed. Refresh and check the record.";
+ return <AppShell profile={profile} title="Membership">
+  <div className="section-head"><div><p className="eyebrow">REGISTRATION & RENEWALS</p><h2>Membership</h2><p className="subtle">RM40 per month · RM10 first-time fee for outsiders only</p></div><Link className="button" href="/membership/register" target="_blank">Open registration</Link></div>
+  {search.error && <p className="error" role="alert">{errorText}</p>}{search.success && <p role="status">Payment review saved.</p>}
+  <section className="grid-2" style={{alignItems:"start"}}><article className="panel"><h3>Registration link & QR code</h3><p><a href={registerUrl}>{registerUrl}</a></p><img src="/api/membership/qr" width="180" height="180" alt="Scan to register for membership"/><p><a className="button secondary" href="/api/membership/qr?download=1">Download QR code</a></p></article><article className="panel"><h3>Renewal reminders</h3><p>Automatically queued on the third-last day of each month. Members who have renewed are excluded before delivery.</p><p>Pending emails: <strong>{emails.count || 0}</strong></p>{emails.data?.filter(email=>email.last_error).map(email=><p className="error" key={email.id}>Email pending: {email.last_error}</p>)}<form action={retryMembershipEmails}><SubmitButton pendingText="Sending…">Retry pending emails</SubmitButton></form><p className="subtle">Access cards require Management action unless a door access integration is configured.</p></article></section>
+  <section className="panel"><h3>Payment verification ({pending.count || 0})</h3><p className="subtle">Check the actual bank transaction before approval. Receipt file format checks do not confirm a bank transfer.</p>{receiptLinks.length ? receiptLinks.map(({payment,url})=> {
+   const member = payment.memberships as unknown as {full_name:string;room_no:string;email:string}|null;
+   return <article key={payment.id} style={{borderTop:"1px solid var(--line)",padding:"18px 0"}}><h4>{member?.full_name} · {member?.room_no}</h4><p>{member?.email} · {payment.period_start.slice(0,7)} · <strong>RM{payment.amount}</strong></p>{url ? <a href={url} target="_blank" rel="noreferrer">View receipt (link expires in 5 minutes)</a> : <p className="error">Receipt unavailable. Refresh before reviewing.</p>}<form action={reviewPayment}><input type="hidden" name="payment" value={payment.id}/><p><label><input type="checkbox" name="verified" value="yes"/> I verified that the correct payment was received.</label></p><label>Review note / rejection reason<input name="note" maxLength={1000} aria-label={`Review note for ${member?.full_name}`}/></label><p style={{display:"flex",gap:10,flexWrap:"wrap"}}><button className="button" name="decision" value="approve" disabled={!url}>Approve payment</button><button className="button secondary" name="decision" value="reject">Reject receipt</button></p></form></article>;
+  }) : <p>No receipts awaiting verification.</p>}{(pending.count||0)>50 && <p>Showing the oldest 50 receipts. Review these to see the next pending receipts.</p>}</section>
+  <section className="panel"><div className="section-head"><h3>Member list ({members.count || 0})</h3><a className="button secondary" href="/admin/members/export">Download card blocking list</a></div><form style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:20}}><input name="q" defaultValue={q} placeholder="Search name, email or room" aria-label="Search members"/><select name="status" defaultValue={search.status || ""} aria-label="Membership status"><option value="">All members</option><option value="active">Active</option><option value="pending">Pending approval</option><option value="block">Cards to block</option><option value="cancelled">Cancelled</option></select><button className="button">Search / Filter</button></form><div className="table-wrap"><table className="table"><thead><tr><th>Member</th><th>Room / Type</th><th>Registered</th><th>Valid until</th><th>Status</th></tr></thead><tbody>{members.data?.map(member=><tr key={member.id}><td><Link href={`/admin/members?id=${member.id}`}>{member.full_name}</Link><br/><small>{member.email}</small></td><td>{member.room_no}<br/>{member.member_type}</td><td>{new Date(member.created_at).toLocaleDateString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})}</td><td>{member.expires_on || "—"}</td><td>{memberStatus(member,today)}</td></tr>)}</tbody></table>{!members.data?.length && <p>No matching members.</p>}</div><p>Page {page} · {page>1 && <Link href={pageUrl(page-1)}>Previous</Link>} {page*50<(members.count||0) && <Link href={pageUrl(page+1)}>Next</Link>}</p></section>
+  {detail?.data && <section className="panel"><h3>{detail.data.full_name} — Member details</h3><dl>{Object.entries(detail.data).map(([key,value])=><div key={key}><dt style={{fontWeight:600}}>{key.replaceAll("_"," ")}</dt><dd>{String(value)}</dd></div>)}</dl><h4>Activity history</h4>{history?.error ? <p className="error">Unable to load activity history.</p> : history?.data?.map(event=><p key={event.id}>{new Date(event.created_at).toLocaleString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})} · {event.event.replaceAll("_"," ")} · {event.actor_id ? `Staff: ${event.actor_id}` : "Member"}<br/><small>{JSON.stringify(event.details)}</small></p>)}</section>}
+ </AppShell>;
+}
