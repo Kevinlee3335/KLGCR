@@ -11,6 +11,6 @@ export function DailyTaskFilters({ filters, category, staff, sort }: { filters: 
     <label className="field"><span>Work date</span><input type="date" name="date" defaultValue={filters.date || ""} /></label>
     <label className="field"><span>From</span><input type="date" name="from" defaultValue={filters.from || ""} /></label>
     <label className="field"><span>To</span><input type="date" name="to" defaultValue={filters.to || ""} /></label>
-    <button className="button" type="submit">Search / Filter</button><Link className="button secondary" href={reset}>Clear / All Records</Link>
+    <button className="button" type="submit">Search / Filter</button><Link className="button secondary" href={reset}>Clear</Link>
   </form>;
 }
