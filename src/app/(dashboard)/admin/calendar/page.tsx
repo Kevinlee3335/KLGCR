@@ -1,3 +1,5 @@
+import { NextRequest } from "next/server";
+import { GET as sendMeetingReminders } from "@/app/api/cron/meeting-reminders/route";
 import { groupCalendarEvents, calendarRecipients, type GroupableCalendarEvent } from "@/lib/calendar-event-groups";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -22,7 +24,7 @@ function eventDates(event: CalendarEvent) { const first = malaysiaDate(event.sta
 function recurringDates(task: RecurringTask,start:string,end:string){const dates:string[]=[];const cursor=new Date(`${start}T00:00:00Z`),finish=new Date(`${end}T00:00:00Z`),begins=new Date(`${task.starts_on}T00:00:00Z`);while(cursor<=finish){const day=cursor.toISOString().slice(0,10),dow=cursor.getUTCDay(),monthDay=cursor.getUTCDate(),offset=Math.floor((cursor.getTime()-begins.getTime())/86400000);if(day>=task.starts_on&&((task.frequency==="monthly"&&monthDay===Math.min(task.day_number,new Date(Date.UTC(cursor.getUTCFullYear(),cursor.getUTCMonth()+1,0)).getUTCDate()))||((task.frequency==="weekly"||task.frequency==="biweekly")&&dow===task.day_number&&(task.frequency!=="biweekly"||offset%14===0))))dates.push(day);cursor.setUTCDate(cursor.getUTCDate()+1);}return dates;}
 const eventLabels = { work: "Work", leave: "Leave", no_leave: "No leave", meeting: "Meeting", other: "Other" } as const;
 
-export default async function AdminCalendar({ searchParams }: { searchParams: Promise<{ month?: string; error?: string }> }) {
+export default async function AdminCalendar({ searchParams }: { searchParams: Promise<{ month?: string; error?: string; reminders?: string }> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month || "") ? query.month! : currentMonth();
@@ -76,6 +78,19 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
 
+  async function sendTodayMeetingReminder() {
+    "use server";
+    await requireRole(["admin"]);
+    if (malaysiaDate(new Date().toISOString()) !== "2026-10-16") redirect("/admin/calendar?error=This+one-time+reminder+has+expired");
+    const secret = process.env.CRON_SECRET;
+    if (!secret) redirect("/admin/calendar?error=Reminder+service+is+not+configured");
+    const response = await sendMeetingReminders(new NextRequest("https://klgcr-maintenance-system.vercel.app/api/cron/meeting-reminders?catchup=2026-10-16", { headers: { authorization: `Bearer ${secret}` } }));
+    if (!response.ok) redirect("/admin/calendar?error=Unable+to+send+meeting+reminders");
+    const result = await response.json();
+    revalidatePath("/admin/calendar");
+    redirect(`/admin/calendar?reminders=${Number(result.sent) || 0}`);
+  }
+
   async function deleteCalendarEvent(formData: FormData) {
     "use server";
     await requireRole(["admin"]);
@@ -117,6 +132,8 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
 
   return <AppShell profile={profile} title="Calendar">
     {profile.role === "admin" && <details className="calendar-tools"><summary>Add calendar item</summary><section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><CalendarEventForm staff={(staffResult.data || []).map((staff) => ({ id: staff.id, full_name: staff.full_name }))} action={createCalendarEvent}/></section></details>}
+    {profile.role === "admin" && malaysiaDate(new Date().toISOString()) === "2026-10-16" && <form action={sendTodayMeetingReminder} className="calendar-event-card"><div><strong>Today's meeting reminder</strong><p className="subtle">Send once to participants of today's upcoming meetings. Already notified participants are skipped.</p></div><button type="submit" className="button">Send today's meeting reminders</button></form>}
+    {query.reminders !== undefined && <p role="status">Meeting reminders processed: {query.reminders}. Previously notified participants and meetings already started were skipped.</p>}
     {query.error && <p className="error">{query.error}</p>}
     {profile.role === "admin" && <details className="calendar-tools"><summary>Calendar Settings ({savedEventGroups.length})</summary><section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{savedEventGroups.length} items</span></header>{savedEventGroups.length ? <div className="calendar-settings-list">{savedEventGroups.map(group => {
       const event=group.event;
