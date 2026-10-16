@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashToken, validToken, membershipToken, registrationSchema, nextPeriod, receiptBytes, membershipEnabled, appOrigin } from "@/lib/membership";
+import { hashToken, validToken, membershipToken, registrationSchema, nextPeriod, receiptBytes, membershipEnabled, appOrigin, receiptOptionalForTesting } from "@/lib/membership";
 import { sealToken } from "@/lib/membership-secrets";
 
 type State = { error: string };
@@ -20,7 +20,9 @@ async function checkRequest(form: FormData) {
   appOrigin();
 }
 async function uploadReceipt(form: FormData, memberId: string) {
-  const file = await receiptBytes(form.get("receipt"));
+  const input = form.get("receipt");
+  if (receiptOptionalForTesting() && (!input || (input instanceof File && !input.size))) return null;
+  const file = await receiptBytes(input);
   const path = `${memberId}/${randomUUID()}.${file.extension}`;
   const { error } = await createAdminClient().storage.from("membership-receipts").upload(path, file.bytes, { contentType: file.type, upsert: false });
   if (error) throw new Error("Receipt could not be uploaded. Please try again.");
@@ -28,10 +30,10 @@ async function uploadReceipt(form: FormData, memberId: string) {
 }
 export async function registerMember(_: State, form: FormData): Promise<State> {
   let token = "";
-  let path: string | undefined;
+  let path: string | null | undefined;
   try {
     await checkRequest(form);
-    const parsed = registrationSchema.safeParse(Object.fromEntries(form));
+    const parsed = registrationSchema.safeParse({ ...Object.fromEntries(form), address: form.get("room_no") });
     if (!parsed.success) return { error: "Please complete all required fields with valid details." };
     const db = createAdminClient();
     const id = randomUUID();
@@ -51,7 +53,7 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
   redirect(`/membership/manage/${token}?submitted=1`);
 }
 export async function submitMemberRequest(_: State, form: FormData): Promise<State> {
-  let path: string | undefined;
+  let path: string | null | undefined;
   const token = String(form.get("token") || "");
   try {
     await checkRequest(form);

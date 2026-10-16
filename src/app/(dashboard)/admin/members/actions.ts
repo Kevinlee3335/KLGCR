@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { membershipEnabled } from "@/lib/membership";
+import { membershipEnabled, receiptOptionalForTesting } from "@/lib/membership";
 import { deliverMembershipEmails } from "@/lib/membership-email";
 export async function reviewPayment(form: FormData) {
  const profile = await requireRole(["admin"]);
@@ -15,6 +15,10 @@ export async function reviewPayment(form: FormData) {
  if (!/^[a-f0-9-]{36}$/.test(payment)) throw new Error("Invalid payment.");
  if (approve && !confirmed) redirect("/admin/members?error=verify");
  if (!approve && !note) redirect("/admin/members?error=reason");
+ if (approve && !receiptOptionalForTesting()) {
+  const {data: paymentRecord,error: paymentError} = await createAdminClient().from("membership_payments").select("receipt_path").eq("id",payment).single();
+  if (paymentError || !paymentRecord?.receipt_path) redirect("/admin/members?error=review");
+ }
  const {error} = await createAdminClient().rpc("review_membership_payment",{p_payment:payment,p_actor:profile.id,p_approve:approve,p_note:note});
  if (error) { console.error("Membership review failed",error); redirect("/admin/members?error=review"); }
  // Approval and email queuing commit atomically. Failed email can be retried without approving twice.

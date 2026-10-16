@@ -19,6 +19,7 @@ export function appOrigin() {
   if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error("Membership URL must use HTTPS.");
   return url.origin;
 }
+export function receiptOptionalForTesting() { return process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development"; }
 export function membershipEnabled() { return process.env.KLGCR_MEMBERSHIP_ENABLED === "true"; }
 export function malaysiaDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);

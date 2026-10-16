@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
-import { membershipFee, reminderDates, nextPeriod, receiptBytes, hashToken, membershipToken, registrationSchema, memberStatus } from "./membership";
+import { membershipFee, reminderDates, nextPeriod, receiptBytes, hashToken, membershipToken, registrationSchema, memberStatus, receiptOptionalForTesting } from "./membership";
 import { openToken, sealToken } from "./membership-secrets";
 afterEach(()=>vi.unstubAllEnvs());
 it('charges RM10 only on outsider registration',()=>{
@@ -46,4 +46,12 @@ it('encrypts management tokens and detects modified ciphertext',()=>{
 it('flags expiry at the start of the next Malaysia day',()=>{
  expect(memberStatus({status:'active',expires_on:'2026-10-31'},'2026-11-01')).toContain('block');
  expect(memberStatus({status:'active',expires_on:'2026-10-31'},'2026-10-31')).toBe('active');
+});
+
+it('only permits optional receipt testing in preview or local development',()=>{
+ vi.stubEnv('NODE_ENV','production');
+ vi.stubEnv('VERCEL_ENV','preview');
+ expect(receiptOptionalForTesting()).toBe(true);
+ vi.stubEnv('VERCEL_ENV','production');
+ expect(receiptOptionalForTesting()).toBe(false);
 });

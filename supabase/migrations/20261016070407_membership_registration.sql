@@ -13,7 +13,7 @@ create table public.membership_payments (
  id uuid primary key default gen_random_uuid(), member_id uuid not null references public.memberships(id),
  kind text not null check(kind in ('registration','renewal')),
  period_start date not null check(extract(day from period_start)=1),
- amount numeric(10,2) not null check(amount in (40,50)), receipt_path text not null,
+ amount numeric(10,2) not null check(amount in (40,50)), receipt_path text,
  status text not null default 'pending_verification' check(status in ('pending_verification','approved','rejected')),
  review_note text, reviewed_by uuid references public.profiles(id), reviewed_at timestamptz,
  created_at timestamptz not null default now()

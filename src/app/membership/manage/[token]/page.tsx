@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashToken, validToken, memberStatus, nextPeriod, membershipEnabled, membershipFee } from "@/lib/membership";
+import { hashToken, validToken, memberStatus, nextPeriod, membershipEnabled, membershipFee, receiptOptionalForTesting } from "@/lib/membership";
 import { MembershipForm } from "@/components/membership-form";
 import { cancelMembership } from "../../actions";
 import { SubmitButton } from "@/components/submit-button";
@@ -18,7 +18,7 @@ export default async function ManagePage({ params, searchParams }: { params: Pro
   const {submitted} = await searchParams;
   return <><p className="eyebrow">MY MEMBERSHIP</p><h1>Hello, {member.full_name}.</h1><p className="member-status">{memberStatus(member)}</p>{submitted && <p className="success" role="status">Your receipt has been submitted. Please wait for Admin verification.</p>}
     <section className="panel"><h2>Membership details</h2><p>Registered: {new Date(member.created_at).toLocaleDateString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})}</p><p>Valid until: <strong>{member.expires_on || "Pending approval"}</strong></p><p className="subtle">Keep this private link safe. Anyone with this link can manage your membership.</p>{member.expires_on && <div className="member-qr"><img width="240" height="240" src={`/api/membership/qr?card=${member.id}`} alt="Your membership QR code"/><p>Member reference: {member.id.slice(0,8).toUpperCase()}</p></div>}</section>
-    {member.status !== "cancelled" && <section className="panel"><h2>{member.expires_on ? "Renew membership" : "Payment verification"}</h2>{pending ? <p>Your payment for {period.slice(0,7)} is pending verification.</p> : <MembershipForm token={token} period={period} fee={membershipFee(member.member_type,!member.expires_on)}/>}</section>}
+    {member.status !== "cancelled" && <section className="panel"><h2>{member.expires_on ? "Renew membership" : "Payment verification"}</h2>{pending ? <p>Your payment for {period.slice(0,7)} is pending verification.</p> : <MembershipForm receiptOptional={receiptOptionalForTesting()} token={token} period={period} fee={membershipFee(member.member_type,!member.expires_on)}/>}</section>}
     <section className="panel"><h2>Payment history</h2>{payments?.length ? payments.map(payment => <div key={payment.id}><p><strong>{payment.period_start.slice(0,7)}</strong> · RM{payment.amount} · {payment.status.replaceAll("_"," ")}</p>{payment.review_note && <p className="subtle">{payment.review_note}</p>}</div>) : <p>No payments submitted.</p>}</section>
     {member.status !== "cancelled" && <details className="panel"><summary>Cancel membership</summary><p>Cancellation ends your membership and adds your card to the list for Management to block. Contact Management for any refund enquiries.</p><form action={cancelMembership}><input type="hidden" name="token" value={token}/><label><input type="checkbox" name="confirm" value="yes" required/> I confirm I want to cancel my membership.</label><p><SubmitButton pendingText="Cancelling…">Confirm cancellation</SubmitButton></p></form></details>}
   </>;
