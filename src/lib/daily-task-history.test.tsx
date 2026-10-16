@@ -66,3 +66,26 @@ describe("Daily Task history visibility", () => {
     expect(filter?.args[0]).toMatch(/^task_date.eq.\d{4}-\d{2}-\d{2},and\(task_date.lt.\d{4}-\d{2}-\d{2},status.neq.completed\)$/);
   });
 });
+
+describe("completed task default visibility",()=>{
+ it.each([undefined,"admin","operation","housekeeping"])("hides earlier completions by Malaysia midnight on %s",async category=>{
+  const html=renderToStaticMarkup(await AdminTasks({searchParams:Promise.resolve(category?{category}:{})}));
+  const filters=mocks.calls.filter(c=>c.table==="admin_daily_tasks"&&c.method==="or");
+  expect(filters).toHaveLength(1);
+  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kuala_Lumpur",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  expect(filters[0].args[0]).toBe(`status.neq.completed,completed_at.gte.${today}T00:00:00+08:00,and(completed_at.is.null,task_date.gte.${today})`);
+  expect(html).toContain('status=completed');
+ });
+ it.each([{status:"completed"},{status_completed:"completed"},{status_pending:"pending",status_completed:"completed"}])("keeps complete history accessible for explicit status %j",async filters=>{
+  renderToStaticMarkup(await AdminTasks({searchParams:Promise.resolve(filters)}));
+  expect(mocks.calls.filter(c=>c.table==="admin_daily_tasks"&&c.method==="or")).toHaveLength(0);
+  const status=mocks.calls.find(c=>c.table==="admin_daily_tasks"&&c.method==="in");
+  expect(status?.args[1]).toContain("completed");
+ });
+ it("combines search and visibility in one PostgREST predicate",async()=>{
+  renderToStaticMarkup(await AdminTasks({searchParams:Promise.resolve({q:"pump"})}));
+  const predicates=mocks.calls.filter(c=>c.table==="admin_daily_tasks"&&c.method==="or");
+  expect(predicates).toHaveLength(1);
+  expect(predicates[0].args[0]).toContain('and(or(title.ilike."%pump%",notes.ilike."%pump%"),or(status.neq.completed');
+ });
+});
