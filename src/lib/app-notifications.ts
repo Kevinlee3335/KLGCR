@@ -21,6 +21,7 @@ type NotificationInput = {
   body: string;
   href: string;
   entityId?: string | null;
+  expiresAt?: string;
 };
 
 export async function createAppNotifications(input: NotificationInput) {
@@ -39,7 +40,7 @@ export async function createAppNotifications(input: NotificationInput) {
     })),
   );
   if (error) throw new Error(`Unable to create notification: ${error.message}`);
-  await sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href });
+  await sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href, expiresAt: input.expiresAt });
 }
 
 export async function notifyActiveAdmins(input: Omit<NotificationInput, "recipientIds">) {

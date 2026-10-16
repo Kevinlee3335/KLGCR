@@ -1,5 +1,6 @@
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
+  if (data.expiresAt && Date.now() >= Date.parse(data.expiresAt)) return;
   event.waitUntil(self.registration.showNotification(data.title || "KLGCR notification", {
     body: data.body || "You have a new KLGCR notification.",
     icon: "/apple-touch-icon.png",

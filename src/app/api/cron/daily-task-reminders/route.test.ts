@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/daily-task-notifications", () => ({ notifyDailyTaskAssigned: mocks.notifyDailyTaskAssigned }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => mocks.db) }));
 
+vi.mock("../meeting-reminders/route", () => ({ GET: vi.fn(async () => new Response("{}", { status: 200 })) }));
 import { GET } from "./route";
 
 describe("daily task reminders", () => {

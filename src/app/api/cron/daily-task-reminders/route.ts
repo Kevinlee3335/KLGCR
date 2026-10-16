@@ -1,3 +1,4 @@
+import { GET as sendMeetingReminders } from "../meeting-reminders/route";
 import { NextRequest, NextResponse } from "next/server";
 import { notifyDailyTaskAssigned } from "@/lib/daily-task-notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -28,5 +29,8 @@ export async function GET(request: NextRequest) {
       await db.from("admin_daily_tasks").update({ due_notification_sent_at: null }).eq("id", task.id);
     }
   }
-  return NextResponse.json({ ok: true, date, sent });
+  let meetingsOk = false;
+  try { meetingsOk = (await sendMeetingReminders(request)).ok; }
+  catch (error) { console.error("Unable to send meeting reminders", error); }
+  return NextResponse.json({ ok: true, date, sent, meetingsOk });
 }
