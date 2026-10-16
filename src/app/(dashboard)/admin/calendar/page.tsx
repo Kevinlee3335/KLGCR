@@ -1,5 +1,4 @@
-import { NextRequest } from "next/server";
-import { GET as sendMeetingReminders } from "@/app/api/cron/meeting-reminders/route";
+import { sendMeetingReminders } from "@/lib/send-meeting-reminders";
 import { groupCalendarEvents, calendarRecipients, type GroupableCalendarEvent } from "@/lib/calendar-event-groups";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -82,9 +81,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     "use server";
     await requireRole(["admin"]);
     if (malaysiaDate(new Date().toISOString()) !== "2026-10-16") redirect("/admin/calendar?error=This+one-time+reminder+has+expired");
-    const secret = process.env.CRON_SECRET;
-    if (!secret) redirect("/admin/calendar?error=Reminder+service+is+not+configured");
-    const response = await sendMeetingReminders(new NextRequest("https://klgcr-maintenance-system.vercel.app/api/cron/meeting-reminders?catchup=2026-10-16", { headers: { authorization: `Bearer ${secret}` } }));
+    const response = await sendMeetingReminders(true);
     if (!response.ok) redirect("/admin/calendar?error=Unable+to+send+meeting+reminders");
     const result = await response.json();
     revalidatePath("/admin/calendar");

@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({ notify: vi.fn(), from: vi.fn(), queries: [] as
 vi.mock("@/lib/app-notifications", () => ({ createAppNotifications: mocks.notify }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: mocks.from }) }));
 import { GET } from "./route";
+import { sendMeetingReminders } from "@/lib/send-meeting-reminders";
 describe("meeting reminders", () => {
   beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-16T09:00:00+08:00"));
@@ -26,11 +27,11 @@ describe("meeting reminders", () => {
   });
   it("allows authorized one-time catch-up only on rollout date", async () => {
     vi.setSystemTime(new Date("2026-10-16T15:00:00+08:00"));
-    await GET(new Request("https://example.com/api/cron/meeting-reminders?catchup=2026-10-16", {headers:{authorization:"Bearer test"}}) as never);
+    await sendMeetingReminders(true);
     expect(mocks.notify).toHaveBeenCalledTimes(1);
     mocks.notify.mockClear();
     vi.setSystemTime(new Date("2026-10-17T15:00:00+08:00"));
-    await GET(new Request("https://example.com/api/cron/meeting-reminders?catchup=2026-10-16", {headers:{authorization:"Bearer test"}}) as never);
+    await sendMeetingReminders(true);
     expect(mocks.notify).not.toHaveBeenCalled();
   });
   it("rejects unauthenticated requests", async () => {
