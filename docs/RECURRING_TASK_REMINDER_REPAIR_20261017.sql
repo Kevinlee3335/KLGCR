@@ -16,3 +16,7 @@ grant execute on function public.materialize_recurring_tasks(date) to service_ro
 grant select, update on public.admin_daily_tasks to service_role;
 -- Verified service_role generation for Oct 17, Oct 30, Nov 1 and Feb 28.
 -- Repeated materialization produces no duplicate recurrence/date rows.
+
+-- Operational prerequisite: production CRON_SECRET was missing and configured
+-- in Vercel on 2026-10-17. Redeploy to load it before running the reminder job.
+-- Keep the credential only in Vercel; never store its value in this repository.
