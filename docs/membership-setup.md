@@ -51,3 +51,15 @@ Email queue batches are bounded and paginated with up to 20 concurrent deliverie
 ## Testing form changes
 
 Room/address is entered once: residents provide their room number, and outsiders provide their residential address / unit number in the same field. The server copies this into the existing address storage field for compatibility. Receipt upload is optional only in Vercel preview or local development. Production submissions still require a valid receipt. Missing test receipts are stored as null, stay pending verification and are labelled in Admin. This does not enable registration while database setup is incomplete.
+
+## Live testing update — 17 October 2026
+
+The three membership migrations have now been applied to the correct KLG CAMPUS RESIDENCE project (`zmypsakuyqpctbusrkps`). They create membership-specific tables only. Earlier notes about the connector showing a different project describe the original setup blocker and no longer apply.
+
+Preview deployments enable real membership submissions by default unless `KLGCR_MEMBERSHIP_ENABLED=false` is explicitly set. Production remains disabled without explicit activation. Registration now atomically saves the application, payment-verification record and registration email queue entry, then attempts immediate delivery through the existing transactional email gateway. Mail status is visible on the private membership page. Mail delivery is not equivalent to payment approval: initial access stays pending until Admin approval.
+
+A membership-only encryption key is generated in `membership_runtime`; this table has RLS and no public/authenticated grants. The server's service role can read it. This avoids copying authentication credentials or requiring a new Vercel secret just to test the feature. A configured `KLGCR_MEMBERSHIP_TOKEN_SECRET` continues to take precedence; do not add, remove or rotate an override after member links exist without migrating encrypted tokens.
+
+Renewal and cancellation entry forms accept name and room number instead of requiring a copied management link. Renewal accepts a receipt (optional during preview testing). Requests disclose no matching member data or management token and cannot change membership until Admin review. Ambiguous/unmatched names remain in the review queue; they cannot be approved until details are resolved. Existing private email links still work as a convenience.
+
+The exact original membership Rules A–D remain unavailable in the supplied material. Do not invent wording or replace these with fee reminders. Obtain the original four clauses before enabling an agreement checkbox for them.

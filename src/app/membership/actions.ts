@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashToken, validToken, membershipToken, registrationSchema, nextPeriod, receiptBytes, membershipEnabled, appOrigin, receiptOptionalForTesting } from "@/lib/membership";
+import { deliverMembershipEmails } from "@/lib/membership-email";
 import { sealToken } from "@/lib/membership-secrets";
 
 type State = { error: string };
@@ -12,8 +13,8 @@ async function checkRequest(form: FormData) {
   if (!membershipEnabled()) throw new Error("Registration is not available yet.");
   if (form.get("website") || form.get("consent") !== "yes") throw new Error("Please confirm your details and consent.");
   const requestHeaders = await headers();
-  // Vercel overwrites x-vercel-forwarded-for; never trust a browser-provided generic IP header.
-  const ip = requestHeaders.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+  // Vercel overwrites its forwarded headers at the platform boundary.
+  const ip = (requestHeaders.get("x-vercel-forwarded-for") || (process.env.VERCEL ? requestHeaders.get("x-forwarded-for") : null))?.split(",")[0]?.trim();
   if (process.env.VERCEL && !ip) throw new Error("Unable to verify this request. Please try again.");
   const { data, error } = await createAdminClient().rpc("membership_rate_limit", { p_key: hashToken(ip || "local-development") });
   if (error || data !== true) throw new Error("Too many requests. Please try again in an hour.");
@@ -38,13 +39,15 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
     const db = createAdminClient();
     const id = randomUUID();
     token = membershipToken();
-    const ciphertext = sealToken(token);
+    const ciphertext = await sealToken(token);
     path = await uploadReceipt(form, id);
     const { error } = await db.rpc("register_membership", { p_member: { ...parsed.data, id, token_hash: hashToken(token), token_ciphertext: ciphertext }, p_receipt: path });
     if (error) {
       if (error.code === "23505") throw new Error("Unable to register these details again. Use your existing membership link or contact Management.");
       throw new Error("Registration could not be saved. Please try again or contact Management.");
     }
+    try { await deliverMembershipEmails(id); }
+    catch (deliveryError) { console.error("Membership registration email remains queued", deliveryError); }
   } catch (error) {
     if (path) await createAdminClient().storage.from("membership-receipts").remove([path]);
     return { error: error instanceof Error ? error.message : "Unable to register. Please try again." };
@@ -82,4 +85,28 @@ export async function cancelMembership(form: FormData) {
   if (error) throw new Error("Cancellation could not be saved. Please contact Management.");
   revalidatePath("/admin/members");
   redirect(`/membership/manage/${token}`);
+}
+
+export async function submitPublicMemberRequest(_: {error:string;success:string}, form: FormData): Promise<{error:string;success:string}> {
+  let path: string | null | undefined;
+  try {
+    await checkRequest(form);
+    const name=String(form.get("full_name")||"").trim();
+    const room=String(form.get("room_no")||"").trim();
+    const intent=String(form.get("intent")||"");
+    if (!name || !room || name.length>200 || room.length>200 || !["renew","cancel"].includes(intent)) throw new Error("Enter your name and room number.");
+    const db=createAdminClient();
+    const escape=(value:string)=>value.replace(/[\\%_]/g,"\\$&");
+    const {data: matches,error: matchError}=await db.from("memberships").select("id").ilike("full_name",escape(name)).ilike("room_no",escape(room)).limit(2);
+    if (matchError) throw new Error("Unable to submit your request. Please try again.");
+    if (intent === "renew") path=await uploadReceipt(form,randomUUID());
+    const {error}=await db.from("membership_requests").insert({full_name:name,room_no:room,request_type:intent,member_id:matches?.length===1?matches[0].id:null,receipt_path:path||null});
+    if (error && error.code!=="23505") throw new Error("Unable to save your request. Please try again.");
+    if (error && path) await db.storage.from("membership-receipts").remove([path]);
+    revalidatePath("/admin/members");
+    return {error:"",success:"Your request has been submitted for Management verification. Your membership will change only after approval."};
+  } catch(error) {
+    if(path) await createAdminClient().storage.from("membership-receipts").remove([path]);
+    return {error:error instanceof Error?error.message:"Unable to submit your request.",success:""};
+  }
 }

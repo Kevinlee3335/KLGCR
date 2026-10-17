@@ -21,13 +21,13 @@ export async function deliverMembershipEmails(memberId?: string) {
         if (skipError) throw new Error("Unable to record skipped email.");
         return;
       }
-      const link = memberLink(openToken(member.token_ciphertext));
-      const registered = item.kind === "approved";
-      const subject = registered ? "Membership confirmed – KLG Campus Residence" : "Membership renewal reminder – KLG Campus Residence";
-      const body = registered ? `Your registration / renewal has been approved. Membership is valid until ${member.expires_on}.` : `Please renew your membership for ${item.period_start.slice(0,7)}. If you do not renew, your access card will be listed for blocking on ${item.period_start}. If you have submitted a receipt, it may still be pending Admin verification.`;
-      const text = `Dear ${member.full_name},\n\n${body}\n\nRenew or cancel membership: ${link}\nRegister: ${appOrigin()}/membership/register\n\nKLG Campus Residence Management`;
+      const link = memberLink(await openToken(member.token_ciphertext));
+      const registered = item.kind !== "reminder";
+      const subject = item.kind === "registered" ? "Registration received – KLG Campus Residence" : registered ? "Membership confirmed – KLG Campus Residence" : "Membership renewal reminder – KLG Campus Residence";
+      const body = item.kind === "registered" ? "Your membership registration has been saved. It is pending Admin verification and your access is not active yet. Keep the private link below to renew or cancel your membership." : registered ? `Your registration / renewal has been approved. Membership is valid until ${member.expires_on}.` : `Please renew your membership for ${item.period_start.slice(0,7)}. If you do not renew, your access card will be listed for blocking on ${item.period_start}. If you have submitted a receipt, it may still be pending Admin verification.`;
+      const text = `Dear ${member.full_name},\n\n${body}\n\nRenew or cancel membership: ${link}\nRegister: ${appOrigin()}/membership/register\n${registered ? `Membership card: ${appOrigin()}/membership/card/${member.id}\n` : ""}\nKLG Campus Residence Management`;
       const html = `<p>Dear ${escapeHtml(member.full_name)},</p><p>${escapeHtml(body)}</p><p><a href="${link}">Renew / manage membership</a></p><p><a href="${appOrigin()}/membership/register">Registration link</a></p>${registered ? `<p>Your membership QR code:</p><img width="240" height="240" src="${appOrigin()}/api/membership/qr?card=${member.id}" alt="Membership QR code"/><p><a href="${appOrigin()}/membership/card/${member.id}">View membership card</a></p>` : ""}<p>KLG Campus Residence Management</p>`;
-      const result = await sendTransactionalEmail(member.email,{subject,text,html});
+      const result = await sendTransactionalEmail(member.email,{subject,text,html},{timeoutMs:20_000});
       if (!result.sent) throw new Error(result.reason);
       const {error:sentError} = await db.from("membership_emails").update({status:"sent",sent_at:new Date().toISOString(),last_error:null}).eq("id",item.id);
       if (sentError) throw new Error("Email delivered but delivery status could not be saved.");

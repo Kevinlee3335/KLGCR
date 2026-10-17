@@ -27,7 +27,7 @@ create table public.membership_activity (
 );
 create table public.membership_emails (
  id uuid primary key default gen_random_uuid(), member_id uuid not null references public.memberships(id),
- event_key text not null unique, kind text not null check(kind in ('approved','reminder')),
+ event_key text not null unique, kind text not null check(kind in ('registered','approved','reminder')),
  payment_id uuid references public.membership_payments(id), period_start date not null,
  status text not null default 'pending' check(status in ('pending','sending','sent','skipped')),
  attempts integer not null default 0, claimed_at timestamptz, sent_at timestamptz, last_error text,
@@ -63,6 +63,8 @@ begin
  insert into public.membership_payments(member_id,kind,period_start,amount,receipt_path)
  values(mid,'registration',period,case when p_member->>'member_type'='outsider' then 50 else 40 end,p_receipt);
  insert into public.membership_activity(member_id,event) values(mid,'registration_submitted');
+ insert into public.membership_emails(member_id,event_key,kind,period_start)
+ values(mid,'registered:'||mid,'registered',period);
  return mid;
 end $$;
 

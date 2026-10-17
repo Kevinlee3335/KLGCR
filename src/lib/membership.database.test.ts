@@ -13,6 +13,8 @@ beforeAll(async()=>{
  create table storage.buckets(id text,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table public.profiles(id uuid primary key,role text,is_active boolean,deleted_at timestamptz);`);
  await db.exec(readFileSync('supabase/migrations/20261016070407_membership_registration.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261017042521_membership_runtime_configuration.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261017042730_membership_public_requests.sql','utf8'));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
  const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',token_hash:'hash',token_ciphertext:'encrypted'};
@@ -43,9 +45,9 @@ it('atomically approves, extends validity and queues one confirmation',async()=>
  const row=(await db.query<{status:string;expires_on:string}>("select status,expires_on::text from memberships where id=$1",[member])).rows[0];
  expect(row.status).toBe('active');
  expect(row.expires_on).toBe((await db.query<{e:string}>("select ($1::date+interval '1 month'-interval '1 day')::date::text e",[month])).rows[0].e);
- expect((await db.query('select * from membership_emails')).rows).toHaveLength(1);
+ expect((await db.query('select * from membership_emails')).rows).toHaveLength(2);
  await expect(db.query('select review_membership_payment($1,$2,true,null)',[payment,admin])).rejects.toThrow('no longer pending');
- expect((await db.query('select * from membership_emails')).rows).toHaveLength(1);
+ expect((await db.query('select * from membership_emails')).rows).toHaveLength(2);
 });
 it('enforces one non-rejected receipt per month',async()=>{
  await expect(db.query("insert into membership_payments(member_id,kind,period_start,amount,receipt_path) values($1,'renewal',$2,40,'x')",[member,month])).rejects.toThrow('duplicate');
@@ -65,4 +67,28 @@ it('cancels without deleting records and rejects pending renewals',async()=>{
 it('limits public submissions using persistent counters',async()=>{
  for(let i=0;i<20;i++) expect((await db.query<{membership_rate_limit:boolean}>("select membership_rate_limit('ip')")).rows[0].membership_rate_limit).toBe(true);
  expect((await db.query<{membership_rate_limit:boolean}>("select membership_rate_limit('ip')")).rows[0].membership_rate_limit).toBe(false);
+});
+
+it('keeps runtime secrets and public requests private',async()=>{
+ for(const role of ['anon','authenticated']) {
+  await db.exec(`set role ${role}`);
+  await expect(db.query('select * from membership_runtime')).rejects.toThrow('permission denied');
+  await expect(db.query('select * from membership_requests')).rejects.toThrow('permission denied');
+  await db.exec('reset role');
+ }
+ expect((await db.query<{n:number}>('select length(token_secret) n from membership_runtime')).rows[0].n).toBe(64);
+});
+it('requires Admin review before a name/room cancellation can affect membership',async()=>{
+ const mid='10000000-0000-4000-8000-000000000002';
+ await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext,status,expires_on) values($1,'Test','request@example.invalid','resident','IC','987','Male','MY','B111','123','B111','testhash','enc','active',($2::date+interval '1 month'-interval '1 day')::date)",[mid,month]);
+ const req=(await db.query<{id:string}>("insert into membership_requests(full_name,room_no,request_type,member_id) values('Test','B111','cancel',$1) returning id",[mid])).rows[0].id;
+ expect((await db.query<{status:string}>('select status from memberships where id=$1',[mid])).rows[0].status).toBe('active');
+ await expect(db.query('select review_membership_request($1,$2,true,null)',[req,staff])).rejects.toThrow('Admin');
+ await db.query("select review_membership_request($1,$2,true,'Verified with member')",[req,admin]);
+ expect((await db.query<{status:string}>('select status from memberships where id=$1',[mid])).rows[0].status).toBe('cancelled');
+ await expect(db.query('select review_membership_request($1,$2,true,null)',[req,admin])).rejects.toThrow('no longer pending');
+});
+it('never approves an unmatched public request',async()=>{
+ const req=(await db.query<{id:string}>("insert into membership_requests(full_name,room_no,request_type) values('Unknown','C999','renew') returning id")).rows[0].id;
+ await expect(db.query('select review_membership_request($1,$2,true,null)',[req,admin])).rejects.toThrow('resolved');
 });

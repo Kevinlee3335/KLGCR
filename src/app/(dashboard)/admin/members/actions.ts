@@ -35,3 +35,21 @@ export async function retryMembershipEmails() {
  await deliverMembershipEmails();
  revalidatePath("/admin/members");
 }
+
+export async function reviewMemberRequest(form:FormData) {
+ const profile=await requireRole(["admin"]);
+ if (!membershipEnabled()) throw new Error("Membership is not enabled.");
+ const id=String(form.get("request")||"");
+ const approve=form.get("decision")==="approve";
+ const note=String(form.get("note")||"").trim().slice(0,1000);
+ if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid request.");
+ if (approve && form.get("verified")!=="yes") redirect("/admin/members?error=verify");
+ if (!approve && !note) redirect("/admin/members?error=reason");
+ const db=createAdminClient();
+ const {data: req,error: loadError}=await db.from("membership_requests").select("member_id,receipt_path,request_type").eq("id",id).single();
+ if (loadError || !req || (approve && !req.member_id) || (approve && req.request_type==="renew" && !req.receipt_path && !receiptOptionalForTesting())) redirect("/admin/members?error=review");
+ const {error}=await db.rpc("review_membership_request",{p_request:id,p_actor:profile.id,p_approve:approve,p_note:note});
+ if(error) {console.error("Membership request review failed",error);redirect("/admin/members?error=review");}
+ if(req.member_id) try{await deliverMembershipEmails(req.member_id);}catch(error){console.error("Membership email remains queued",error);}
+ revalidatePath("/admin/members");redirect("/admin/members?success=reviewed");
+}

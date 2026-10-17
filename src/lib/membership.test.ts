@@ -33,15 +33,15 @@ it('does not trust image MIME labels and enforces file size',async()=>{
  await expect(receiptBytes(new File([new Uint8Array(3*1024*1024+1)],'huge.pdf',{type:'application/pdf'}))).rejects.toThrow('3 MB');
  expect((await receiptBytes(new File(['%PDF-1.7'],'receipt.pdf',{type:'application/pdf'}))).type).toBe('application/pdf');
 });
-it('encrypts management tokens and detects modified ciphertext',()=>{
+it('encrypts management tokens and detects modified ciphertext',async()=>{
  vi.stubEnv('KLGCR_MEMBERSHIP_TOKEN_SECRET','a'.repeat(40));
  const token=membershipToken();
- const sealed=sealToken(token);
+ const sealed=await sealToken(token);
  expect(sealed).not.toContain(token);
- expect(openToken(sealed)).toBe(token);
+ expect(await openToken(sealed)).toBe(token);
  expect(hashToken(token)).not.toBe(token);
  const bytes=Buffer.from(sealed,'base64'); bytes[20]^=1;
- expect(()=>openToken(bytes.toString('base64'))).toThrow();
+ await expect(openToken(bytes.toString('base64'))).rejects.toThrow();
 });
 it('flags expiry at the start of the next Malaysia day',()=>{
  expect(memberStatus({status:'active',expires_on:'2026-10-31'},'2026-11-01')).toContain('block');

@@ -20,7 +20,11 @@ export function appOrigin() {
   return url.origin;
 }
 export function receiptOptionalForTesting() { return process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development"; }
-export function membershipEnabled() { return process.env.KLGCR_MEMBERSHIP_ENABLED === "true"; }
+export function membershipEnabled() {
+  const configured = process.env.KLGCR_MEMBERSHIP_ENABLED;
+  if (configured === "false") return false;
+  return configured === "true" || process.env.VERCEL_ENV === "preview";
+}
 export function malaysiaDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
@@ -55,3 +59,7 @@ export async function receiptBytes(file: FormDataEntryValue | null) {
 export function escapeHtml(value: string) { return value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]!)); }
 
 export function memberLink(token: string) { return `${appOrigin()}/membership/manage/${token}`; }
+
+export function membershipEmailConfigured() {
+ return Boolean((process.env.KLGCR_GMAIL_WEB_APP_URL && process.env.KLGCR_GMAIL_WEB_APP_SECRET) || (process.env.KLGCR_EMAIL_ENABLED === "true" && process.env.RESEND_API_KEY && process.env.KLGCR_EMAIL_FROM));
+}
