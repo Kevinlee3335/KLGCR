@@ -63,3 +63,7 @@ A membership-only encryption key is generated in `membership_runtime`; this tabl
 Renewal and cancellation entry forms accept name and room number instead of requiring a copied management link. Renewal accepts a receipt (optional during preview testing). Requests disclose no matching member data or management token and cannot change membership until Admin review. Ambiguous/unmatched names remain in the review queue; they cannot be approved until details are resolved. Existing private email links still work as a convenience.
 
 The exact original membership Rules A–D remain unavailable in the supplied material. Do not invent wording or replace these with fee reminders. Obtain the original four clauses before enabling an agreement checkbox for them.
+
+## Payment QR source
+
+The DuitNow payment code was decoded from the user's supplied bank stand photo on 17 October 2026. Merchant name is `K HOTEL SDN BHD`, currency code `458` (MYR), country `MY`, and no fixed amount is embedded. The original EMV CRC was verified. The regenerated SVG/PNG preserve the complete original 169-character payload; the PNG was decoded again and compared byte-for-byte with the original. No recipient or payment data was changed. Registration and renewal forms display the proper fee beside the QR and offer a PNG download before receipt upload.

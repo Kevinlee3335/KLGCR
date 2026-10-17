@@ -1,6 +1,7 @@
 "use client";
 import { UploadCloud, FileCheck2, CheckCircle2 } from "lucide-react";
 import { useActionState, useState, useId } from "react";
+import { MembershipPayment } from "./membership-payment";
 import { SubmitButton } from "./submit-button";
 import { registerMember, submitMemberRequest } from "@/app/membership/actions";
 export function MembershipForm({ token, period, fee, submissionEnabled = true, receiptOptional = false }: { token?: string; period?: string; fee?: number; submissionEnabled?: boolean; receiptOptional?: boolean }) {
@@ -30,6 +31,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>
       <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>New member fee: <strong>{type === "outsider" ? "RM10 (outsiders only)" : "RM0"}</strong><br/>Total: <strong>RM{type === "outsider" ? 50 : 40}</strong>. Initial membership covers the current calendar month.</p>
     </>}
+    <MembershipPayment amount={token ? (fee ?? 40) : type === "outsider" ? 50 : 40}/>
     <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{receiptOptional ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
       {fileName ? <FileCheck2 size={26} aria-hidden="true"/> : <UploadCloud size={26} aria-hidden="true"/>}
       <span className="receipt-upload-copy"><strong>{fileName || "Upload payment receipt"}</strong><small>{fileName ? "Click to replace file" : "Click to browse or choose a photo"}</small></span><span className="receipt-browse">Browse files</span>
