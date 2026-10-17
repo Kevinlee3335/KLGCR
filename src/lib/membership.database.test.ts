@@ -15,9 +15,10 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261016070407_membership_registration.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261017042521_membership_runtime_configuration.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261017042730_membership_public_requests.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261017044216_membership_declaration_consent.sql','utf8'));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
- const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',token_hash:'hash',token_ciphertext:'encrypted'};
+ const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
  await db.query('select register_membership($1,$2)',[JSON.stringify(data),'private/receipt.pdf']);
  payment=(await db.query<{id:string}>('select id from membership_payments')).rows[0].id;
 },30000);
@@ -91,4 +92,10 @@ it('requires Admin review before a name/room cancellation can affect membership'
 it('never approves an unmatched public request',async()=>{
  const req=(await db.query<{id:string}>("insert into membership_requests(full_name,room_no,request_type) values('Unknown','C999','renew') returning id")).rows[0].id;
  await expect(db.query('select review_membership_request($1,$2,true,null)',[req,admin])).rejects.toThrow('resolved');
+});
+
+it('records the accepted declaration version and rejects registration without acceptance',async()=>{
+ const declaration=(await db.query<{details:{version:string;clauses:string[]}}>("select details from membership_activity where member_id=$1 and event='rules_accepted'",[member])).rows[0];
+ expect(declaration.details).toEqual({version:'2026-10-17-v1',clauses:['a','b','c','d']});
+ await expect(db.query("select register_membership('{}'::jsonb,null)")).rejects.toThrow('declaration acceptance');
 });

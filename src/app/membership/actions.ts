@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashToken, validToken, membershipToken, registrationSchema, nextPeriod, receiptBytes, membershipEnabled, appOrigin, receiptOptionalForTesting } from "@/lib/membership";
+import { MEMBERSHIP_DECLARATION_VERSION, MEMBERSHIP_DECLARATION_CLAUSES } from "@/lib/membership-declaration";
 import { deliverMembershipEmails } from "@/lib/membership-email";
 import { sealToken } from "@/lib/membership-secrets";
 
@@ -34,6 +35,7 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
   let path: string | null | undefined;
   try {
     await checkRequest(form);
+    if (form.get("rules_consent") !== "yes") throw new Error("Please read and agree to the four membership declaration clauses.");
     const parsed = registrationSchema.safeParse({ ...Object.fromEntries(form), address: form.get("room_no") });
     if (!parsed.success) return { error: "Please complete all required fields with valid details." };
     const db = createAdminClient();
@@ -41,7 +43,7 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
     token = membershipToken();
     const ciphertext = await sealToken(token);
     path = await uploadReceipt(form, id);
-    const { error } = await db.rpc("register_membership", { p_member: { ...parsed.data, id, token_hash: hashToken(token), token_ciphertext: ciphertext }, p_receipt: path });
+    const { error } = await db.rpc("register_membership", { p_member: { ...parsed.data, id, declaration_accepted:true, declaration_version:MEMBERSHIP_DECLARATION_VERSION, declaration_clauses:MEMBERSHIP_DECLARATION_CLAUSES, token_hash: hashToken(token), token_ciphertext: ciphertext }, p_receipt: path });
     if (error) {
       if (error.code === "23505") throw new Error("Unable to register these details again. Use your existing membership link or contact Management.");
       throw new Error("Registration could not be saved. Please try again or contact Management.");

@@ -1,6 +1,7 @@
 "use client";
 import { UploadCloud, FileCheck2, CheckCircle2 } from "lucide-react";
 import { useActionState, useState, useId } from "react";
+import { MembershipDeclaration } from "./membership-declaration";
 import { MembershipPayment } from "./membership-payment";
 import { SubmitButton } from "./submit-button";
 import { registerMember, submitMemberRequest } from "@/app/membership/actions";
@@ -43,6 +44,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
         } else {setReceiptError("");setFileName(file?.name || "");}
       }}/>
     </span><small id={`${receiptId}-help`}>JPG, PNG or PDF · Maximum 3 MB</small>{receiptError && <span className="error" role="alert">{receiptError}</span>}</label>
+    {!token && <MembershipDeclaration/>}
     <label className="wide member-consent"><input type="checkbox" name="consent" value="yes" required/>I confirm my details and any uploaded payment receipt are accurate. I agree to the use of these details for membership administration.</label>
     <div hidden aria-hidden="true"><input name="website" tabIndex={-1} autoComplete="off"/></div>
     <div className="wide">{submissionEnabled ? <SubmitButton pendingText="Submitting…">{token ? "Submit renewal for verification" : "Submit registration"}</SubmitButton> : <button type="submit" className="button membership-test-button">Test registration</button>}</div>

@@ -67,3 +67,7 @@ The exact original membership Rules A–D remain unavailable in the supplied mat
 ## Payment QR source
 
 The DuitNow payment code was decoded from the user's supplied bank stand photo on 17 October 2026. Merchant name is `K HOTEL SDN BHD`, currency code `458` (MYR), country `MY`, and no fixed amount is embedded. The original EMV CRC was verified. The regenerated SVG/PNG preserve the complete original 169-character payload; the PNG was decoded again and compared byte-for-byte with the original. No recipient or payment data was changed. Registration and renewal forms display the proper fee beside the QR and offer a PNG download before receipt upload.
+
+## Original declaration recovered
+
+The original `WhatsApp Image 2026-10-16 at 2.17.15 PM.jpeg` was located and visually read on 17 October 2026. Its four clauses (a–d) are transcribed in `src/lib/membership-declaration.ts` and displayed in full on New Registration. This supersedes the earlier note that the original wording was unavailable. New applicants must explicitly agree; registration records the clause text, version and server timestamp in an atomic `rules_accepted` activity entry. Existing member records are not retroactively marked as having agreed.
