@@ -112,7 +112,7 @@ export async function submitPublicMemberRequest(_: {error:string;success:string}
     const identificationLookup=identification.toUpperCase().replace(/[^A-Z0-9]/g,"");
     const email=String(form.get("email")||"").trim().toLowerCase();
     const intent=String(form.get("intent")||"");
-    if (!name || name.length>200 || !["IC","Passport"].includes(idType) || !identificationLookup || identification.length>200 || email.length>254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !["renew","cancel"].includes(intent)) throw new Error("Enter your full name, IC / Passport number and a valid email address.");
+    if (!name || name.length>200 || !["IC","Passport"].includes(idType) || !identificationLookup || identification.length>200 || email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["renew","cancel"].includes(intent)) throw new Error("Enter your full name, IC / Passport number and a valid email address.");
     const db=createAdminClient();
     const escape=(value:string)=>value.replace(/[\\%_]/g,"\\$&");
     const {data: matches,error: matchError}=await db.from("memberships").select("id,room_no").eq("id_type",idType).eq("identification_lookup",identificationLookup).ilike("full_name",escape(name)).ilike("email",escape(email)).limit(2);
