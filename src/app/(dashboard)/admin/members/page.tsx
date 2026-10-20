@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { deliverMembershipEmails } from "@/lib/membership-email";
 import { AppShell } from "@/components/app-shell";
 import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { appOrigin, membershipEnabled, memberStatus, malaysiaDay, receiptOptionalForTesting } from "@/lib/membership";
+import { appOrigin, membershipEnabled, memberStatus, malaysiaDay, receiptOptionalForTesting, membershipEmailConfigured } from "@/lib/membership";
 import { reviewPayment, retryMembershipEmails, reviewMemberRequest } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -26,6 +28,10 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
   db.from("membership_emails").select("id,last_error",{count:"exact"}).eq("status","pending").limit(5),
  ]);
  if (members.error || pending.error || emails.error) return <AppShell profile={profile} title="Membership"><p className="error">Unable to load membership records. Confirm the database setup and refresh.</p></AppShell>;
+ // Retry confirmations that were blocked before the email gateway was configured.
+ if (membershipEmailConfigured() && emails.data?.some(email=>email.last_error==="disabled_or_missing_recipient")) {
+  after(async()=>{try{await deliverMembershipEmails();}catch{console.error("Membership confirmation remains queued for retry.");}});
+ }
  const receiptLinks = await Promise.all((pending.data||[]).map(async payment => {
   const {data} = payment.receipt_path ? await db.storage.from("membership-receipts").createSignedUrl(payment.receipt_path,300) : {data:null};
   const member=payment.memberships as unknown as {photo_path?:string|null}|null;
