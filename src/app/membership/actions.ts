@@ -107,15 +107,18 @@ export async function submitPublicMemberRequest(_: {error:string;success:string}
   try {
     await checkRequest(form);
     const name=String(form.get("full_name")||"").trim();
-    const room=String(form.get("room_no")||"").trim();
+    const idType=String(form.get("id_type")||"");
+    const identification=String(form.get("identification")||"").trim();
+    const identificationLookup=identification.toUpperCase().replace(/[^A-Z0-9]/g,"");
+    const email=String(form.get("email")||"").trim().toLowerCase();
     const intent=String(form.get("intent")||"");
-    if (!name || !room || name.length>200 || room.length>200 || !["renew","cancel"].includes(intent)) throw new Error("Enter your name and address.");
+    if (!name || name.length>200 || !["IC","Passport"].includes(idType) || !identificationLookup || identification.length>200 || email.length>254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !["renew","cancel"].includes(intent)) throw new Error("Enter your full name, IC / Passport number and a valid email address.");
     const db=createAdminClient();
     const escape=(value:string)=>value.replace(/[\\%_]/g,"\\$&");
-    const {data: matches,error: matchError}=await db.from("memberships").select("id").ilike("full_name",escape(name)).ilike("room_no",escape(room)).limit(2);
+    const {data: matches,error: matchError}=await db.from("memberships").select("id,room_no").eq("id_type",idType).eq("identification_lookup",identificationLookup).ilike("full_name",escape(name)).ilike("email",escape(email)).limit(2);
     if (matchError) throw new Error("Unable to submit your request. Please try again.");
     if (intent === "renew") path=await uploadReceipt(form,randomUUID());
-    const {error}=await db.from("membership_requests").insert({full_name:name,room_no:room,request_type:intent,member_id:matches?.length===1?matches[0].id:null,receipt_path:path||null});
+    const {error}=await db.from("membership_requests").insert({full_name:name,room_no:matches?.length===1?matches[0].room_no:"Not matched",id_type:idType,identification,email,request_type:intent,member_id:matches?.length===1?matches[0].id:null,receipt_path:path||null});
     if (error && error.code!=="23505") throw new Error("Unable to save your request. Please try again.");
     if (error && path) await db.storage.from("membership-receipts").remove([path]);
     revalidatePath("/admin/members");
