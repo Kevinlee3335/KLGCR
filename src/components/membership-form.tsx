@@ -18,7 +18,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
     event.preventDefault();
     if (receiptError) return;
     const values = new FormData(event.currentTarget);
-    setPreviewResult({name:String(values.get("full_name")||"Member"),location:String(values.get("room_no")||""),amount:type === "outsider" ? 50 : 40});
+    setPreviewResult({name:String(values.get("full_name")||"Member"),location:String(values.get("room_no")||""),amount:40});
   }}>
     {state.error && <p className="error wide" role="alert">{state.error}</p>}
     {token ? <><input type="hidden" name="token" value={token}/><input type="hidden" name="period" value={period}/><input type="hidden" name="intent" value="renew"/><p className="fee-note wide">Membership month: <strong>{period?.slice(0, 7)}</strong><br/>Amount payable: <strong>RM{fee ?? 40}</strong>. Your membership is updated after Admin verifies your payment.</p></> : <>
@@ -31,11 +31,11 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Nationality<input name="nationality" maxLength={200} required/></label>
       <label>{type === "resident" ? "Room number" : "Residential address / unit number"}<input name="room_no" maxLength={200} required/></label>
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>
-      <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>New member fee: <strong>{type === "outsider" ? "RM10 (Non Residence only)" : "RM0"}</strong><br/>Total: <strong>RM{type === "outsider" ? 50 : 40}</strong>. Initial membership covers the current calendar month.</p>
+      <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>Online payment: <strong>RM40</strong>{type === "outsider" && <><br/>Access Card Deposit: <strong>RM10 — pay cash at the Management Office</strong><br/>The deposit is separate from your online membership payment.</>}<br/>Initial membership covers the current calendar month.</p>
     </>}
     {!token && <MembershipPhoto/>}
     <p className="fee-note wide">Payment receipts are reviewed manually by Admin. Your application is approved only after Admin confirms your payment.</p>
-    <MembershipPayment amount={token ? (fee ?? 40) : type === "outsider" ? 50 : 40}/>
+    <MembershipPayment amount={token ? (fee ?? 40) : 40}/>
     <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{receiptOptional ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
       {fileName ? <FileCheck2 size={26} aria-hidden="true"/> : <UploadCloud size={26} aria-hidden="true"/>}
       <span className="receipt-upload-copy"><strong>{fileName || "Upload payment receipt"}</strong><small>{fileName ? "Click to replace file" : "Click to browse or choose a photo"}</small></span><span className="receipt-browse">Browse files</span>
