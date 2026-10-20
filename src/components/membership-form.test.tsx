@@ -6,7 +6,7 @@ import { MembershipForm } from "./membership-form";
 it("lets preview users test without a receipt and clearly reports that nothing was saved",()=>{
  const {container}=render(<MembershipForm submissionEnabled={false} receiptOptional/>);
  fireEvent.change(screen.getByLabelText("Full name"),{target:{value:"Test Student"}});
- fireEvent.change(screen.getByLabelText("Room number"),{target:{value:"A421"}});
+ fireEvent.change(screen.getByLabelText("Address"),{target:{value:"A421"}});
  const button=screen.getByRole("button",{name:"Test registration"});
  expect(button).toBeEnabled();
  fireEvent.submit(container.querySelector("form")!);
