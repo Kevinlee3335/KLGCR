@@ -50,6 +50,8 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
     if (form.get("rules_consent") !== "yes") throw new Error("Please read and agree to the four membership declaration clauses.");
     const parsed = registrationSchema.safeParse({ ...Object.fromEntries(form), address: form.get("room_no") });
     if (!parsed.success) return { error: "Please complete all required fields with valid details." };
+    const receipt=form.get("receipt");
+    if(!(receipt instanceof File)||!receipt.size) throw new Error("Upload your payment receipt before registering.");
     const db = createAdminClient();
     const id = randomUUID();
     token = membershipToken();
