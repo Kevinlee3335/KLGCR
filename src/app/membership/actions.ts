@@ -30,8 +30,19 @@ async function uploadReceipt(form: FormData, memberId: string) {
   if (error) throw new Error("Receipt could not be uploaded. Please try again.");
   return path;
 }
+async function uploadPersonalPhoto(form: FormData, memberId: string) {
+ const input=form.get("personal_photo");
+ if(!(input instanceof File)||!input.size||input.size>1024*1024) throw new Error("Add your personal photo using Take photo or Upload photo.");
+ const file=await receiptBytes(input);
+ if(file.type==="application/pdf") throw new Error("Your personal photo must be a JPG or PNG image.");
+ const path=memberId+"/"+randomUUID()+"."+file.extension;
+ const {error}=await createAdminClient().storage.from("membership-photos").upload(path,file.bytes,{contentType:file.type,upsert:false});
+ if(error) throw new Error("Your personal photo could not be uploaded. Please try again.");
+ return path;
+}
 export async function registerMember(_: State, form: FormData): Promise<State> {
   let token = "";
+  let photoPath: string | undefined;
   let path: string | null | undefined;
   try {
     await checkRequest(form);
@@ -42,8 +53,9 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
     const id = randomUUID();
     token = membershipToken();
     const ciphertext = await sealToken(token);
+    photoPath = await uploadPersonalPhoto(form, id);
     path = await uploadReceipt(form, id);
-    const { error } = await db.rpc("register_membership", { p_member: { ...parsed.data, id, declaration_accepted:true, declaration_version:MEMBERSHIP_DECLARATION_VERSION, declaration_clauses:MEMBERSHIP_DECLARATION_CLAUSES, token_hash: hashToken(token), token_ciphertext: ciphertext }, p_receipt: path });
+    const { error } = await db.rpc("register_membership", { p_member: { ...parsed.data, id, photo_path:photoPath, declaration_accepted:true, declaration_version:MEMBERSHIP_DECLARATION_VERSION, declaration_clauses:MEMBERSHIP_DECLARATION_CLAUSES, token_hash: hashToken(token), token_ciphertext: ciphertext }, p_receipt: path });
     if (error) {
       if (error.code === "23505") throw new Error("Unable to register these details again. Use your existing membership link or contact Management.");
       throw new Error("Registration could not be saved. Please try again or contact Management.");
@@ -52,6 +64,7 @@ export async function registerMember(_: State, form: FormData): Promise<State> {
     catch (deliveryError) { console.error("Membership registration email remains queued", deliveryError); }
   } catch (error) {
     if (path) await createAdminClient().storage.from("membership-receipts").remove([path]);
+    if (photoPath) await createAdminClient().storage.from("membership-photos").remove([photoPath]);
     return { error: error instanceof Error ? error.message : "Unable to register. Please try again." };
   }
   revalidatePath("/admin/members");
