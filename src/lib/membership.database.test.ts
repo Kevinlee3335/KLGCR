@@ -16,9 +16,11 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261017042521_membership_runtime_configuration.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261017042730_membership_public_requests.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261017044216_membership_declaration_consent.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261020034051_membership_personal_photos.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261020034143_membership_cash_access_card_deposit.sql','utf8'));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
- const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
+ const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
  await db.query('select register_membership($1,$2)',[JSON.stringify(data),'private/receipt.pdf']);
  payment=(await db.query<{id:string}>('select id from membership_payments')).rows[0].id;
 },30000);
@@ -33,8 +35,9 @@ it('keeps PII and tokens inaccessible to anon and authenticated',async()=>{
  const rows=(await db.query<{relrowsecurity:boolean}>("select relrowsecurity from pg_class where relname in ('memberships','membership_payments','membership_activity','membership_emails','membership_request_limits')")).rows;
  expect(rows).toHaveLength(5); expect(rows.every(r=>r.relrowsecurity)).toBe(true);
 });
-it('registers initial fee and records an auditable submission',async()=>{
- expect((await db.query<{amount:string}>('select amount from membership_payments')).rows[0].amount).toBe('50.00');
+it('stores personal photo and queues RM40 online fee pending manual approval',async()=>{
+ expect((await db.query<{amount:string}>('select amount from membership_payments')).rows[0].amount).toBe('40.00');
+ expect((await db.query<{photo_path:string;status:string}>('select photo_path,status from memberships where id=$1',[member])).rows[0]).toEqual({photo_path:member+'/portrait.jpg',status:'pending'});
  expect((await db.query("select * from membership_activity where event='registration_submitted'")).rows).toHaveLength(1);
 });
 it('rejects non-admin approval and requires rejection reason',async()=>{
