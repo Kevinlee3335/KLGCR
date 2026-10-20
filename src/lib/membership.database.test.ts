@@ -18,9 +18,10 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261017044216_membership_declaration_consent.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020034051_membership_personal_photos.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020034143_membership_cash_access_card_deposit.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261020035652_membership_emergency_contact.sql','utf8'));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
- const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
+ const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
  await db.query('select register_membership($1,$2)',[JSON.stringify(data),'private/receipt.pdf']);
  payment=(await db.query<{id:string}>('select id from membership_payments')).rows[0].id;
 },30000);
