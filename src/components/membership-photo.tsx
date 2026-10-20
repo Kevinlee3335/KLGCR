@@ -34,12 +34,12 @@ export function MembershipPhoto() {
   }catch(cause){input.current.value="";input.current.setCustomValidity("");setPhoto(null);setError(cause instanceof Error?cause.message:"Unable to prepare your photo.");}
   finally{setBusy(false);}
  }
- return <section className="wide receipt-field" aria-labelledby={id+"-label"} style={{position:"relative"}}>
+ return <section className="membership-photo-field receipt-field" aria-labelledby={id+"-label"} style={{position:"relative"}}>
   <strong id={id+"-label"}>Personal photo</strong>
-  <div className="receipt-upload" style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:18}}>
-   {preview?<img src={preview} alt="Your selected personal photo" style={{width:100,height:120,objectFit:"cover",borderRadius:12}}/>:<UserRound size={42} aria-hidden="true"/>}
+  <div className="receipt-upload" style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:10}}>
+   {preview?<img src={preview} alt="Your selected personal photo" style={{width:64,height:80,objectFit:"cover",borderRadius:12}}/>:<UserRound size={30} aria-hidden="true"/>}
    <div className="receipt-upload-copy"><strong>{busy?"Preparing photo…":photo?"Personal photo added":"Add your personal photo"}</strong><small>Take a photo or upload one from your device.</small>
-    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:12}}>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
      <button type="button" className="button secondary" disabled={busy} onClick={()=>choose(true)}><Camera size={18} aria-hidden="true"/> Take photo</button>
      <button type="button" className="button secondary" disabled={busy} onClick={()=>choose(false)}><UploadCloud size={18} aria-hidden="true"/> Upload photo</button>
     </div>
