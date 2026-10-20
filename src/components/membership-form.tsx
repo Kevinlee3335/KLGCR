@@ -1,6 +1,7 @@
 "use client";
 import { UploadCloud, FileCheck2, CheckCircle2 } from "lucide-react";
 import { useActionState, useState, useId } from "react";
+import { MEMBERSHIP_COUNTRIES } from "@/lib/membership-countries";
 import { MembershipDeclaration } from "./membership-declaration";
 import { MembershipPhoto } from "./membership-photo";
 import { MembershipPayment } from "./membership-payment";
@@ -11,6 +12,8 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
   const [fileName, setFileName] = useState("");
   const [receiptError, setReceiptError] = useState("");
   const [previewResult, setPreviewResult] = useState<{name:string;location:string;amount:number}|null>(null);
+  const [idType, setIdType] = useState("IC");
+  const [passportNationality, setPassportNationality] = useState("");
   const [type, setType] = useState("resident");
   const [state, action] = useActionState(token ? submitMemberRequest : registerMember, { error: "" });
   return <form action={action} className="membership-form" onSubmit={event => {
@@ -25,10 +28,10 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Member type<select name="member_type" value={type} onChange={event => setType(event.target.value)}><option value="resident">Residence tenant</option><option value="outsider">Non Residence</option></select></label>
       <label>Full name<input name="full_name" autoComplete="name" maxLength={200} required/></label>
       <label>Email address<input name="email" type="email" autoComplete="email" maxLength={254} required/></label>
-      <label>Identification type<select name="id_type"><option>IC</option><option>Passport</option></select></label>
+      <label>Identification type<select name="id_type" value={idType} onChange={event=>setIdType(event.target.value)}><option>IC</option><option>Passport</option></select></label>
       <label>IC / Passport number<input name="identification" maxLength={200} required/></label>
       <label>Gender<select name="gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
-      <label>Nationality<input name="nationality" maxLength={200} required/></label>
+      <label>Nationality{idType === "IC" ? <input name="nationality" value="Malaysia" readOnly aria-readonly="true"/> : <select name="nationality" value={passportNationality} onChange={event=>setPassportNationality(event.target.value)} required><option value="" disabled>Select country</option>{MEMBERSHIP_COUNTRIES.map(country=><option key={country} value={country}>{country}</option>)}</select>}</label>
       <label>Address<input name="room_no" autoComplete="street-address" maxLength={200} required/></label>
       <label>Emergency contact number<input name="emergency_contact" type="tel" inputMode="tel" maxLength={40} required/></label>
       <label>Relationship<select name="emergency_relationship" defaultValue="" required><option value="" disabled>Select relationship</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Guardian</option><option>Friend</option><option>Other</option></select></label>
