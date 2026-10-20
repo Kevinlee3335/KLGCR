@@ -15,7 +15,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       <Link className={`membership-choice${intent === "renew" ? " selected" : ""}`} href="/membership/register?action=renew" aria-current={intent === "renew" ? "page" : undefined}><span className="choice-icon"><RefreshCw size={26}/></span><div><h2>Renew Membership</h2><p>Continue your existing membership.</p></div><ArrowRight size={20}/></Link>
       <Link className={`membership-choice${intent === "cancel" ? " selected" : ""}`} href="/membership/register?action=cancel" aria-current={intent === "cancel" ? "page" : undefined}><span className="choice-icon"><CircleX size={26}/></span><div><h2>Cancel Membership</h2><p>Manage your membership cancellation.</p></div><ArrowRight size={20}/></Link>
     </nav>
-    {intent && <section className="panel"><h2>{intent === "renew" ? "Renew Membership" : "Cancel Membership"}</h2><p className="member-intro">Enter your name and room number. Management will verify your request.</p><MembershipServiceForm key={intent} intent={intent} receiptOptional={receiptOptionalForTesting()}/></section>}
+    {intent && <section className="panel"><h2>{intent === "renew" ? "Renew Membership" : "Cancel Membership"}</h2><p className="member-intro">Enter your name and address. Management will verify your request.</p><MembershipServiceForm key={intent} intent={intent} receiptOptional={receiptOptionalForTesting()}/></section>}
 
   </>;
 
