@@ -1,14 +1,17 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
+import { MEMBERSHIP_COUNTRIES } from "./membership-countries";
 
 const required = z.string().trim().min(1, "This field is required.").max(200);
 export const registrationSchema = z.object({
   full_name: required, email: z.string().trim().toLowerCase().email().max(254),
   member_type: z.enum(["resident", "outsider"]), id_type: z.enum(["IC", "Passport"]),
-  identification: required.transform(value => value.replace(/\s/g," ").toUpperCase()), gender: z.enum(["Male", "Female", "Other"]), nationality: required,
+  identification: required.transform(value => value.replace(/\s/g," ").toUpperCase()), gender: z.enum(["Male", "Female", "Other"]), nationality: z.string().trim().max(200),
   room_no: required, student_id: required, address: required,
   emergency_contact: z.string().trim().min(5).max(40).regex(/^[+()0-9 .-]+$/), emergency_relationship: required,
-});
+}).superRefine((value,ctx)=>{
+  if(value.id_type === "Passport" && !MEMBERSHIP_COUNTRIES.includes(value.nationality)) ctx.addIssue({code:"custom",path:["nationality"],message:"Select your country."});
+}).transform(value=>({...value,nationality:value.id_type === "IC" ? "Malaysia" : value.nationality}));
 export function membershipToken() { return randomBytes(32).toString("hex"); }
 export function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
 export function validToken(token: string) { return /^[a-f0-9]{64}$/.test(token); }
