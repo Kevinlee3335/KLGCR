@@ -7,6 +7,7 @@ export const registrationSchema = z.object({
   member_type: z.enum(["resident", "outsider"]), id_type: z.enum(["IC", "Passport"]),
   identification: required.transform(value => value.replace(/\s/g," ").toUpperCase()), gender: z.enum(["Male", "Female", "Other"]), nationality: required,
   room_no: required, student_id: required, address: required,
+  emergency_contact: z.string().trim().min(5).max(40).regex(/^[+()0-9 .-]+$/), emergency_relationship: required,
 });
 export function membershipToken() { return randomBytes(32).toString("hex"); }
 export function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
