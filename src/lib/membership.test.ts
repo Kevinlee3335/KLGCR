@@ -26,6 +26,10 @@ it('renews the next uncovered calendar month',()=>{
 it('requires all registration fields and normalizes email',()=>{
  const input={full_name:' Kevin ',email:'KEVIN@example.com',member_type:'resident',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse'};
  expect(registrationSchema.parse(input).email).toBe('kevin@example.com');
+ expect(registrationSchema.parse(input).nationality).toBe('Malaysia');
+ expect(registrationSchema.parse({...input,id_type:'Passport',nationality:'Singapore'}).nationality).toBe('Singapore');
+ expect(registrationSchema.safeParse({...input,id_type:'Passport',nationality:''}).success).toBe(false);
+ expect(registrationSchema.safeParse({...input,id_type:'Passport',nationality:'not-a-country'}).success).toBe(false);
  expect(registrationSchema.safeParse({...input,student_id:''}).success).toBe(false);
  expect(registrationSchema.safeParse({...input,emergency_contact:''}).success).toBe(false);
  expect(registrationSchema.safeParse({...input,emergency_relationship:''}).success).toBe(false);
