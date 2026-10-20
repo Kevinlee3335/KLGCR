@@ -29,7 +29,9 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>IC / Passport number<input name="identification" maxLength={200} required/></label>
       <label>Gender<select name="gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
       <label>Nationality<input name="nationality" maxLength={200} required/></label>
-      <label>{type === "resident" ? "Room number" : "Residential address / unit number"}<input name="room_no" maxLength={200} required/></label>
+      <label>Address<input name="room_no" autoComplete="street-address" maxLength={200} required/></label>
+      <label>Emergency contact number<input name="emergency_contact" type="tel" inputMode="tel" maxLength={40} required/></label>
+      <label>Relationship<select name="emergency_relationship" defaultValue="" required><option value="" disabled>Select relationship</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Guardian</option><option>Friend</option><option>Other</option></select></label>
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>
       <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>Online payment: <strong>RM40</strong>{type === "outsider" && <><br/>Access Card Deposit: <strong>RM10 — pay cash at the Management Office</strong><br/>The deposit is separate from your online membership payment.</>}<br/>Initial membership covers the current calendar month.</p>
     </>}
