@@ -35,7 +35,7 @@ export function reminderDates(now = new Date()) {
   const next = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
   return { day, nextMonth: next, reminderDue: date >= last - 2 };
 }
-export function membershipFee(type: string, initial: boolean) { return 40 + (initial && type === "outsider" ? 10 : 0); }
+export function membershipFee(_type: string, _initial: boolean) { return 40; }
 export function nextPeriod(expiry: string | null, today = malaysiaDay()) {
   const current = today.slice(0, 7) + "-01";
   if (!expiry || expiry < today) return current;
