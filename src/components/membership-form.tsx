@@ -37,6 +37,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Relationship<select name="emergency_relationship" defaultValue="" required><option value="" disabled>Select relationship</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Guardian</option><option>Friend</option><option>Other</option></select></label>
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>
       <MembershipPhoto/>
+      {type==="resident" && <MembershipPhoto accessCard/>}
       <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>Online payment: <strong>RM40</strong>{type === "outsider" && <><br/>Access Card Deposit: <strong>RM10 — pay cash at the Management Office</strong><br/>The deposit is separate from your online membership payment.</>}<br/>Initial membership covers the current calendar month.</p>
     </>}
     <p className="fee-note wide">Payment receipts are reviewed manually by Admin. Your application is approved only after Admin confirms your payment.</p>
