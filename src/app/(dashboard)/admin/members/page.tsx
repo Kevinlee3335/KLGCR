@@ -50,7 +50,7 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
  const registerUrl = `${appOrigin()}/membership/register`;
  const pageUrl = (p:number) => `/admin/members?${new URLSearchParams({q,status:search.status||"",page:String(p)})}`;
  const errorText = search.error === "verify" ? "Confirm payment was received before approving." : search.error === "reason" ? "Enter a reason before rejecting." : "Review could not be saved. The payment may already be reviewed, the membership may be cancelled, or its payment month has passed. Refresh and check the record.";
- return <AppShell profile={profile} title="Membership"><div className="membership-admin">
+ return <AppShell profile={profile} title="Membership"><div className={`membership-admin${detail?.data ? " member-detail-view" : ""}`}>
   <div className="section-head"><div><p className="eyebrow">REGISTRATION & RENEWALS</p><h2>Membership</h2><p className="subtle">RM40 per month · RM10 Access Card Deposit for Non Residence · Pay cash at the Management Office</p></div><Link className="button" href="/membership/register" target="_blank">Open registration</Link></div>
   {search.error && <p className="error" role="alert">{errorText}</p>}{search.success && <p role="status">Payment review saved.</p>}
 
