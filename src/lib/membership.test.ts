@@ -24,9 +24,11 @@ it('renews the next uncovered calendar month',()=>{
  expect(nextPeriod('2026-12-31','2026-10-16')).toBe('2027-01-01');
 });
 it('requires all registration fields and normalizes email',()=>{
- const input={full_name:' Kevin ',email:'KEVIN@example.com',member_type:'resident',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM'};
+ const input={full_name:' Kevin ',email:'KEVIN@example.com',member_type:'resident',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse'};
  expect(registrationSchema.parse(input).email).toBe('kevin@example.com');
  expect(registrationSchema.safeParse({...input,student_id:''}).success).toBe(false);
+ expect(registrationSchema.safeParse({...input,emergency_contact:''}).success).toBe(false);
+ expect(registrationSchema.safeParse({...input,emergency_relationship:''}).success).toBe(false);
 });
 it('does not trust image MIME labels and enforces file size',async()=>{
  await expect(receiptBytes(new File(['hello'],'fake.png',{type:'image/png'}))).rejects.toThrow('valid');
