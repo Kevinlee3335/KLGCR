@@ -9,6 +9,7 @@ import { SubmitButton } from "./submit-button";
 import { registerMember, submitMemberRequest } from "@/app/membership/actions";
 export function MembershipForm({ token, period, fee, submissionEnabled = true, receiptOptional = false }: { token?: string; period?: string; fee?: number; submissionEnabled?: boolean; receiptOptional?: boolean }) {
   const receiptId = useId();
+  const receiptRequired = !token || !receiptOptional;
   const [fileName, setFileName] = useState("");
   const [receiptError, setReceiptError] = useState("");
   const [previewResult, setPreviewResult] = useState<{name:string;location:string;amount:number}|null>(null);
@@ -23,6 +24,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
     const values = new FormData(event.currentTarget);
     setPreviewResult({name:String(values.get("full_name")||"Member"),location:String(values.get("room_no")||""),amount:40});
   }}>
+    {!token && <p className="fee-note wide">All fields and required uploads must be completed before registration.</p>}
     {state.error && <p className="error wide" role="alert">{state.error}</p>}
     {token ? <><input type="hidden" name="token" value={token}/><input type="hidden" name="period" value={period}/><input type="hidden" name="intent" value="renew"/><p className="fee-note wide">Membership month: <strong>{period?.slice(0, 7)}</strong><br/>Amount payable: <strong>RM{fee ?? 40}</strong>. Your membership is updated after Admin verifies your payment.</p></> : <>
       <label>Member type<select name="member_type" value={type} onChange={event => setType(event.target.value)}><option value="resident">Residence tenant</option><option value="outsider">Non Residence</option></select></label>
@@ -30,7 +32,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Email address<input name="email" type="email" autoComplete="email" maxLength={254} required/></label>
       <label>Identification type<select name="id_type" value={idType} onChange={event=>setIdType(event.target.value)}><option>IC</option><option>Passport</option></select></label>
       <label>IC / Passport number<input name="identification" maxLength={200} required/></label>
-      <label>Gender<select name="gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
+      <label>Gender<select name="gender" defaultValue="" required><option value="" disabled>Select gender</option><option>Male</option><option>Female</option><option>Other</option></select></label>
       <MembershipCountrySelect locked={idType==="IC"} value={passportNationality} onChange={setPassportNationality}/>
       <label>Address<input name="room_no" autoComplete="street-address" maxLength={200} required/></label>
       <label>Emergency contact number<input name="emergency_contact" type="tel" inputMode="tel" maxLength={40} required/></label>
@@ -42,10 +44,10 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
     </>}
     <p className="fee-note wide">Payment receipts are reviewed manually by Admin. Your application is approved only after Admin confirms your payment.</p>
     <MembershipPayment amount={token ? (fee ?? 40) : 40}/>
-    <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{receiptOptional ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
+    <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{!receiptRequired ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
       {fileName ? <FileCheck2 size={26} aria-hidden="true"/> : <UploadCloud size={26} aria-hidden="true"/>}
       <span className="receipt-upload-copy"><strong>{fileName || "Upload payment receipt"}</strong><small>{fileName ? "Click to replace file" : "Click to browse or choose a photo"}</small></span><span className="receipt-browse">Browse files</span>
-      <input id={receiptId} name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required={!receiptOptional} aria-describedby={`${receiptId}-help`} onChange={event => {
+      <input id={receiptId} name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required={receiptRequired} aria-describedby={`${receiptId}-help`} onChange={event => {
         const file=event.currentTarget.files?.[0];
         setPreviewResult(null);
         if (file && (file.size > 3*1024*1024 || !["image/jpeg","image/png","application/pdf"].includes(file.type))) {
