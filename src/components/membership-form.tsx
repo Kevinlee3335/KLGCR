@@ -1,7 +1,7 @@
 "use client";
 import { UploadCloud, FileCheck2, CheckCircle2 } from "lucide-react";
 import { useActionState, useState, useId } from "react";
-import { MEMBERSHIP_COUNTRIES } from "@/lib/membership-countries";
+import { MembershipCountrySelect } from "./membership-country-select";
 import { MembershipDeclaration } from "./membership-declaration";
 import { MembershipPhoto } from "./membership-photo";
 import { MembershipPayment } from "./membership-payment";
@@ -31,14 +31,14 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>Identification type<select name="id_type" value={idType} onChange={event=>setIdType(event.target.value)}><option>IC</option><option>Passport</option></select></label>
       <label>IC / Passport number<input name="identification" maxLength={200} required/></label>
       <label>Gender<select name="gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
-      <label>Nationality{idType === "IC" ? <input name="nationality" value="Malaysia" readOnly aria-readonly="true"/> : <select name="nationality" value={passportNationality} onChange={event=>setPassportNationality(event.target.value)} required><option value="" disabled>Select country</option>{MEMBERSHIP_COUNTRIES.map(country=><option key={country} value={country}>{country}</option>)}</select>}</label>
+      <MembershipCountrySelect locked={idType==="IC"} value={passportNationality} onChange={setPassportNationality}/>
       <label>Address<input name="room_no" autoComplete="street-address" maxLength={200} required/></label>
       <label>Emergency contact number<input name="emergency_contact" type="tel" inputMode="tel" maxLength={40} required/></label>
       <label>Relationship<select name="emergency_relationship" defaultValue="" required><option value="" disabled>Select relationship</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Guardian</option><option>Friend</option><option>Other</option></select></label>
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>
+      <MembershipPhoto/>
       <p className="fee-note wide">Monthly membership: <strong>RM40</strong><br/>Online payment: <strong>RM40</strong>{type === "outsider" && <><br/>Access Card Deposit: <strong>RM10 — pay cash at the Management Office</strong><br/>The deposit is separate from your online membership payment.</>}<br/>Initial membership covers the current calendar month.</p>
     </>}
-    {!token && <MembershipPhoto/>}
     <p className="fee-note wide">Payment receipts are reviewed manually by Admin. Your application is approved only after Admin confirms your payment.</p>
     <MembershipPayment amount={token ? (fee ?? 40) : 40}/>
     <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{receiptOptional ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
