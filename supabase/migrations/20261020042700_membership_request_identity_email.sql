@@ -1,3 +1,0 @@
-alter table public.memberships add column identification_lookup text generated always as (regexp_replace(upper(identification),'[^A-Z0-9]','','g')) stored;
-create index membership_identification_lookup on public.memberships(id_type,identification_lookup);
-alter table public.membership_requests add column id_type text check (id_type in ('IC','Passport')), add column identification text, add column email text;
