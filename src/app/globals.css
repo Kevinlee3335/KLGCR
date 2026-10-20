@@ -3876,3 +3876,16 @@ button.calendar-item {
 .member-timeline details li{margin:8px 0}
 @media(max-width:1000px){.member-profile-layout{grid-template-columns:170px minmax(0,1fr);gap:24px}.member-identity{padding-right:22px}.member-portrait{width:130px;height:160px}.member-timeline>li{grid-template-columns:12px minmax(0,1fr)}.member-timeline time{grid-column:2}}
 @media(max-width:600px){.member-profile-heading{align-items:flex-start;flex-direction:column;padding:22px}.member-profile-layout{grid-template-columns:1fr;padding:22px}.member-identity{border-right:0;border-bottom:1px solid var(--line);padding:0 0 24px}.member-info-grid{gap:20px;grid-template-columns:1fr}.member-history{padding:22px}.member-profile-heading h2{font-size:1.4rem}}
+
+/* Formal member record: details on the left, portrait at top right. */
+.member-profile-layout{grid-template-columns:minmax(0,1fr) 190px;align-items:start}
+.member-identity{grid-column:2;grid-row:1;border-right:0;border-left:1px solid var(--line);padding:0 0 0 24px}
+.member-profile-info{grid-column:1;grid-row:1}
+.member-info-grid{gap:0;border-top:1px solid var(--line);border-left:1px solid var(--line);border-radius:10px;overflow:hidden}
+.member-info-grid>div{display:grid;grid-template-columns:125px minmax(0,1fr);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.member-info-grid dt{padding:14px 12px;margin:0;background:#f8f5ee;border-right:1px solid var(--line);font-size:.73rem;line-height:1.5}
+.member-info-grid dd{padding:14px 12px;background:#fff;font-size:.83rem}
+.member-emergency{border-top:0;margin-top:24px;padding-top:0}
+.member-detail-view>.grid-2,.member-detail-view>section.panel:not(.member-profile){display:none}
+@media(max-width:1200px){.member-info-grid{grid-template-columns:1fr}.member-profile-layout{grid-template-columns:minmax(0,1fr) 170px}.member-portrait{width:140px;height:175px}}
+@media(max-width:600px){.member-profile-layout{grid-template-columns:minmax(0,1fr) 105px;gap:14px;padding:18px}.member-identity{grid-column:2;grid-row:1;padding-left:12px;border-bottom:0;border-left:1px solid var(--line)}.member-portrait{width:86px;height:110px;border-radius:8px}.member-portrait-empty strong{font-size:1.6rem}.member-portrait-empty span{font-size:.6rem}.member-identity p{font-size:.65rem}.member-identity>strong{font-size:.7rem}.member-state{font-size:.65rem;padding:5px 8px}.member-profile-info{grid-column:1;grid-row:1}.member-info-grid>div{grid-template-columns:1fr}.member-info-grid dt{padding:8px 10px;border-right:0}.member-info-grid dd{padding:8px 10px}.member-profile-info h3{font-size:.88rem}}
