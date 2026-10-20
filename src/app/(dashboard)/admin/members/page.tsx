@@ -9,7 +9,7 @@ import { appOrigin, membershipEnabled, memberStatus, malaysiaDay, receiptOptiona
 import { reviewPayment, retryMembershipEmails, reviewMemberRequest } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-export default async function MembersPage({searchParams}:{searchParams:Promise<{q?:string;status?:string;page?:string;id?:string;error?:string;success?:string}>}) {
+export default async function MembersPage({searchParams}:{searchParams:Promise<{q?:string;status?:string;page?:string;id?:string;error?:string;success?:string;paymentPage?:string}>}) {
  const profile = await requireRole(["admin"]);
  if (!membershipEnabled()) return <AppShell profile={profile} title="Membership"><section className="panel"><h2>Membership setup</h2><p>The membership module is awaiting database and email configuration. Public registration is disabled until setup is verified.</p></section></AppShell>;
  const search = await searchParams;
@@ -47,6 +47,22 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
  const detail = selected ? await db.from("memberships").select("full_name,email,id_type,identification,gender,nationality,room_no,student_id,address,member_type,status,expires_on,photo_path,emergency_contact,emergency_relationship").eq("id",selected).maybeSingle() : null;
  const {data:detailPhoto}=detail?.data?.photo_path ? await db.storage.from("membership-photos").createSignedUrl(detail.data.photo_path,300) : {data:null};
  const history = selected ? await db.from("membership_activity").select("id,event,created_at,actor_id,details").eq("member_id",selected).order("created_at",{ascending:false}).limit(100) : null;
+
+ const paymentPage=Math.max(1,Math.min(100000,Number(search.paymentPage)||1));
+ const paymentOffset=(paymentPage-1)*25;
+ const [paymentHistory,renewalUploads]=selected ? await Promise.all([
+  db.from("membership_payments").select("id,kind,period_start,amount,receipt_path,status,review_note,reviewed_at,created_at",{count:"exact"}).eq("member_id",selected).order("created_at",{ascending:false}).range(paymentOffset,paymentOffset+24),
+  db.from("membership_requests").select("id,receipt_path,status,review_note,reviewed_at,created_at",{count:"exact"}).eq("member_id",selected).eq("request_type","renew").neq("status","approved").order("created_at",{ascending:false}).range(paymentOffset,paymentOffset+24),
+ ]) : [null,null];
+ const paymentRows=await Promise.all([
+  ...(paymentHistory?.data||[]).map(row=>({...row,source:"payment"})),
+  ...(renewalUploads?.data||[]).map(row=>({...row,kind:"renewal",period_start:null,amount:40,source:"request"})),
+ ].sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(async row=>{
+  const {data}=row.receipt_path ? await db.storage.from("membership-receipts").createSignedUrl(row.receipt_path,300) : {data:null};
+  return {...row,receiptUrl:data?.signedUrl};
+ }));
+ const paymentHasNext=Math.max(paymentHistory?.count||0,renewalUploads?.count||0)>paymentPage*25;
+ const paymentPageUrl=(p:number)=>`/admin/members?${new URLSearchParams({id:selected||"",paymentPage:String(p)})}#payment-records`;
  const registerUrl = `${appOrigin()}/membership/register`;
  const pageUrl = (p:number) => `/admin/members?${new URLSearchParams({q,status:search.status||"",page:String(p)})}`;
  const errorText = search.error === "verify" ? "Confirm payment was received before approving." : search.error === "reason" ? "Enter a reason before rejecting." : "Review could not be saved. The payment may already be reviewed, the membership may be cancelled, or its payment month has passed. Refresh and check the record.";
@@ -65,6 +81,12 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
    ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl>
    <div className="member-emergency"><h3>Emergency contact</h3><dl className="member-info-grid"><div><dt>Contact number</dt><dd>{detail.data.emergency_contact || "Not provided"}</dd></div><div><dt>Relationship</dt><dd>{detail.data.emergency_relationship || "Not provided"}</dd></div></dl></div>
    </div></div>
+
+   <div className="member-history" id="payment-records"><div className="member-history-heading"><h3>Payment records</h3><span>Registration & renewals</span></div>
+   {paymentHistory?.error || renewalUploads?.error ? <p className="error">Unable to load payment records. Please refresh.</p> : !paymentRows.length ? <p className="subtle">No payment records on this page.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Submitted</th><th>Type / Month</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Review</th></tr></thead><tbody>{paymentRows.map(row=><tr key={row.source+row.id}><td>{new Date(row.created_at).toLocaleString("en-MY",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kuala_Lumpur"})}</td><td>{row.kind==="renewal" ? "Renewal" : "Registration"}<br/><small>{row.period_start ? row.period_start.slice(0,7) : "Month assigned on approval"}</small></td><td>RM{Number(row.amount).toFixed(2)}</td><td><span className="badge">{row.status==="approved" ? "Approved" : row.status==="rejected" ? "Rejected" : row.status==="pending" || row.status==="pending_verification" ? "Pending review" : row.status.replaceAll("_"," ")}</span></td><td>{row.receiptUrl ? <a className="text-link" href={row.receiptUrl} target="_blank" rel="noreferrer">View receipt ↗</a> : row.receipt_path ? "Unavailable — refresh" : "No receipt uploaded"}</td><td style={{whiteSpace:"normal",minWidth:160,maxWidth:300,overflowWrap:"anywhere"}}>{row.review_note || "—"}{row.reviewed_at && <><br/><small>{new Date(row.reviewed_at).toLocaleString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})}</small></>}</td></tr>)}</tbody></table></div>}
+   <p className="subtle" style={{fontSize:12,marginTop:16}}>Receipt links expire after 5 minutes. Refresh this page to reopen them.</p>
+   {(paymentPage>1 || paymentHasNext) && <div className="actions">{paymentPage>1 && <Link className="button secondary" href={paymentPageUrl(paymentPage-1)}>Previous records</Link>}<span>Page {paymentPage}</span>{paymentHasNext && <Link className="button secondary" href={paymentPageUrl(paymentPage+1)}>More records</Link>}</div>}
+   </div>
    <div className="member-history"><div className="member-history-heading"><h3>Activity history</h3><span>Latest updates</span></div>{history?.error ? <p className="error">Unable to load activity history.</p> : !history?.data?.length ? <p className="subtle">No activity recorded yet.</p> : <ol className="member-timeline">{history.data.map(event=>{
     const labels:Record<string,string>={payment_approved:"Payment approved",payment_rejected:"Payment rejected",receipt_submitted:"Payment receipt submitted",registration_submitted:"Registration submitted",rules_accepted:"Membership rules accepted",renewal_requested:"Renewal requested",cancelled:"Membership cancelled"};
     const data=event.details && typeof event.details==="object" && !Array.isArray(event.details) ? event.details as Record<string,unknown> : {};
