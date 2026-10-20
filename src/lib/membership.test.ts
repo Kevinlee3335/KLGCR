@@ -3,9 +3,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { membershipFee, reminderDates, nextPeriod, receiptBytes, hashToken, membershipToken, registrationSchema, memberStatus, receiptOptionalForTesting } from "./membership";
 import { openToken, sealToken } from "./membership-secrets";
 afterEach(()=>vi.unstubAllEnvs());
-it('charges RM10 only on outsider registration',()=>{
+it('keeps office cash card deposit separate from online membership payments',()=>{
  expect(membershipFee('resident',true)).toBe(40);
- expect(membershipFee('outsider',true)).toBe(50);
+ expect(membershipFee('outsider',true)).toBe(40);
  expect(membershipFee('outsider',false)).toBe(40);
 });
 it.each([
