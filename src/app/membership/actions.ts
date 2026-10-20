@@ -109,7 +109,7 @@ export async function submitPublicMemberRequest(_: {error:string;success:string}
     const name=String(form.get("full_name")||"").trim();
     const room=String(form.get("room_no")||"").trim();
     const intent=String(form.get("intent")||"");
-    if (!name || !room || name.length>200 || room.length>200 || !["renew","cancel"].includes(intent)) throw new Error("Enter your name and room number.");
+    if (!name || !room || name.length>200 || room.length>200 || !["renew","cancel"].includes(intent)) throw new Error("Enter your name and address.");
     const db=createAdminClient();
     const escape=(value:string)=>value.replace(/[\\%_]/g,"\\$&");
     const {data: matches,error: matchError}=await db.from("memberships").select("id").ilike("full_name",escape(name)).ilike("room_no",escape(room)).limit(2);
