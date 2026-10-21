@@ -36,3 +36,4 @@
 .po-workspace .po-table strong{font-size:12px;font-weight:600}
 @media(max-width:1200px){.po-workspace .po-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.po-workspace .panel{padding:14px}.po-workspace .po-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.po-workspace .section-head{flex-wrap:wrap}.po-workspace .table-wrap{overflow:auto}.po-workspace .po-table{min-width:780px}.po-workspace .po-item-results{position:static;margin-top:5px}.po-workspace .section-head>input[type=search]{width:100%}}
+.po-workspace .po-record-actions{display:flex;gap:6px;flex-wrap:wrap}

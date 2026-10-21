@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
     const parsed=purchaseOrderSchema.safeParse(JSON.parse(raw));
     if(!parsed.success)return NextResponse.json({error:'Please select inventory items, enter a date, requester and positive quantities.'},{status:400});
     const db=await createClient();
-    const {data,error}=await db.rpc('save_inventory_purchase_order',{payload:parsed.data});
+    const {data,error}=await db.rpc(parsed.data.orderId?'edit_inventory_purchase_order':'save_inventory_purchase_order',{payload:parsed.data});
+    if(error?.message.includes('changed by another'))return NextResponse.json({error:'This PO was changed by another user. Refresh the page and reopen the latest PO before editing.'},{status:409});
     if(error){console.error('PO save:',error.message);return NextResponse.json({error:'Unable to save PO. Please retry; the same request will not create a duplicate.'},{status:503});}
     await archivedPurchaseOrderPdf(data);
     return NextResponse.json({order:data});

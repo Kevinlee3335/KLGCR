@@ -20,6 +20,7 @@ beforeAll(async()=>{
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  set app.admin='yes';`);
  await db.exec(readFileSync('supabase/migrations/20261021083933_inventory_purchase_orders.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261021091937_inventory_purchase_order_edits.sql','utf8'));
 },30000);
 afterAll(()=>db.close());
 describe('PO save',()=>{
@@ -39,6 +40,18 @@ describe('PO save',()=>{
  it('has RLS on both tables and no anonymous privileges',async()=>{
  const r=await db.query<{relrowsecurity:boolean}>("select relrowsecurity from pg_class where relname in ('inventory_po_counters','inventory_purchase_orders')");expect(r.rows.every(x=>x.relrowsecurity)).toBe(true);
  await db.exec('set role anon');await expect(db.query('select * from inventory_purchase_orders')).rejects.toThrow('permission denied');await db.exec('reset role');
+ });
+ it('edits the same PO, archives revisions and rejects stale changes without consuming a number',async()=>{
+ const previous=(await db.query<{id:string}>('select id from inventory_purchase_orders limit 1')).rows[0];
+ const patch={...input,orderId:previous.id,expectedRevision:1,requestId:crypto.randomUUID(),items:[...input.items,{...input.items[0],quantity:7,location:'External Area'}]};
+ const edit=()=>db.query<{o:{revision:number;po_no:string;items:unknown[]}}>('select edit_inventory_purchase_order($1) o',[JSON.stringify(patch)]);
+ const saved=(await edit()).rows[0].o;
+ expect(saved.po_no).toBe('KH/KLG/PO/2026-0030');expect(saved.revision).toBe(2);expect(saved.items).toHaveLength(2);
+ expect((await edit()).rows[0].o.revision).toBe(2);
+ expect((await db.query('select * from inventory_po_revisions')).rows).toHaveLength(2);
+ expect((await db.query<{last_number:number}>('select last_number from inventory_po_counters where year=2026')).rows[0].last_number).toBe(30);
+ await expect(db.query('select edit_inventory_purchase_order($1)',[JSON.stringify({...patch,requestId:crypto.randomUUID()})])).rejects.toThrow('changed by another');
+ await db.exec("set app.admin='no'");await expect(edit()).rejects.toThrow('Administrator access required');await db.exec("set app.admin='yes'");
  });
  it('starts each future year at 0001 and preserves earlier orders',async()=>{
  const sql=readFileSync('supabase/migrations/20261021083933_inventory_purchase_orders.sql','utf8');
