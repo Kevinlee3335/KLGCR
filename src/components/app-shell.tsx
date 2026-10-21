@@ -10,7 +10,7 @@ import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, File
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
   ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays],
-  ["Check-out Rooms", "/admin/checkouts", DoorOpen],
+  ["Check-out Rooms", "/admin/checkouts", DoorOpen], ["Waste Collection", "/admin/waste-collection", ClipboardCheck],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
   ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
@@ -30,7 +30,7 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
 
 function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; currentTitle: string }) {
   const groups = [
-    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms"].includes(label)) },
+    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", "Waste Collection"].includes(label)) },
     { label: "Daily Tasks", Icon: ClipboardCheck, links: [
       ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
