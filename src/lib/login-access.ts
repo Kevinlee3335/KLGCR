@@ -1,5 +1,7 @@
+import type { AppRole } from "./types";
+
 export type LoginProfile = {
-  role: "admin" | "maintenance_staff" | "management_viewer";
+  role: AppRole;
   is_active: boolean;
 };
 
