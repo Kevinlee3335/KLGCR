@@ -47,7 +47,7 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
     const lines=columns.map((c,i)=>wrap(c,edges[i+1]-edges[i]-12));
     const height=Math.max(52, Math.max(...lines.map(a=>a.length))*14+14);
     if(top+height>615){text(`Continued - ${order.po_no}`,24,805,9);page=pdf.addPage([595.3,841.9]);start();top=334;}
-    for(let i=0;i<5;i++){line(edges[i],top,edges[i],top+height);lines[i].forEach((s,j)=>text(s,edges[i]+6,top+5+j*14));}
+    for(let i=0;i<5;i++){line(edges[i],top,edges[i],top+height);lines[i].forEach((s,j)=>text(s,edges[i]+6,top+5+j*14,i===1&&j===0?8:11));}
     line(edges[5],top,edges[5],top+height);line(edges[0],top+height,edges[5],top+height);top+=height;
   });
   for(const [x,label,name,date] of [[50.5,'Requested by:',order.requested_by,order.requested_date],[375,'Approved By:',order.approved_by,order.approved_date]] as const){
