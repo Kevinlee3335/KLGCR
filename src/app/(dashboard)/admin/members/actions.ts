@@ -53,3 +53,18 @@ export async function reviewMemberRequest(form:FormData) {
  if(req.member_id) try{await deliverMembershipEmails(req.member_id);}catch(error){console.error("Membership email remains queued",error);}
  revalidatePath("/admin/members");redirect("/admin/members?success=reviewed");
 }
+
+export async function updateMemberStatus(form:FormData) {
+ const profile=await requireRole(["admin"]);
+ if(!membershipEnabled()) throw new Error("Membership is not enabled.");
+ const id=String(form.get("member")||"");
+ if(!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid member.");
+ const location=`/admin/members?id=${id}`;
+ const status=String(form.get("status")||"");
+ const note=String(form.get("note")||"").trim();
+ if(!["active","suspended","cancelled"].includes(status)||!note||note.length>1000||form.get("confirmed")!=="yes") redirect(location+"&error=status");
+ const {error}=await createAdminClient().rpc("set_membership_status",{p_member:id,p_actor:profile.id,p_status:status,p_expected:String(form.get("expected")||""),p_note:note});
+ if(error) redirect(location+"&error=status");
+ revalidatePath("/admin/members");
+ redirect(location+"&success=status");
+}

@@ -9,6 +9,7 @@ const roles = [
   ["maintenance_staff", "Maintenance Staff"],
   ["cleaner", "Cleaner / Housekeeping"],
   ["management_viewer", "Management Viewer"],
+  ["gym_patrol", "Gym Patrol (Read only)"],
 ] as const;
 
 export function UserRowActions({ id, email, isActive, role, fullName }: { id: string; email?: string | null; isActive: boolean; role: string; fullName: string }) {

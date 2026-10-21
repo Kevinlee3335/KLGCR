@@ -25,10 +25,16 @@ type NotificationInput = {
 };
 
 export async function createAppNotifications(input: NotificationInput) {
-  const recipientIds = [...new Set(input.recipientIds.filter(Boolean))];
+  let recipientIds = [...new Set(input.recipientIds.filter(Boolean))];
   if (!recipientIds.length) return;
 
   const db = createAdminClient();
+  // Gym-only accounts must not receive staff meeting/task details by push.
+  const {data: gymAccounts,error: scopeError}=await db.from("profiles").select("id").in("id",recipientIds).eq("role","gym_patrol");
+  if(scopeError) throw new Error(`Unable to verify notification scope: ${scopeError.message}`);
+  const gymIds=new Set((gymAccounts||[]).map(profile=>profile.id));
+  recipientIds=recipientIds.filter(id=>!gymIds.has(id));
+  if(!recipientIds.length) return;
   const { error } = await db.from("app_notifications").insert(
     recipientIds.map((recipient_id) => ({
       recipient_id,

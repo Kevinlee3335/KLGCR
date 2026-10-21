@@ -38,7 +38,7 @@ const schema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/),
   email: z.string().email().toLowerCase(),
   password: z.string().min(10),
-  role: z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer"]),
+  role: z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer", "gym_patrol"]),
 });
 
 export async function createUser(
@@ -84,7 +84,7 @@ export async function createUser(
       return { error: profileError.message };
     }
 
-    const blocks = data.getAll("blocks").map(String);
+    const blocks = parsed.data.role === "gym_patrol" ? [] : data.getAll("blocks").map(String);
     if (blocks.length) {
       const { data: blockRows } = await admin
         .from("blocks")
@@ -109,7 +109,7 @@ export async function createUser(
   }
 }
 
-const roleSchema = z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer"]);
+const roleSchema = z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer", "gym_patrol"]);
 
 export async function updateUserRole(data: FormData) {
   const actor = await requireRole(["admin"]);

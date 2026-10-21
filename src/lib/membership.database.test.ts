@@ -19,6 +19,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261020034051_membership_personal_photos.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020034143_membership_cash_access_card_deposit.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020035652_membership_emergency_contact.sql','utf8'));
+ await db.exec(readFileSync("supabase/migrations/20261021041410_membership_admin_status.sql","utf8"));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
  const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
@@ -102,4 +103,31 @@ it('records the accepted declaration version and rejects registration without ac
  const declaration=(await db.query<{details:{version:string;clauses:string[]}}>("select details from membership_activity where member_id=$1 and event='rules_accepted'",[member])).rows[0];
  expect(declaration.details).toEqual({version:'2026-10-17-v1',clauses:['a','b','c','d']});
  await expect(db.query("select register_membership('{}'::jsonb,null)")).rejects.toThrow('declaration acceptance');
+});
+
+it('restricts manual status changes, preserves expiry, and audits each change atomically',async()=>{
+ const mid='10000000-0000-4000-8000-000000000003';
+ await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext,status,expires_on) values($1,'Status Test','status@example.invalid','resident','IC','status','Male','MY','A1','1','A1','statushash','enc','active',current_date+30)",[mid]);
+ const change=(actor:string,status:string,expected:string,note='Admin test')=>db.query('select set_membership_status($1,$2,$3,$4,$5)',[mid,actor,status,expected,note]);
+ await expect(change(staff,'suspended','active')).rejects.toThrow('Admin');
+ await expect(change(admin,'suspended','active','')).rejects.toThrow('reason');
+ await change(admin,'suspended','active');
+ await expect(change(admin,'cancelled','active')).rejects.toThrow('Status changed');
+ const row=(await db.query<{status:string;days:number}>("select status,expires_on-current_date days from memberships where id=$1",[mid])).rows[0];
+ expect(row).toEqual({status:'suspended',days:30});
+ const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount,receipt_path) values($1,'renewal',($2::date+interval '2 months')::date,40,'test') returning id",[mid,month])).rows[0].id;
+ await expect(db.query('select review_membership_payment($1,$2,true,null)',[pid,admin])).rejects.toThrow('cancelled');
+ await change(admin,'active','suspended');
+ await change(admin,'cancelled','active');
+ expect((await db.query<{status:string}>('select status from membership_payments where id=$1',[pid])).rows[0].status).toBe('rejected');
+ expect((await db.query("select * from membership_activity where member_id=$1 and event='status_changed' and actor_id=$2",[mid,admin])).rows).toHaveLength(3);
+ await db.query("update memberships set expires_on=current_date-1 where id=$1",[mid]);
+ await expect(change(admin,'active','cancelled')).rejects.toThrow('renewal');
+ await db.query("update memberships set status='pending' where id=$1",[mid]);
+ await expect(change(admin,'active','pending')).rejects.toThrow('initial payment');
+ for(const role of ['anon','authenticated']) {
+  await db.exec(`set role ${role}`);
+  await expect(change(admin,'cancelled','pending')).rejects.toThrow('permission denied');
+  await db.exec('reset role');
+ }
 });

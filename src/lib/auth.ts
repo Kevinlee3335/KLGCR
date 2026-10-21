@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { AppRole, Profile } from "@/lib/types";
+import { roleHome, type AppRole, type Profile } from "@/lib/types";
 
 export const getSessionProfile = cache(async function getSessionProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -16,6 +16,6 @@ export const getSessionProfile = cache(async function getSessionProfile(): Promi
 export async function requireRole(allowed: AppRole[]): Promise<Profile> {
   const profile = await getSessionProfile();
   if (!profile) redirect("/login");
-  if (!allowed.includes(profile.role)) redirect(profile.role === "cleaner" ? "/staff" : profile.role === "maintenance_staff" ? "/staff" : "/admin");
+  if (!allowed.includes(profile.role)) redirect(roleHome(profile.role));
   return profile;
 }
