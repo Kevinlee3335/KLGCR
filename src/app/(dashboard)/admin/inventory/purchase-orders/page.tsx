@@ -1,0 +1,13 @@
+import { AppShell } from '@/components/app-shell';
+import { PurchaseOrders } from '@/components/purchase-orders';
+import { requireRole } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import type { PurchaseOrder } from '@/lib/purchase-orders/schema';
+export default async function Page(){
+ const profile=await requireRole(['admin','management_viewer']);const db=await createClient();
+ // Fetch in batches so the Supabase 1,000-row limit does not hide items or old POs.
+ const items=[];const orders=[];let error='';
+ for(let from=0;;from+=1000){const r=await db.from('inventory_items').select('id,item_code,description,unit').eq('is_active',true).order('id').range(from,from+999);if(r.error){error='Unable to load inventory items.';break;}items.push(...r.data);if(r.data.length<1000)break;}
+ for(let from=0;;from+=1000){const r=await db.from('inventory_purchase_orders').select('id,po_no,order_date,requested_by,approved_by,requested_date,approved_date,items,created_at').order('created_at',{ascending:false}).order('id').range(from,from+999);if(r.error){error='Purchase Order storage is unavailable. Please try again shortly.';break;}orders.push(...r.data);if(r.data.length<1000)break;}
+ return <AppShell profile={profile} title="Purchase Orders"><div className="section-head"><div><p className="eyebrow">Inventory</p><h2>Purchase Orders</h2></div><a className="button secondary-button" href="/admin/inventory">Back to Inventory</a></div>{error?<p className="error">{error}</p>:<PurchaseOrders items={items} orders={orders as PurchaseOrder[]} requester={profile.full_name} canCreate={profile.role==='admin'}/>}</AppShell>;
+}

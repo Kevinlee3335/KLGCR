@@ -52,6 +52,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>Inventory</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
     {query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">Inventory saved successfully.</p>}{error && <p className="error">{error.message}</p>}
 
+    <section className="panel"><div className="section-head"><div><h3>Purchase Orders</h3><p className="subtle">Create a PO from Inventory items and save a PDF for HQ.</p></div><a className="button" href="/admin/inventory/purchase-orders">Purchase Orders</a></div></section>
     <section className="inventory-kpis">
       <article><span>Total Items</span><strong>{rows.length}</strong><small>Active inventory records</small></article>
       <article className="warning"><span>Near Reorder</span><strong>{near}</strong><small>Stock at or below reorder level</small></article>
