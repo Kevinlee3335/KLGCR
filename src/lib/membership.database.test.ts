@@ -22,6 +22,8 @@ beforeAll(async()=>{
  await db.exec(readFileSync("supabase/migrations/20261021041410_membership_admin_status.sql","utf8"));
  await db.exec(readFileSync("supabase/migrations/20261022084319_membership_member_number.sql","utf8"));
  await db.exec(readFileSync("supabase/migrations/20261022094206_membership_monthly_payment_list.sql","utf8"));
+ await db.exec("insert into membership_payment_imports(id,source_file,source_sha256,row_count,months) values('receipt-test','test.xlsx','hash',1,'{}'); insert into membership_payment_ledger(id,source,legacy_key,collected_on,full_name,member_type,member_reference,import_id,source_receipt_no) values('40000000-0000-4000-8000-000000000001','legacy','test-receipt','2026-08-01','Imported Name','resident','B111','receipt-test','KLGCR / 17801')");
+ await db.exec(readFileSync("supabase/migrations/20261022095717_membership_receipt_numbers.sql","utf8"));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
  const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
@@ -182,4 +184,23 @@ it('uses residence room numbers and Malaysia calendar boundaries in the live led
  const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount,status,reviewed_at) values($1,'renewal',$2,40,'approved','2026-08-31T16:00:00Z') returning id",[mid,month])).rows[0].id;
  const row=(await db.query<{member_reference:string;collected_on:Date}>('select * from membership_payment_ledger where payment_id=$1',[pid])).rows[0];
  expect(row.member_reference).toBe('B111');expect(new Date(row.collected_on).toISOString().slice(0,10)).toBe('2026-09-01');
+});
+
+it('restores source receipt numbers and audits authorized manual changes with stale-write protection',async()=>{
+ const id='40000000-0000-4000-8000-000000000001';
+ expect((await db.query('select receipt_no from membership_payment_ledger where id=$1',[id])).rows[0]).toEqual({receipt_no:'KLGCR / 17801'});
+ const save=(value:string,expected:string,actor=admin)=>db.query('select set_membership_payment_receipt($1,$2,$3,$4)',[id,actor,value,expected]);
+ await expect(save('New','KLGCR / 17801',staff)).rejects.toThrow('Admin');
+ await expect(save('x'.repeat(101),'KLGCR / 17801')).rejects.toThrow('Invalid');
+ await save('  KLGCR / 18000  ','KLGCR / 17801');
+ await expect(save('Overwrite','KLGCR / 17801')).rejects.toThrow('changed');
+ const row=(await db.query('select receipt_no,receipt_updated_by,source_receipt_no from membership_payment_ledger where id=$1',[id])).rows[0];
+ expect(row).toEqual({receipt_no:'KLGCR / 18000',receipt_updated_by:admin,source_receipt_no:'KLGCR / 17801'});
+ expect((await db.query("select * from membership_payment_receipt_history where ledger_id=$1 and actor_id=$2 and old_value='KLGCR / 17801' and new_value='KLGCR / 18000'",[id,admin])).rows).toHaveLength(1);
+ for(const role of ['anon','authenticated']){
+ await db.exec(`set role ${role}`);
+ await expect(save('Denied','KLGCR / 18000')).rejects.toThrow('permission denied');
+ await expect(db.query('select * from membership_payment_receipt_history')).rejects.toThrow('permission denied');
+ await db.exec('reset role');
+ }
 });

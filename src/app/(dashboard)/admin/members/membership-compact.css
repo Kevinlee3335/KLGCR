@@ -1,0 +1,27 @@
+.admin-shell .membership-overview-head{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:22px}
+.membership-overview-head>div:first-child{flex:1 1 440px;min-width:0}
+.membership-overview-head h2{margin:4px 0 8px}.membership-overview-head p:last-child{margin:0;max-width:650px;font-size:13px}
+.membership-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto}
+.admin-shell .membership-toolbar .button,.admin-shell .payment-list-compact .button{display:inline-flex;justify-content:center;align-items:center;gap:6px;min-height:32px;height:32px;padding:0 11px;border-radius:7px;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;box-shadow:none}
+.admin-shell .membership-toolbar .button.secondary,.admin-shell .payment-list-compact .button.secondary{background:#fffdf8;border:1px solid #ddd3bb;color:#715a2c}
+.payment-list-compact .section-head{margin-bottom:16px}.payment-list-compact h2{font-size:22px;margin:4px 0 7px}.payment-list-compact .section-head .subtle{font-size:13px;max-width:700px}
+.admin-shell .payment-list-compact .panel{padding:18px;border-radius:12px}
+.payment-list-controls{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.payment-list-month-form{display:flex;gap:6px;align-items:center}.payment-list-month-form label{font-size:12px;color:#746c5c;display:flex;gap:8px;align-items:center}
+.admin-shell .payment-list-month-form input{height:32px;min-height:32px;padding:0 9px;width:153px;font-size:12px;border-radius:7px;border:1px solid #dcd5c6}
+.payment-month-tabs{display:inline-flex;gap:3px;padding:3px;background:#f3efe5;border:1px solid #e4dccb;border-radius:8px;margin-top:12px}
+.payment-month-tabs a{display:inline-flex;align-items:center;justify-content:center;min-height:29px;padding:0 12px;border-radius:5px;font-size:12px;font-weight:600;color:#7b704f;white-space:nowrap;text-decoration:none}
+.payment-month-tabs a[aria-current=page]{background:#fff;border:1px solid #dfc990;box-shadow:0 1px 2px #b9a77e22;color:#765718}.payment-month-tabs a:hover{background:#fff9ec}
+.payment-list-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 10px}.payment-list-heading h3{font-size:14px;margin:0}.payment-list-heading p{margin:4px 0 0;font-size:11px;color:#8a806c}
+.payment-list-compact .table-wrap{border:1px solid #e1d9c8;border-radius:7px;max-width:1050px}
+.admin-shell .payment-list-compact .payment-list-table{width:100%;min-width:720px;table-layout:fixed;font-size:12px}
+.admin-shell .payment-list-compact .payment-list-table th{padding:8px 9px;font-size:10px;letter-spacing:.035em;line-height:1.2}
+.admin-shell .payment-list-compact .payment-list-table td{padding:3px 9px;height:32px;line-height:1.3;vertical-align:middle;border-bottom:1px solid #eee8dc}
+.payment-list-table td:nth-child(4){white-space:normal;overflow-wrap:anywhere}.payment-list-table td:first-child{color:#82785f}
+.receipt-number-editor{display:flex;gap:4px;align-items:center;position:relative;min-width:0;margin:0}
+.admin-shell .receipt-number-editor input{width:100%;min-width:0;height:25px;min-height:25px;padding:0 5px;border:1px solid transparent;border-radius:4px;background:transparent;font-size:11px;line-height:1.2;color:#4a4233;box-shadow:none}
+.admin-shell .receipt-number-editor input:hover{border-color:#ddd2bc;background:#fff}.admin-shell .receipt-number-editor input:focus{outline:0;border-color:#bf9a43;background:#fff}.receipt-number-editor input::placeholder{font-size:10px;color:#b4aa97}
+.admin-shell .receipt-number-editor button{flex:0 0 25px;display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;min-height:25px;padding:0;border:1px solid #dfd3b8;border-radius:4px;background:#f8f2e5;color:#80652b;cursor:pointer;box-shadow:none}.admin-shell .receipt-number-editor button:disabled{opacity:.35;cursor:default}
+.receipt-number-editor.has-error{flex-wrap:wrap}.receipt-number-error{font-size:10px;color:#9d3a2b;width:100%;white-space:normal}.receipt-save-spin{animation:receipt-save-spin 1s linear infinite}@keyframes receipt-save-spin{to{transform:rotate(360deg)}}
+@media(max-width:700px){.membership-toolbar{width:100%}.admin-shell .payment-list-compact .panel{padding:12px}.payment-list-month-form label{gap:5px}.payment-list-controls{gap:8px}.payment-month-tabs{max-width:100%;overflow:auto}.payment-month-tabs a{padding:0 10px}}
+.payment-list-compact{max-width:1180px}.payment-list-compact .table-wrap{max-width:none}.admin-shell .receipt-number-editor button[title="Saved"]{opacity:1;color:#25734f;background:#edf7f0;border-color:#bdd8c6}
