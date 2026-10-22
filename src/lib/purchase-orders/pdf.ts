@@ -51,11 +51,11 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
     line(edges[5],top,edges[5],top+height);line(edges[0],top+height,edges[5],top+height);top+=height;
   });
   for(const [x,label,name,date] of [[50.5,'Requested by:',order.requested_by,new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date(order.requested_at||order.created_at))],[375,'Approved By:',order.approved_at?'James Ooi':'Pending approval',order.approved_at?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date(order.approved_at)):'']] as const){
-    text(label,x,631.7,14);text(`Name: ${name}`,x,747.1,12);text(`Date: ${date}`,x,776.4,12);
+    text(label,x,631.7,14);text(`Name: ${name}`,x,653.7,12);text(`Date: ${date}`,x,675.7,12);
   }
   const time=(value:string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(value));
-  text(`Time: ${time(order.requested_at||order.created_at)} MYT`,50.5,798,11);
-  if(order.approved_at)text(`Time: ${time(order.approved_at)} MYT`,375,798,11);
+  text(`Time: ${time(order.requested_at||order.created_at)} MYT`,50.5,697.7,11);
+  if(order.approved_at)text(`Time: ${time(order.approved_at)} MYT`,375,697.7,11);
   pdf.setTitle(order.po_no); pdf.setCreationDate(new Date(order.created_at));
   return pdf.save();
 }
