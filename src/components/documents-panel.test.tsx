@@ -1,10 +1,28 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe,it,expect,vi } from "vitest";
+import { updateDocumentCategories } from "@/app/(dashboard)/documents/actions";
 import { DocumentsPanel } from "./documents-panel";
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
 vi.mock("@/app/(dashboard)/documents/actions",()=>({prepareDocument:vi.fn(),saveDocument:vi.fn(),documentUrl:vi.fn(),deleteDocument:vi.fn(),updateDocumentCategories:vi.fn()}));
 const documents=[{id:"1",file_name:"Block A Level 2 Floor Plan.pdf",size_bytes:1024,created_at:"2026-10-12T00:00:00Z"},{id:"2",file_name:"Pump Manual.docx",size_bytes:1024,created_at:"2026-10-12T00:00:00Z"}];
 describe("Documents",()=>{
+ it("saves a selected category and shows success",async()=>{
+  vi.mocked(updateDocumentCategories).mockResolvedValueOnce(undefined);
+  render(<DocumentsPanel documents={documents} canManage/>);
+  fireEvent.change(screen.getByLabelText(`Category for ${documents[0].file_name}`),{target:{value:"Clinic Plans"}});
+  await waitFor(()=>expect(screen.getByRole("status")).toHaveTextContent("Category saved successfully"));
+  expect(updateDocumentCategories).toHaveBeenCalledWith(["1"],"Clinic Plans");
+  fireEvent.click(screen.getByRole("button",{name:/Clinic Plans/}));
+  expect(screen.getByText(documents[0].file_name)).toBeInTheDocument();
+ });
+ it("reports failed saves without changing the category",async()=>{
+  vi.mocked(updateDocumentCategories).mockRejectedValueOnce(new Error("Save failed"));
+  render(<DocumentsPanel documents={documents} canManage/>);
+  fireEvent.change(screen.getByLabelText(`Category for ${documents[0].file_name}`),{target:{value:"Clinic Plans"}});
+  await waitFor(()=>expect(screen.getByRole("status")).toHaveTextContent("Save failed"));
+  fireEvent.click(screen.getByRole("button",{name:/Clinic Plans/}));
+  expect(screen.queryByText(documents[0].file_name)).toBeNull();
+ });
  it("combines category, block, level and type filters and clears them",()=>{
   const files=[...documents,{id:"3",file_name:"Block D (Approved Bomba Plan) - Level 4 - 6.pdf",size_bytes:1024,created_at:"2026-10-12T00:00:00Z"}];
   render(<DocumentsPanel documents={files} canManage={false}/>);
