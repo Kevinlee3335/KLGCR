@@ -50,6 +50,12 @@ it('binds approval to James, timestamps it, rejects spoofing and invalidates edi
  const first=(await db.query<{id:string}>('select id from inventory_po_notification_outbox limit 1')).rows[0];
  expect((await db.query<{claimed:boolean}>('select claim_po_notification($1,$2) claimed',[first.id,crypto.randomUUID()])).rows[0].claimed).toBe(true);
  expect((await db.query<{claimed:boolean}>('select claim_po_notification($1,$2) claimed',[first.id,crypto.randomUUID()])).rows[0].claimed).toBe(false);
+ await db.exec(readFileSync('supabase/migrations/20261022051353_po_name_only_approval.sql','utf8'));
+ const unsigned=(await db.query<{o:{id:string;requested_at:string;requested_signature:null}}>('select save_inventory_purchase_order($1) o',[JSON.stringify({...payload,requestId:crypto.randomUUID(),useSignature:false})])).rows[0].o;
+ expect(unsigned.requested_signature).toBeNull();expect(unsigned.requested_at).toBeTruthy();
+ await db.exec(`set app.uid='${james}'`);await db.query('delete from user_e_signatures where user_id=$1',[james]);
+ const nameOnly=(await db.query<{o:{approved_by:string;approved_at:string;approved_signature:null;requested_at:string}}>('select approve_inventory_purchase_order($1,1) o',[unsigned.id])).rows[0].o;
+ expect(nameOnly.approved_by).toBe('James Ooi');expect(nameOnly.approved_at).toBeTruthy();expect(nameOnly.approved_signature).toBeNull();expect(nameOnly.requested_at).toBe(unsigned.requested_at);
  await db.exec('set role anon');await expect(db.query('select approve_inventory_purchase_order($1,3)',[o.id])).rejects.toThrow('permission denied');
  }finally{await db.close();}
 },30000);
