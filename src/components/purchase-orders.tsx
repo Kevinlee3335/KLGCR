@@ -7,13 +7,13 @@ import { receivingLines,type GoodsReceipt } from '@/lib/purchase-orders/receipts
 import type { PurchaseOrder, PurchaseOrderInput } from '@/lib/purchase-orders/schema';
 type Item={id:string;item_code:string;description:string;unit:string|null};
 type Line=PurchaseOrderInput['items'][number]&{query:string};
-export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,canApprove=false}:{items:Item[];orders:PurchaseOrder[];receipts?:GoodsReceipt[];requester:string;canCreate:boolean;canApprove?:boolean}) {
+export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,canApprove=false,initialSearch=''}:{items:Item[];orders:PurchaseOrder[];receipts?:GoodsReceipt[];requester:string;canCreate:boolean;canApprove?:boolean;initialSearch?:string}) {
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date());
  const blank=():Line=>({itemId:'',query:'',specification:'',quantity:1,location:''});
  const [lines,setLines]=useState<Line[]>([blank()]);const [date,setDate]=useState(today);
  const [name,setName]=useState(requester);
  const [requestedDate,setRequestedDate]=useState(today);
- const [records,setRecords]=useState(orders);const [search,setSearch]=useState('');
+ const [records,setRecords]=useState(orders);const [search,setSearch]=useState(initialSearch);
  const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [saved,setSaved]=useState<PurchaseOrder|null>(null);
  const [requestId,setRequestId]=useState('');
  const [receivingId,setReceivingId]=useState<string|null>(null);const [deliveryRecords,setDeliveryRecords]=useState(receipts);

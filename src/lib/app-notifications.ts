@@ -12,7 +12,9 @@ export type AppNotificationType =
   | "daily_task_assigned"
   | "daily_task_completed"
   | "calendar_event"
-  | "material_request";
+  | "material_request"
+  | "po_approval_requested"
+  | "po_approved";
 
 type NotificationInput = {
   recipientIds: string[];

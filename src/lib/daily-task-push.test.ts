@@ -3,7 +3,7 @@ const mocks=vi.hoisted(()=>({push:vi.fn(),insert:vi.fn(),profile:vi.fn()}));
 vi.mock("./push",()=>({sendPushNotifications:mocks.push}));
 vi.mock("./supabase/admin",()=>({createAdminClient:()=>({from:(table:string)=>{
   if(table === "app_notifications")return {insert:mocks.insert};
-  const query={select:()=>query,eq:()=>query,is:()=>query,maybeSingle:mocks.profile};return query;
+  const query={select:()=>query,in:()=>({eq:async()=>({data:[],error:null})}),eq:()=>query,is:()=>query,maybeSingle:mocks.profile};return query;
 }})}));
 import { notifyDailyTaskAssigned } from "./daily-task-notifications";
 beforeEach(()=>{

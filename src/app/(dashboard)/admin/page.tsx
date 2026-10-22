@@ -1,3 +1,4 @@
+import { PoApprovalQueue } from '@/components/po-approval-queue';
 import { requireRole } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { Dashboard, type AdminDashboardData } from "@/components/dashboard";
@@ -11,6 +12,8 @@ function malaysiaToday() {
 export default async function AdminPage() {
   const profile = await requireRole(["admin", "management_viewer"]);
   const supabase = await createClient();
+  const isPoApprover=profile.id==='eeab5f04-30c3-42bd-a095-58e56c814358'&&profile.role==='admin';
+  const pendingPOPromise=isPoApprover?supabase.from('inventory_purchase_orders').select('id,po_no,requested_by,revision',{count:'exact'}).is('approved_at',null).order('created_at',{ascending:true}).limit(10):Promise.resolve(null);
   const today = malaysiaToday();
   const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{count:completionPhotos},{data:noShowRows,error:noShowError},{data:complaintIntake,error:intakeError}] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
@@ -45,5 +48,6 @@ export default async function AdminPage() {
     complaintIntake: intakeError ? null : complaintIntake,
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
-  return <AppShell profile={profile} title="Dashboard"><Dashboard kind="admin" name={profile.full_name} data={data}/></AppShell>;
+  const pendingPOs=await pendingPOPromise;
+  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<Dashboard kind="admin" name={profile.full_name} data={data}/></AppShell>;
 }
