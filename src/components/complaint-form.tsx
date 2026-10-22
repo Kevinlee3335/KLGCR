@@ -19,7 +19,7 @@ const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main
 // Keep the original shared-building locations as well as the external
 // facilities. The external-area change must not remove existing Common Area
 // choices used for complaints inside Blocks A–D.
-const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Other", ...externalAreas];
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lobby · Male Toilet", "Lobby · Female Toilet", "Lift", "Staircase", "Utility Room", "Pantry", "Other", ...externalAreas];
 
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
@@ -58,6 +58,8 @@ const defectOptions = {
     Chair: ["Broken", "Missing"], Bookshelf: ["Broken", "Missing", "Bloated"], Wardrobe: ["Broken", "Missing", "Bloated"],
     Curtain: ["Broken", "Missing", "Dirty"], "Curtain Hook / Holder": ["Broken", "Missing"],
     Floor: ["Water Mark", "Leaking", "Vinyl Tiles Broken"], Wall: ["Water Seepage", "Mouldy", "Near Window", "Near Door", "Near Bathroom"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
     "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
     "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
     "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
@@ -67,12 +69,18 @@ const defectOptions = {
     "Door Knob": ["Loose", "Broken", "Cannot Open", "Stuck"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"],
     "Shower Valve": ["Leaking", "Broken", "Slow Pressure"], "Toilet Seat": ["Dirty", "Broken"],
     "Flexible Hose": ["Leaking", "Broken"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
     "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
     "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
     "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
     Lighting: ["Not Working", "Broken"], Other: ["Other"],
   },
   "Common Area": {
+    Fridge: ["Not Cold", "Not Working", "Leaking"],
+    "Fridge Lock": ["Broken", "Loose", "Detached", "Cannot Lock"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
     "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
     "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
     "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
