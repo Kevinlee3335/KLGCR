@@ -14,7 +14,7 @@ beforeEach(()=>{
   mocks.create.mockResolvedValue({data:{user:{id:"new-id"}},error:null});
   mocks.insert.mockResolvedValue({error:null});
 });
-it.each([["cleaner","Nancy","housekeeping"],["maintenance_staff","Worker","operation"],["admin","Nouril","admin"],["admin","Fikri","operation"],["admin","Kevin Lee","operation"],["management_viewer","Viewer","admin"]])("stores the department when creating %s/%s",async(role,fullName,category)=>{
+it.each([["cleaner","Nancy","housekeeping"],["maintenance_staff","Worker","operation"],["admin","Nouril","admin"],["admin","Fikri","operation"],["admin","Kevin Lee","operation"],["management_viewer","Viewer","admin"],["gym_patrol","Gym Helper",null]])("stores the department when creating %s/%s",async(role,fullName,category)=>{
   const form=new FormData();
   Object.entries({role,fullName,username:"newuser",email:"new@example.test",password:"test-password-123"}).forEach(([key,value])=>form.set(key,value));
   expect(await createUser({},form)).toEqual({ok:`${fullName} can now sign in.`});

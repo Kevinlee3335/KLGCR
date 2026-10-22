@@ -1,0 +1,68 @@
+/* Scoped to PO editing; other Inventory pages keep their current styling. */
+.po-workspace{display:grid;gap:16px;min-width:0;font-size:14px}
+.po-workspace .panel{padding:20px;border-radius:14px}
+.po-workspace .section-head{gap:14px;align-items:center;margin-bottom:16px}
+.po-workspace .section-head h2{margin:0;font-size:19px;line-height:1.3}
+.po-workspace .subtle{margin:5px 0 0;font-size:12px;line-height:1.5}
+.po-workspace fieldset{min-width:0}
+.po-workspace .stock-state{font-size:10px;padding:5px 9px}
+.po-workspace .po-fields{display:grid;grid-template-columns:150px minmax(150px,1fr) 150px minmax(150px,1fr) 150px;gap:12px;margin:0 0 18px}
+.po-workspace .po-fields label{display:grid;gap:6px;font-size:12px;font-weight:600;color:#5e594f;min-width:0}
+.po-workspace input,.po-workspace select{box-sizing:border-box;min-width:0;width:100%;height:35px;min-height:35px;padding:7px 9px;border:1px solid #ddd8ce;border-radius:7px;background:#fff;color:#27241e;font-family:inherit;font-size:13px;line-height:19px;box-shadow:none}
+.po-workspace input:focus,.po-workspace select:focus{outline:2px solid #b58d3333;outline-offset:1px;border-color:#b58d33}
+.po-workspace .section-head>input[type=search]{width:260px;max-width:100%}
+.po-workspace .table-wrap{overflow:visible;border:1px solid #e6e1d8;border-radius:10px}
+.po-workspace .po-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:13px}
+.po-workspace .po-table th{padding:10px 9px;background:#f5f2eb;font-size:10px;letter-spacing:.04em;line-height:1.4;color:#746344;border-bottom:1px solid #e6e1d8;text-align:left}
+.po-workspace .po-table th:first-child{border-radius:10px 0 0 0}
+.po-workspace .po-table th:last-child{border-radius:0 10px 0 0}
+.po-workspace .po-table td{padding:10px 9px;vertical-align:top;border-bottom:1px solid #eeeae2;background:#fff;overflow-wrap:anywhere}
+.po-workspace .po-table tr:last-child td{border-bottom:0}
+.po-workspace .po-table td:first-child{color:#8d8679}
+.po-workspace .po-table:has(.po-item-cell) th:nth-child(1){width:38px}
+.po-workspace .po-table:has(.po-item-cell) th:nth-child(2){width:30%}
+.po-workspace .po-table:has(.po-item-cell) th:nth-child(4){width:80px}
+.po-workspace .po-table:has(.po-item-cell) th:nth-child(5){width:48px}
+.po-workspace .po-table:has(.po-item-cell) th:nth-child(7){width:52px}
+.po-workspace .po-item-search{position:relative;min-width:0}
+.po-workspace .po-item-code{display:block;margin-top:5px;font-size:10px;font-weight:400;line-height:1.3;color:#8a8275;letter-spacing:.02em}
+.po-workspace .po-item-results{position:static;margin-top:6px;width:100%;box-sizing:border-box;max-height:210px;overflow:auto;padding:4px;border:1px solid #e0d9cd;border-radius:8px;background:white;box-shadow:0 8px 24px #33281b22}
+.po-workspace .po-item-option{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;padding:8px 9px;border:0;border-radius:5px;background:white;color:#25221c;font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.po-workspace .po-item-option small{font-size:10px;font-weight:400;color:#8a8275}
+.po-workspace .po-item-option:hover,.po-workspace .po-item-option:focus-visible{background:#f6f1e6;outline:none}
+.po-workspace .po-item-results p{padding:6px;font-size:12px}
+.po-workspace .button{display:inline-flex;align-items:center;justify-content:center;min-height:34px;height:34px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;line-height:18px;white-space:nowrap}
+.po-workspace .po-item-cell~td:last-child .button{width:30px;min-height:32px;height:32px;padding:0;font-size:19px;font-weight:400}
+.po-workspace .po-table strong{font-size:12px;font-weight:600}
+@media(max-width:1200px){.po-workspace .po-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.po-workspace .panel{padding:14px}.po-workspace .po-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.po-workspace .section-head{flex-wrap:wrap}.po-workspace .table-wrap{overflow:auto}.po-workspace .po-table{min-width:780px}.po-workspace .po-item-results{position:static;margin-top:5px}.po-workspace .section-head>input[type=search]{width:100%}}
+.po-workspace .po-record-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.po-workspace .po-history-table th:nth-child(1){width:20%}
+.po-workspace .po-history-table th:nth-child(2){width:12%}
+.po-workspace .po-history-table th:nth-child(3){width:16%}
+.po-workspace .po-history-table th:nth-child(5){width:138px}
+.po-workspace .po-history-table td{white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.po-workspace .po-history-item{display:grid;gap:3px;line-height:1.5;white-space:normal}
+.po-workspace .po-history-item+.po-history-item{margin-top:9px}
+.po-workspace .po-history-item small{font-size:10px;color:#8a8275;white-space:normal}
+.po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:7px}
+.po-workspace .po-history-table .po-record-actions .button{min-width:49px;flex:none}
+.po-workspace .po-history-table th:nth-child(5){width:220px}
+.po-workspace .po-history-table .po-record-actions{flex-wrap:wrap}
+.po-workspace .po-receive-table th:first-child{width:42%}
+.po-workspace .po-receive-table td{white-space:normal}
+.po-workspace .po-receive-note{display:grid;gap:6px;font-size:12px;margin:16px 0}
+.po-workspace .po-receipt-record{border-top:1px solid #e6e1d8;padding:12px 0;display:grid;gap:7px;font-size:12px}
+.po-workspace .po-receipt-record>span{color:#746344;font-size:11px}
+.po-workspace .po-sync-pending{margin-top:16px;padding:14px;border:1px solid #dfc985;border-radius:8px;background:#fff9ea;font-size:12px}
+.po-workspace .po-sync-pending>div{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.po-workspace .po-sync-pending small{display:block;width:100%;color:#815e19}
+.po-workspace .po-receive-message{padding:12px;background:#f6f1e6;border-radius:7px}
+.po-workspace .po-receiving{scroll-margin-top:100px}
+
+.po-workspace .po-history-table th:nth-child(5){width:330px}
+.po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:8px}
+.po-workspace .po-history-table .po-record-actions .button{height:40px;min-height:40px;font-size:13px;padding:8px 12px;gap:7px}
+.po-workspace .po-record-actions svg{width:21px;height:21px;stroke-width:1.8;flex:none}
+@media(max-width:760px){.po-workspace .po-history-table{min-width:1000px}}

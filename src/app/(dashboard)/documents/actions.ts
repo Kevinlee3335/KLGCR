@@ -2,6 +2,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { documentCategories } from "@/lib/document-classification";
 const managers = ["admin", "management_viewer"] as const;
 const bucket = "system-documents";
 export async function prepareDocument(name: string, size: number) {
@@ -16,14 +17,15 @@ export async function prepareDocument(name: string, size: number) {
   if (error) throw new Error(error.message);
   return { id, path, token: data.token };
 }
-export async function saveDocument(id: string, path: string, name: string) {
+export async function saveDocument(id: string, path: string, name: string, category: string | null = null) {
   const profile = await requireRole([...managers]);
   if (!/^[0-9a-f-]{36}$/.test(id) || !path.startsWith(`${profile.id}/${id}/file.`) || !name || name.length > 255) throw new Error("Invalid document.");
+  validateCategory(category);
   const supabase = await createClient();
   const { data: files, error: fileError } = await supabase.storage.from(bucket).list(`${profile.id}/${id}`);
   const file = files?.find(file => path === `${profile.id}/${id}/${file.name}`);
   if (fileError || !file) throw new Error("Upload was not completed. Please retry.");
-  const { error } = await supabase.from("system_documents").insert({ id, storage_path: path, file_name: name, size_bytes: file.metadata?.size || 0, uploaded_by: profile.id });
+  const { error } = await supabase.from("system_documents").insert({ id, storage_path: path, file_name: name, size_bytes: file.metadata?.size || 0, uploaded_by: profile.id, category });
   if (error) {
     await supabase.storage.from(bucket).remove([path]);
     throw new Error(error.message);
@@ -48,5 +50,19 @@ export async function deleteDocument(id: string) {
   if (removed.error) throw new Error(removed.error.message);
   const deleted = await supabase.from("system_documents").delete().eq("id",id);
   if (deleted.error) throw new Error(deleted.error.message);
+  revalidatePath("/documents");
+}
+
+function validateCategory(category: string | null) {
+  if (category !== null && !documentCategories.some(value => value === category)) throw new Error("Invalid document category.");
+}
+export async function updateDocumentCategories(ids: string[], category: string | null) {
+  await requireRole([...managers]);
+  validateCategory(category);
+  if (!Array.isArray(ids) || !ids.length || ids.length > 1000 || ids.some(id => !/^[0-9a-f-]{36}$/i.test(id))) throw new Error("Invalid document selection.");
+  const supabase = await createClient();
+  const {data,error} = await supabase.from("system_documents").update({category}).in("id",ids).select("id");
+  if (error) throw new Error(error.message);
+  if (data.length !== new Set(ids).size) throw new Error("Some documents could not be updated. Refresh and try again.");
   revalidatePath("/documents");
 }
