@@ -17,7 +17,9 @@ export async function POST(req:NextRequest){
   const current=await db.from('inventory_items').select('balance_qty').eq('id',itemId).single();if(current.error)throw Error('Stock unavailable');
   if(Number(current.data.balance_qty)===53){const changed=await db.from('inventory_items').update({balance_qty:43}).eq('id',itemId).eq('balance_qty',53).select('id');if(changed.error||changed.data.length!==1)throw Error('Stock changed; retry');}
   else if(Number(current.data.balance_qty)!==43)throw Error('Stock changed since test; cleanup stopped');
-  const protect=await db.from('inventory_po_receipts').update({sheet_status:'pending'}).eq('id',receiptId);if(protect.error)throw Error('Could not protect restored stock');\n  const check=await db.from('inventory_items').select('balance_qty').eq('id',itemId).single();if(check.error||Number(check.data.balance_qty)!==43)throw Error('Restored stock changed');\n  const removed=await db.from('inventory_adjustment_history').delete().eq('id',18);if(removed.error)throw Error('History cleanup failed');
+  const protect=await db.from('inventory_po_receipts').update({sheet_status:'pending'}).eq('id',receiptId);if(protect.error)throw Error('Could not protect restored stock');
+  const check=await db.from('inventory_items').select('balance_qty').eq('id',itemId).single();if(check.error||Number(check.data.balance_qty)!==43)throw Error('Restored stock changed');
+  const removed=await db.from('inventory_adjustment_history').delete().eq('id',18);if(removed.error)throw Error('History cleanup failed');
  }
  const item=await db.from('inventory_items').select('item_code,description,category,movement_category,balance_qty,reorder_level,unit').eq('id',itemId).single();if(item.error||Number(item.data.balance_qty)!==43)throw Error('Unexpected restored stock');
  const pushed=await pushInventoryItemToGoogle(item.data);if(pushed.skipped||!pushed.ok)throw Error('Google Sheet rollback failed');
@@ -29,3 +31,4 @@ export async function POST(req:NextRequest){
  return NextResponse.json({ok:true,balance:43,googleSynced:true,pdfsRemoved:names.length,nextPo:'KH/KLG/PO/2026-0030'});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Cleanup failed'},{status:503});}
 }
+
