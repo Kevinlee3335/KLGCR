@@ -49,7 +49,7 @@ const defectOptions = {
   Room: {
     "Door Handle": ["Loose", "Broken", "Missing", "Rusty"],
     "Door Closer": ["Loose", "Broken", "Missing"],
-    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty"],
+    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty", "Stuck"],
     "Ceiling Fan": ["Noisy", "No Power", "Shaking"],
     "Air Conditioning": ["Not Cool", "No Power", "Leaking", "Remote Malfunction"],
     Lighting: ["Not Working", "Broken"],
@@ -58,14 +58,27 @@ const defectOptions = {
     Chair: ["Broken", "Missing"], Bookshelf: ["Broken", "Missing", "Bloated"], Wardrobe: ["Broken", "Missing", "Bloated"],
     Curtain: ["Broken", "Missing", "Dirty"], "Curtain Hook / Holder": ["Broken", "Missing"],
     Floor: ["Water Mark", "Leaking", "Vinyl Tiles Broken"], Wall: ["Water Seepage", "Mouldy", "Near Window", "Near Door", "Near Bathroom"],
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
     Other: ["Other"],
   },
   Bathroom: {
-    "Door Knob": ["Loose", "Broken", "Cannot Open"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"],
+    "Door Knob": ["Loose", "Broken", "Cannot Open", "Stuck"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"],
     "Shower Valve": ["Leaking", "Broken", "Slow Pressure"], "Toilet Seat": ["Dirty", "Broken"],
-    "Flexible Hose": ["Leaking", "Broken"], Other: ["Other"],
+    "Flexible Hose": ["Leaking", "Broken"],
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
+    Lighting: ["Not Working", "Broken"], Other: ["Other"],
   },
-  "Common Area": { Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"] },
+  "Common Area": {
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
+    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty", "Stuck"],
+    Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"],
+  },
 } as const;
 
 type DefectArea = keyof typeof defectOptions;
