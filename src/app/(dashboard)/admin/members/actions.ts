@@ -29,6 +29,7 @@ export async function reviewPayment(form: FormData) {
   if (reviewedPayment) await deliverMembershipEmails(reviewedPayment.member_id);
  } catch (error) { console.error("Membership email retry pending",error); }
  revalidatePath("/admin/members");
+ revalidatePath("/admin/members/payment-list");
  redirect("/admin/members?success=reviewed");
 }
 export async function retryMembershipEmails() {
@@ -36,6 +37,7 @@ export async function retryMembershipEmails() {
  if (!membershipEnabled()) return;
  await deliverMembershipEmails();
  revalidatePath("/admin/members");
+ revalidatePath("/admin/members/payment-list");
 }
 
 export async function reviewMemberRequest(form:FormData) {
@@ -53,7 +55,8 @@ export async function reviewMemberRequest(form:FormData) {
  const {error}=await db.rpc("review_membership_request",{p_request:id,p_actor:profile.id,p_approve:approve,p_note:note});
  if(error) {console.error("Membership request review failed",error);redirect("/admin/members?error=review");}
  if(req.member_id) try{await deliverMembershipEmails(req.member_id);}catch(error){console.error("Membership email remains queued",error);}
- revalidatePath("/admin/members");redirect("/admin/members?success=reviewed");
+ revalidatePath("/admin/members");
+ revalidatePath("/admin/members/payment-list");redirect("/admin/members?success=reviewed");
 }
 
 export async function updateMemberStatus(form:FormData) {
@@ -68,5 +71,6 @@ export async function updateMemberStatus(form:FormData) {
  const {error}=await createAdminClient().rpc("set_membership_status",{p_member:id,p_actor:profile.id,p_status:status,p_expected:String(form.get("expected")||""),p_note:note});
  if(error) redirect(location+"&error=status");
  revalidatePath("/admin/members");
+ revalidatePath("/admin/members/payment-list");
  redirect(location+"&success=status");
 }
