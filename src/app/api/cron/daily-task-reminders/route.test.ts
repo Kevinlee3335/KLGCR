@@ -1,3 +1,4 @@
+vi.mock('@/lib/purchase-orders/notifications',()=>({dispatchPoNotifications:vi.fn().mockResolvedValue(undefined)}));
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {

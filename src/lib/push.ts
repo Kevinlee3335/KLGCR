@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type PushPayload = { recipientIds: string[]; title: string; body: string; href: string; expiresAt?: string };
+type PushPayload = { recipientIds: string[]; title: string; body: string; href: string; expiresAt?: string; strict?: boolean };
 
 function configured() {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -20,6 +20,7 @@ export async function sendPushNotifications(payload: PushPayload) {
   const db = createAdminClient();
   const { data: subscriptions, error } = await db.from("push_subscriptions")
     .select("id,endpoint,p256dh,auth").in("user_id", [...new Set(payload.recipientIds)]);
+  if(error&&payload.strict)throw new Error(error.message);
   if (error || !subscriptions?.length) return;
   await Promise.all(subscriptions.map(async (subscription) => {
     try {
@@ -27,7 +28,7 @@ export async function sendPushNotifications(payload: PushPayload) {
     } catch (error: unknown) {
       const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 0;
       if (statusCode === 404 || statusCode === 410) await db.from("push_subscriptions").delete().eq("id", subscription.id);
-      else console.error("Unable to send push notification", error);
+      else {console.error("Unable to send push notification", error);if(payload.strict)throw error;}
     }
   }));
 }

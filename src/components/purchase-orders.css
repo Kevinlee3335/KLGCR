@@ -38,18 +38,10 @@
 @media(max-width:760px){.po-workspace .panel{padding:14px}.po-workspace .po-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.po-workspace .section-head{flex-wrap:wrap}.po-workspace .table-wrap{overflow:auto}.po-workspace .po-table{min-width:780px}.po-workspace .po-item-results{position:static;margin-top:5px}.po-workspace .section-head>input[type=search]{width:100%}}
 .po-workspace .po-record-actions{display:flex;gap:6px;flex-wrap:wrap}
 
-.po-workspace .po-history-table th:nth-child(1){width:20%}
-.po-workspace .po-history-table th:nth-child(2){width:12%}
-.po-workspace .po-history-table th:nth-child(3){width:16%}
-.po-workspace .po-history-table th:nth-child(5){width:138px}
 .po-workspace .po-history-table td{white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .po-workspace .po-history-item{display:grid;gap:3px;line-height:1.5;white-space:normal}
 .po-workspace .po-history-item+.po-history-item{margin-top:9px}
 .po-workspace .po-history-item small{font-size:10px;color:#8a8275;white-space:normal}
-.po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:7px}
-.po-workspace .po-history-table .po-record-actions .button{min-width:49px;flex:none}
-.po-workspace .po-history-table th:nth-child(5){width:220px}
-.po-workspace .po-history-table .po-record-actions{flex-wrap:wrap}
 .po-workspace .po-receive-table th:first-child{width:42%}
 .po-workspace .po-receive-table td{white-space:normal}
 .po-workspace .po-receive-note{display:grid;gap:6px;font-size:12px;margin:16px 0}
@@ -61,8 +53,18 @@
 .po-workspace .po-receive-message{padding:12px;background:#f6f1e6;border-radius:7px}
 .po-workspace .po-receiving{scroll-margin-top:100px}
 
-.po-workspace .po-history-table th:nth-child(5){width:330px}
-.po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:8px}
-.po-workspace .po-history-table .po-record-actions .button{height:40px;min-height:40px;font-size:13px;padding:8px 12px;gap:7px}
 .po-workspace .po-record-actions svg{width:21px;height:21px;stroke-width:1.8;flex:none}
-@media(max-width:760px){.po-workspace .po-history-table{min-width:1000px}}
+
+/* All six record columns have explicit space; scroll the list before squeezing items. */
+.po-workspace .table-wrap:has(.po-history-table){overflow-x:auto;overflow-y:hidden}
+.po-workspace .po-history-table{table-layout:fixed;min-width:1300px}
+.po-workspace .po-history-table th:nth-child(1){width:200px}
+.po-workspace .po-history-table th:nth-child(2){width:110px}
+.po-workspace .po-history-table th:nth-child(3){width:145px}
+.po-workspace .po-history-table th:nth-child(4){width:245px}
+.po-workspace .po-history-table th:nth-child(5){width:200px}
+.po-workspace .po-history-table th:nth-child(6){width:400px}
+.po-workspace .po-history-table td{overflow-wrap:break-word;word-break:normal;white-space:normal}
+.po-workspace .po-history-item{min-width:0;overflow-wrap:break-word}
+.po-workspace .po-history-table .po-record-actions{display:flex;gap:8px;flex-wrap:nowrap}
+.po-workspace .po-history-table .po-record-actions .button{height:40px;min-height:40px;font-size:13px;padding:8px 12px;gap:7px;flex:none}
