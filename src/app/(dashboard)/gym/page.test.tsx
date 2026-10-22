@@ -7,7 +7,7 @@ vi.mock("@/lib/membership",()=>({membershipEnabled:()=>true,malaysiaDay:()=>"202
 vi.mock("@/components/logout-form",()=>({LogoutForm:()=> <button>Sign out</button>}));
 vi.mock("next/link",()=>({default:({href,children,...props}:{href:string;children:React.ReactNode})=><a href={href} {...props}>{children}</a>}));
 import GymPage from "./page";
-const member={email:"member@example.test",member_type:"resident",id_type:"Passport",identification:"TEST123",gender:"Male",nationality:"Malaysia",address:"B111",emergency_contact:"0123456789",emergency_relationship:"Father",created_at:"2026-10-20T10:00:00Z",access_card_path:"test/card.jpg",id:"10000000-0000-4000-8000-000000000001",full_name:"Test Member",student_id:"ST123",status:"active",expires_on:"2026-10-31",photo_path:"test/photo.jpg"};
+const member={email:"member@example.test",member_type:"resident",id_type:"Passport",identification:"TEST123",gender:"Male",nationality:"Malaysia",room_no:"B111",address:"B111",member_number:null,emergency_contact:"0123456789",emergency_relationship:"Father",created_at:"2026-10-20T10:00:00Z",access_card_path:"test/card.jpg",id:"10000000-0000-4000-8000-000000000001",full_name:"Test Member",student_id:"ST123",status:"active",expires_on:"2026-10-31",photo_path:"test/photo.jpg"};
 beforeEach(()=>{
  vi.clearAllMocks();mocks.queries=[];
  mocks.auth.mockResolvedValue({id:"patrol",full_name:"Gym Helper",role:"gym_patrol"});

@@ -20,6 +20,10 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261020034143_membership_cash_access_card_deposit.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020035652_membership_emergency_contact.sql','utf8'));
  await db.exec(readFileSync("supabase/migrations/20261021041410_membership_admin_status.sql","utf8"));
+ await db.exec(readFileSync("supabase/migrations/20261022084319_membership_member_number.sql","utf8"));
+ await db.exec(readFileSync("supabase/migrations/20261022094206_membership_monthly_payment_list.sql","utf8"));
+ await db.exec("insert into membership_payment_imports(id,source_file,source_sha256,row_count,months) values('receipt-test','test.xlsx','hash',1,'{}'); insert into membership_payment_ledger(id,source,legacy_key,collected_on,full_name,member_type,member_reference,import_id,source_receipt_no) values('40000000-0000-4000-8000-000000000001','legacy','test-receipt','2026-08-01','Imported Name','resident','B111','receipt-test','KLGCR / 17801')");
+ await db.exec(readFileSync("supabase/migrations/20261022095717_membership_receipt_numbers.sql","utf8"));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
  const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
@@ -129,5 +133,74 @@ it('restricts manual status changes, preserves expiry, and audits each change at
   await db.exec(`set role ${role}`);
   await expect(change(admin,'cancelled','pending')).rejects.toThrow('permission denied');
   await db.exec('reset role');
+ }
+});
+
+it('assigns Non Residence member numbers atomically and rejects blanks, duplicates and unauthorized approval',async()=>{
+ const make=async(suffix:string)=>{
+  const mid=`20000000-0000-4000-8000-00000000000${suffix}`;
+  await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext) values($1,'Number Test',$2,'outsider','IC',$2,'Male','MY','Address','1','Address',$2,'enc')",[mid,`number${suffix}@example.invalid`]);
+  const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount) values($1,'registration',$2,40) returning id",[mid,month])).rows[0].id;
+  return {mid,pid};
+ };
+ const a=await make('1'),b=await make('2');
+ const approve=(pid:string,num:string,actor=admin)=>db.query('select review_membership_payment_with_number($1,$2,true,null,$3)',[pid,actor,num]);
+ await expect(approve(a.pid,'')).rejects.toThrow('Member number');
+ await expect(approve(a.pid,'GYM001',staff)).rejects.toThrow('Admin');
+ await approve(a.pid,'  GYM001  ');
+ expect((await db.query('select member_number,status from memberships where id=$1',[a.mid])).rows[0]).toEqual({member_number:'GYM001',status:'active'});
+ await expect(approve(b.pid,'gym001')).rejects.toThrow('unique');
+ expect((await db.query('select status from membership_payments where id=$1',[b.pid])).rows[0]).toEqual({status:'pending_verification'});
+ expect((await db.query("select * from membership_emails where member_id=$1 and kind='approved'",[b.mid])).rows).toHaveLength(0);
+ expect((await db.query('select * from membership_payment_ledger where payment_id=$1',[b.pid])).rows).toHaveLength(0);
+ await approve(b.pid,'GYM002');
+ for(const role of ['anon','authenticated']) {
+  await db.exec(`set role ${role}`);
+  await expect(approve(a.pid,'GYM003')).rejects.toThrow('permission denied');
+  await db.exec('reset role');
+ }
+});
+
+it('records a live monthly row with the assigned member number in the approval transaction',async()=>{
+ const mid='30000000-0000-4000-8000-000000000001';
+ await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext) values($1,'Live List','live-list@example.invalid','outsider','IC','live','Male','MY','Address','1','Address','live-list','enc')",[mid]);
+ const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount) values($1,'registration',$2,40) returning id",[mid,month])).rows[0].id;
+ expect((await db.query('select * from membership_payment_ledger where payment_id=$1',[pid])).rows).toHaveLength(0);
+ await db.query('select review_membership_payment_with_number($1,$2,true,null,$3)',[pid,admin,'GYM26-99']);
+ const row=(await db.query<{member_reference:string;receipt_no:string;full_name:string;source:string}>('select * from membership_payment_ledger where payment_id=$1',[pid])).rows[0];
+ expect(row.member_reference).toBe('GYM26-99');expect(row.receipt_no).toBe('');expect(row.full_name).toBe('Live List');expect(row.source).toBe('system');
+ await db.query('update membership_payments set status=status where id=$1',[pid]);
+ expect((await db.query('select * from membership_payment_ledger where payment_id=$1',[pid])).rows).toHaveLength(1);
+ for(const role of ['anon','authenticated']){
+ await db.exec(`set role ${role}`);
+ await expect(db.query('select * from membership_payment_ledger')).rejects.toThrow('permission denied');
+ await expect(db.query('select * from membership_payment_imports')).rejects.toThrow('permission denied');
+ await db.exec('reset role');
+ }
+});
+it('uses residence room numbers and Malaysia calendar boundaries in the live ledger',async()=>{
+ const mid='30000000-0000-4000-8000-000000000002';
+ await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext) values($1,'Residence List','residence-list@example.invalid','resident','IC','list-res','Male','MY','B111','1','Address','res-list','enc')",[mid]);
+ const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount,status,reviewed_at) values($1,'renewal',$2,40,'approved','2026-08-31T16:00:00Z') returning id",[mid,month])).rows[0].id;
+ const row=(await db.query<{member_reference:string;collected_on:Date}>('select * from membership_payment_ledger where payment_id=$1',[pid])).rows[0];
+ expect(row.member_reference).toBe('B111');expect(new Date(row.collected_on).toISOString().slice(0,10)).toBe('2026-09-01');
+});
+
+it('restores source receipt numbers and audits authorized manual changes with stale-write protection',async()=>{
+ const id='40000000-0000-4000-8000-000000000001';
+ expect((await db.query('select receipt_no from membership_payment_ledger where id=$1',[id])).rows[0]).toEqual({receipt_no:'KLGCR / 17801'});
+ const save=(value:string,expected:string,actor=admin)=>db.query('select set_membership_payment_receipt($1,$2,$3,$4)',[id,actor,value,expected]);
+ await expect(save('New','KLGCR / 17801',staff)).rejects.toThrow('Admin');
+ await expect(save('x'.repeat(101),'KLGCR / 17801')).rejects.toThrow('Invalid');
+ await save('  KLGCR / 18000  ','KLGCR / 17801');
+ await expect(save('Overwrite','KLGCR / 17801')).rejects.toThrow('changed');
+ const row=(await db.query('select receipt_no,receipt_updated_by,source_receipt_no from membership_payment_ledger where id=$1',[id])).rows[0];
+ expect(row).toEqual({receipt_no:'KLGCR / 18000',receipt_updated_by:admin,source_receipt_no:'KLGCR / 17801'});
+ expect((await db.query("select * from membership_payment_receipt_history where ledger_id=$1 and actor_id=$2 and old_value='KLGCR / 17801' and new_value='KLGCR / 18000'",[id,admin])).rows).toHaveLength(1);
+ for(const role of ['anon','authenticated']){
+ await db.exec(`set role ${role}`);
+ await expect(save('Denied','KLGCR / 18000')).rejects.toThrow('permission denied');
+ await expect(db.query('select * from membership_payment_receipt_history')).rejects.toThrow('permission denied');
+ await db.exec('reset role');
  }
 });
