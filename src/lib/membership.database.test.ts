@@ -20,6 +20,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20261020034143_membership_cash_access_card_deposit.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261020035652_membership_emergency_contact.sql','utf8'));
  await db.exec(readFileSync("supabase/migrations/20261021041410_membership_admin_status.sql","utf8"));
+ await db.exec(readFileSync("supabase/migrations/20261022084319_membership_member_number.sql","utf8"));
  await db.query("insert into profiles values($1,'admin',true,null),($2,'maintenance_staff',true,null)",[admin,staff]);
  month=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
  const data={id:member,full_name:'Member',email:'test@example.com',member_type:'outsider',id_type:'IC',identification:'123',gender:'Male',nationality:'Malaysian',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Spouse',photo_path:member+'/portrait.jpg',token_hash:'hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
@@ -128,6 +129,30 @@ it('restricts manual status changes, preserves expiry, and audits each change at
  for(const role of ['anon','authenticated']) {
   await db.exec(`set role ${role}`);
   await expect(change(admin,'cancelled','pending')).rejects.toThrow('permission denied');
+  await db.exec('reset role');
+ }
+});
+
+it('assigns Non Residence member numbers atomically and rejects blanks, duplicates and unauthorized approval',async()=>{
+ const make=async(suffix:string)=>{
+  const mid=`20000000-0000-4000-8000-00000000000${suffix}`;
+  await db.query("insert into memberships(id,full_name,email,member_type,id_type,identification,gender,nationality,room_no,student_id,address,token_hash,token_ciphertext) values($1,'Number Test',$2,'outsider','IC',$2,'Male','MY','Address','1','Address',$2,'enc')",[mid,`number${suffix}@example.invalid`]);
+  const pid=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount) values($1,'registration',$2,40) returning id",[mid,month])).rows[0].id;
+  return {mid,pid};
+ };
+ const a=await make('1'),b=await make('2');
+ const approve=(pid:string,num:string,actor=admin)=>db.query('select review_membership_payment_with_number($1,$2,true,null,$3)',[pid,actor,num]);
+ await expect(approve(a.pid,'')).rejects.toThrow('Member number');
+ await expect(approve(a.pid,'GYM001',staff)).rejects.toThrow('Admin');
+ await approve(a.pid,'  GYM001  ');
+ expect((await db.query('select member_number,status from memberships where id=$1',[a.mid])).rows[0]).toEqual({member_number:'GYM001',status:'active'});
+ await expect(approve(b.pid,'gym001')).rejects.toThrow('unique');
+ expect((await db.query('select status from membership_payments where id=$1',[b.pid])).rows[0]).toEqual({status:'pending_verification'});
+ expect((await db.query("select * from membership_emails where member_id=$1 and kind='approved'",[b.mid])).rows).toHaveLength(0);
+ await approve(b.pid,'GYM002');
+ for(const role of ['anon','authenticated']) {
+  await db.exec(`set role ${role}`);
+  await expect(approve(a.pid,'GYM003')).rejects.toThrow('permission denied');
   await db.exec('reset role');
  }
 });

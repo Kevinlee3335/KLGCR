@@ -11,6 +11,8 @@ export async function reviewPayment(form: FormData) {
  const payment = String(form.get("payment")||"");
  const approve = form.get("decision") === "approve";
  const note = String(form.get("note")||"").trim().slice(0,1000);
+ const memberNumber = String(form.get("member_number")||"").trim();
+ if (approve && memberNumber.length > 50) redirect("/admin/members?error=member_number");
  const confirmed = form.get("verified") === "yes";
  if (!/^[a-f0-9-]{36}$/.test(payment)) throw new Error("Invalid payment.");
  if (approve && !confirmed) redirect("/admin/members?error=verify");
@@ -19,8 +21,8 @@ export async function reviewPayment(form: FormData) {
   const {data: paymentRecord,error: paymentError} = await createAdminClient().from("membership_payments").select("receipt_path").eq("id",payment).single();
   if (paymentError || !paymentRecord?.receipt_path) redirect("/admin/members?error=review");
  }
- const {error} = await createAdminClient().rpc("review_membership_payment",{p_payment:payment,p_actor:profile.id,p_approve:approve,p_note:note});
- if (error) { console.error("Membership review failed",error); redirect("/admin/members?error=review"); }
+ const {error} = await createAdminClient().rpc("review_membership_payment_with_number",{p_payment:payment,p_actor:profile.id,p_approve:approve,p_note:note,p_member_number:memberNumber});
+ if (error) { console.error("Membership review failed",error); redirect(error.code === "23505" || error.message?.includes("Member number") ? "/admin/members?error=member_number" : "/admin/members?error=review"); }
  // Approval and email queuing commit atomically. Failed email can be retried without approving twice.
  try {
   const {data: reviewedPayment} = await createAdminClient().from("membership_payments").select("member_id").eq("id",payment).single();

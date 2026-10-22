@@ -6,7 +6,7 @@ import { MembershipForm } from "./membership-form";
 it("lets preview users test without a receipt and clearly reports that nothing was saved",()=>{
  const {container}=render(<MembershipForm submissionEnabled={false} receiptOptional/>);
  fireEvent.change(screen.getByLabelText("Full name"),{target:{value:"Test Student"}});
- fireEvent.change(screen.getByLabelText("Address"),{target:{value:"A421"}});
+ fireEvent.change(screen.getByLabelText("ROOM NO"),{target:{value:"A421"}});
  const button=screen.getByRole("button",{name:"Test registration"});
  expect(button).toBeEnabled();
  fireEvent.submit(container.querySelector("form")!);
@@ -21,4 +21,13 @@ it("shows a chosen file and rejects oversized files before submission",()=>{
  expect(screen.getByText("receipt.pdf")).toBeInTheDocument();
  fireEvent.change(input,{target:{files:[new File([new Uint8Array(3*1024*1024+1)],"oversized.pdf",{type:"application/pdf"})]}});
  expect(screen.getByRole("alert")).toHaveTextContent("up to 3 MB");
+});
+
+it("switches location label and removes access-card upload for Non Residence",()=>{
+ render(<MembershipForm/>);
+ expect(screen.getByLabelText("ROOM NO")).toBeRequired();
+ expect(screen.getByRole("region",{name:"Access Card photo"})).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText("Member type"),{target:{value:"outsider"}});
+ expect(screen.getByLabelText("Address")).toBeRequired();
+ expect(screen.queryByRole("region",{name:"Access Card photo"})).not.toBeInTheDocument();
 });

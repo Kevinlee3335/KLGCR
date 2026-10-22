@@ -35,7 +35,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
       <label>IC / Passport number<input name="identification" maxLength={200} required/></label>
       <label>Gender<select name="gender" defaultValue="" required><option value="" disabled>Select gender</option><option>Male</option><option>Female</option><option>Other</option></select></label>
       <MembershipCountrySelect locked={idType==="IC"} value={passportNationality} onChange={setPassportNationality}/>
-      <label>Address<input name="room_no" autoComplete="street-address" maxLength={200} required/></label>
+      <label>{type === "resident" ? "ROOM NO" : "Address"}<input name="room_no" autoComplete={type === "resident" ? "off" : "street-address"} maxLength={200} required/></label>
       <label>Emergency contact number<input name="emergency_contact" type="tel" inputMode="tel" maxLength={40} required/></label>
       <label>Relationship<select name="emergency_relationship" defaultValue="" required><option value="" disabled>Select relationship</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Guardian</option><option>Friend</option><option>Other</option></select></label>
       <label>Student ID number<input name="student_id" maxLength={200} required/></label>

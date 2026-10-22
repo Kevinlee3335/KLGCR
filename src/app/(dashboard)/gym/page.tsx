@@ -37,7 +37,7 @@ export default async function GymPage({searchParams}:{searchParams:Promise<{q?:s
  const [members,counts,detail,payments,requests,declaration]=await Promise.all([
   memberQuery(group).order("full_name").order("id").range((page-1)*30,page*30-1),
   Promise.all(gymGroups.map(bucket=>memberQuery(bucket,true))),
-  selected ? db.from("memberships").select("id,full_name,email,member_type,id_type,identification,gender,nationality,address,room_no,student_id,emergency_contact,emergency_relationship,status,expires_on,created_at,photo_path,access_card_path").eq("id",selected).maybeSingle() : null,
+  selected ? db.from("memberships").select("id,full_name,email,member_type,id_type,identification,gender,nationality,address,room_no,student_id,emergency_contact,emergency_relationship,status,expires_on,created_at,photo_path,access_card_path,member_number").eq("id",selected).maybeSingle() : null,
   selected ? db.from("membership_payments").select("id,kind,period_start,amount,status,receipt_path,created_at,reviewed_at",{count:"exact"}).eq("member_id",selected).order("created_at",{ascending:false}).order("id").range((paymentPage-1)*20,paymentPage*20-1) : null,
   selected ? db.from("membership_requests").select("id,status,receipt_path,created_at,reviewed_at",{count:"exact"}).eq("member_id",selected).eq("request_type","renew").neq("status","approved").order("created_at",{ascending:false}).order("id").range((paymentPage-1)*20,paymentPage*20-1) : null,
   selected ? db.from("membership_activity").select("created_at,details").eq("member_id",selected).eq("event","rules_accepted").order("created_at",{ascending:false}).limit(1).maybeSingle() : null,
@@ -70,7 +70,7 @@ export default async function GymPage({searchParams}:{searchParams:Promise<{q?:s
     <section className="gym-registration-info" aria-label="Registration information"><h3>Registration information</h3><dl>{[
      ["Full name",detail.data.full_name],["Email address",detail.data.email],["Member type",detail.data.member_type==="outsider"?"Non Residence":"Residence tenant"],
      ["Identification type",detail.data.id_type],["IC / Passport number",detail.data.identification],["Gender",detail.data.gender],["Nationality",detail.data.nationality],
-     ["Address",detail.data.address||detail.data.room_no],["Student ID",detail.data.student_id],["Registered on",date(detail.data.created_at)],
+     [detail.data.member_type === "resident" ? "ROOM NO" : "Address",detail.data.member_type === "resident" ? detail.data.room_no : detail.data.address||detail.data.room_no],["Member number",detail.data.member_number],["Student ID",detail.data.student_id],["Registered on",date(detail.data.created_at)],
      ["Emergency contact number",detail.data.emergency_contact],["Relationship",detail.data.emergency_relationship],
     ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||"Not provided"}</dd></div>)}</dl></section>
     {detail.data.member_type==="resident" && <section className="gym-registration-info"><h3>Access Card photo</h3>{accessCard ? <a href={accessCard} target="_blank" rel="noreferrer"><img className="gym-access-card" src={accessCard} alt="Uploaded Access Card with activation code"/><span className="gym-open">Open full-size card ↗</span></a> : <p>{detail.data.access_card_path?"Photo unavailable — refresh":"No Access Card photo uploaded"}</p>}</section>}
