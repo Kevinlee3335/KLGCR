@@ -14,12 +14,12 @@ type ComplaintFormProps = {
 
 // These are shared external facilities, so they deliberately do not belong to
 // a residential block. Keep the labels exactly as staff use them onsite.
-const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
+const externalAreas = ["Bungalow XA3/X3", "Futsal", "Car Park", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 
 // Keep the original shared-building locations as well as the external
 // facilities. The external-area change must not remove existing Common Area
 // choices used for complaints inside Blocks A–D.
-const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Other", ...externalAreas];
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lobby · Male Toilet", "Lobby · Female Toilet", "Lift", "Staircase", "Utility Room", "Pantry", "Kitchen Block C", "Kitchen Block D", "Other", ...externalAreas];
 
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
@@ -33,7 +33,8 @@ export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
       <label className="field"><span>Location type</span><select value={locationType} onChange={event => setLocationType(event.target.value)}><option value="block">Block</option><option value="external">External Area</option></select></label>
       {locationType === "block" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue={complaint?.block?.id}><option value="">Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
       {locationType === "external" && <label className="field"><span>External Area *</span><select required value={area} onChange={event => setArea(event.target.value)}><option value="">Choose location</option>{externalAreas.map(value => <option key={value}>{value}</option>)}</select></label>}
-      <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
+      <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input list="complaint-block-locations" required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
+      <datalist id="complaint-block-locations">{commonAreaLocations.filter(value => !externalAreas.includes(value)).map(value => <option key={value} value={value}/>)}</datalist>
       <input type="hidden" name="room" value={locationType === "external" ? `${area}${room.trim() ? ` · ${room.trim()}` : ""}` : room}/>
       <input type="hidden" name="category" value={complaint?.category || (locationType === "external" ? "Common Area" : "Room Maintenance")}/>
       <label className="field"><span>Complainant name</span><input name="name" defaultValue={complaint?.complainant_name || ""}/></label>
@@ -49,7 +50,7 @@ const defectOptions = {
   Room: {
     "Door Handle": ["Loose", "Broken", "Missing", "Rusty"],
     "Door Closer": ["Loose", "Broken", "Missing"],
-    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty"],
+    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty", "Stuck"],
     "Ceiling Fan": ["Noisy", "No Power", "Shaking"],
     "Air Conditioning": ["Not Cool", "No Power", "Leaking", "Remote Malfunction"],
     Lighting: ["Not Working", "Broken"],
@@ -58,15 +59,38 @@ const defectOptions = {
     Chair: ["Broken", "Missing"], Bookshelf: ["Broken", "Missing", "Bloated"], Wardrobe: ["Broken", "Missing", "Bloated"],
     Curtain: ["Broken", "Missing", "Dirty"], "Curtain Hook / Holder": ["Broken", "Missing"],
     Floor: ["Water Mark", "Leaking", "Vinyl Tiles Broken"], Wall: ["Water Seepage", "Mouldy", "Near Window", "Near Door", "Near Bathroom"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
     Other: ["Other"],
   },
   Bathroom: {
-    "Door Knob": ["Loose", "Broken", "Cannot Open"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"],
+    "Door Knob": ["Loose", "Broken", "Cannot Open", "Stuck"], "Water Tap / Sink Tap": ["Leaking", "Broken", "Slow Pressure"],
     "Shower Valve": ["Leaking", "Broken", "Slow Pressure"], "Toilet Seat": ["Dirty", "Broken"],
-    "Flexible Hose": ["Leaking", "Broken"], Other: ["Other"],
+    "Flexible Hose": ["Leaking", "Broken"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
+    Lighting: ["Not Working", "Broken"], Other: ["Other"],
   },
-  "Common Area": { Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"] },
+  "Common Area": {
+    Fridge: ["Not Cold", "Not Working", "Leaking"],
+    "Fridge Lock": ["Broken", "Loose", "Detached", "Cannot Lock"],
+    Ceiling: ["Broken", "Gap", "Detached", "Leaking", "Mouldy"],
+    "Shoe Rack": ["Broken", "Loose", "Detached"],
+    "Switch / Socket": ["No Power Supply", "Burnt", "Loose", "Detached"],
+    "Floor Trap": ["Clogged"], "Toilet Bowl": ["Clogged"], "Sink": ["Clogged"],
+    "Flushing System": ["Faulty"], "Pipe": ["Leaking", "Loose"],
+    "Door Lock / Key": ["Loose", "Broken", "Key Missing", "Rusty", "Stuck"],
+    Lighting: ["Not Working", "Broken"], "Water Leakage": ["Leaking"], Other: ["Other"],
+  },
 } as const;
+
+const detailedLocations = ["Corridor", "Common Bathroom", "Drying Area", "Pantry", "Utility Room", "Visitor Room", "Lobby", "Balcony"];
 
 type DefectArea = keyof typeof defectOptions;
 
@@ -82,12 +106,15 @@ type ConfirmedDefect = {
   issue: string;
   note: string;
   location: string;
+  block: string;
+  level: string;
+  wing: string;
 };
 
 function newDefect(key: number, area: DefectArea = "Room", location = ""): ConfirmedDefect {
   const item = Object.keys(defectOptions[area])[0];
   const issue = (defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0];
-  return { key, area, item, issue, note: "", location };
+  return { key, area, item, issue, note: "", location, block: "", level: "", wing: "" };
 }
 
 type AssignmentFormProps = {
@@ -127,7 +154,10 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         <p className="subtle">Add every verified defect in this complaint first. Maintenance will receive the complete defect list. You can add up to 10 defects.</p>
       </div>
       <div className="field field-wide assignment-action-bar"><button className="button assignment-submit" type="button" onClick={() => setDefects((current) => current.length >= 10 ? current : [...current, newDefect(existingCount + current.length + 1, defaultArea, matchedExternalArea)])} disabled={defects.length >= 10}>+ Add Another Defect</button></div>
-      <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note, location }) => ({ area, item, issue, note: location ? `${location}${note ? ` · ${note}` : ""}` : note })))} />
+      <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note, location, block, level, wing }) => {
+        const place = area === "Common Area" ? (detailedLocations.includes(location) ? `Block ${block} · Level ${level}${["Lobby", "Balcony"].includes(location) ? "" : ` · Wing ${wing}`} · ${location}` : location) : "";
+        return { area, item, issue, note: place ? `${place}${note ? ` · ${note}` : ""}` : note };
+      }))} />
       {defects.map((defect, index) => {
         const items = Object.keys(defectOptions[defect.area]);
         const issues = defectOptions[defect.area][defect.item as keyof (typeof defectOptions)[typeof defect.area]] as readonly string[];
@@ -137,6 +167,11 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
           <div className="form-grid">
             <label className="field"><span>Area *</span><select value={defect.area} onChange={(event) => updateDefect(defect.key, { area: event.target.value as DefectArea })}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
             {defect.area === "Common Area" && <label className="field"><span>Common Area Location *</span><select value={defect.location} onChange={(event) => updateDefect(defect.key, { location: event.target.value })} required><option value="">Choose location</option>{commonAreaLocations.map((value) => <option key={value}>{value}</option>)}</select></label>}
+            {defect.area === "Common Area" && detailedLocations.includes(defect.location) && <>
+              <label className="field"><span>Location Block *</span><select required value={defect.block} onChange={event => updateDefect(defect.key, { block: event.target.value })}><option value="">Choose block</option>{["A", "B", "C", "D"].map(value => <option key={value} value={value}>Block {value}</option>)}</select></label>
+              <label className="field"><span>Location Level *</span><select required value={defect.level} onChange={event => updateDefect(defect.key, { level: event.target.value })}><option value="">Choose level</option>{[1,2,3,4,5,6,7,8].map(value => <option key={value} value={value}>Level {value}</option>)}</select></label>
+              {!["Lobby", "Balcony"].includes(defect.location) && <label className="field"><span>Location Wing *</span><select required value={defect.wing} onChange={event => updateDefect(defect.key, { wing: event.target.value })}><option value="">Choose wing</option>{["A", "B"].map(value => <option key={value} value={value}>Wing {value}</option>)}</select></label>}
+            </>}
             <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => updateDefect(defect.key, { item: event.target.value })}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => updateDefect(defect.key, { issue: event.target.value })}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Location / Note"}</span><input value={defect.note} onChange={(event) => updateDefect(defect.key, { note: event.target.value })} maxLength={500} required={needsOtherDetails} placeholder={needsOtherDetails ? "Write the problem clearly, for example: broken door stopper" : "Example: Near window, beside main door"}/></label>
