@@ -57,13 +57,13 @@
 
 /* All six record columns have explicit space; scroll the list before squeezing items. */
 .po-workspace .table-wrap:has(.po-history-table){overflow-x:auto;overflow-y:hidden}
-.po-workspace .po-history-table{table-layout:fixed;min-width:1260px}
+.po-workspace .po-history-table{table-layout:fixed;min-width:1300px}
 .po-workspace .po-history-table th:nth-child(1){width:200px}
 .po-workspace .po-history-table th:nth-child(2){width:110px}
 .po-workspace .po-history-table th:nth-child(3){width:145px}
 .po-workspace .po-history-table th:nth-child(4){width:245px}
 .po-workspace .po-history-table th:nth-child(5){width:200px}
-.po-workspace .po-history-table th:nth-child(6){width:360px}
+.po-workspace .po-history-table th:nth-child(6){width:400px}
 .po-workspace .po-history-table td{overflow-wrap:break-word;word-break:normal;white-space:normal}
 .po-workspace .po-history-item{min-width:0;overflow-wrap:break-word}
 .po-workspace .po-history-table .po-record-actions{display:flex;gap:8px;flex-wrap:nowrap}
