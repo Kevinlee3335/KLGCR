@@ -9,4 +9,4 @@ export const purchaseOrderSchema = z.object({
 });
 export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>;
 export type OrderLine = { itemId: string; code: string; description: string; unit: string; specification: string; quantity: number; location: string };
-export type PurchaseOrder = { id: string; po_no: string; order_date: string; requested_by: string; approved_by: string; requested_date: string; approved_date: string; items: OrderLine[]; created_at: string; revision?: number; updated_at?: string };
+export type PurchaseOrder = { id: string; po_no: string; order_date: string; requested_by: string; approved_by: string; requested_date: string; approved_date: string; items: OrderLine[]; created_at: string; received_quantities?: Record<string,number>; revision?: number; updated_at?: string };

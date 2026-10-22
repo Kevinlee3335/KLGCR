@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Inventory sync is not configured" }, { status: 500 });
   }
   const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const { error } = await supabase.from("inventory_items").upsert(rows, { onConflict: "item_code" });
+  const { error } = await supabase.rpc("import_inventory_sheet_rows", { p_rows: rows });
   if (error) {
     const diagnostics = syncDiagnostics(url, serviceKey);
     console.error("Google inventory import failed", { error, diagnostics });

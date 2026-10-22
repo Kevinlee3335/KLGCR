@@ -48,3 +48,15 @@
 .po-workspace .po-history-item small{font-size:10px;color:#8a8275;white-space:normal}
 .po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:7px}
 .po-workspace .po-history-table .po-record-actions .button{min-width:49px;flex:none}
+.po-workspace .po-history-table th:nth-child(5){width:220px}
+.po-workspace .po-history-table .po-record-actions{flex-wrap:wrap}
+.po-workspace .po-receive-table th:first-child{width:42%}
+.po-workspace .po-receive-table td{white-space:normal}
+.po-workspace .po-receive-note{display:grid;gap:6px;font-size:12px;margin:16px 0}
+.po-workspace .po-receipt-record{border-top:1px solid #e6e1d8;padding:12px 0;display:grid;gap:7px;font-size:12px}
+.po-workspace .po-receipt-record>span{color:#746344;font-size:11px}
+.po-workspace .po-sync-pending{margin-top:16px;padding:14px;border:1px solid #dfc985;border-radius:8px;background:#fff9ea;font-size:12px}
+.po-workspace .po-sync-pending>div{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.po-workspace .po-sync-pending small{display:block;width:100%;color:#815e19}
+.po-workspace .po-receive-message{padding:12px;background:#f6f1e6;border-radius:7px}
+.po-workspace .po-receiving{scroll-margin-top:100px}

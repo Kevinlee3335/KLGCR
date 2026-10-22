@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
 import './purchase-orders.css';
+import { GoodsReceiving } from './po-receiving';
+import { receivingLines,type GoodsReceipt } from '@/lib/purchase-orders/receipts';
 import type { PurchaseOrder, PurchaseOrderInput } from '@/lib/purchase-orders/schema';
 type Item={id:string;item_code:string;description:string;unit:string|null};
 type Line=PurchaseOrderInput['items'][number]&{query:string};
-export function PurchaseOrders({items,orders,requester,canCreate}:{items:Item[];orders:PurchaseOrder[];requester:string;canCreate:boolean}) {
+export function PurchaseOrders({items,orders,receipts=[],requester,canCreate}:{items:Item[];orders:PurchaseOrder[];receipts?:GoodsReceipt[];requester:string;canCreate:boolean}) {
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date());
  const blank=():Line=>({itemId:'',query:'',specification:'',quantity:1,location:''});
  const [lines,setLines]=useState<Line[]>([blank()]);const [date,setDate]=useState(today);
@@ -13,6 +15,9 @@ export function PurchaseOrders({items,orders,requester,canCreate}:{items:Item[];
  const [records,setRecords]=useState(orders);const [search,setSearch]=useState('');
  const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [saved,setSaved]=useState<PurchaseOrder|null>(null);
  const [requestId,setRequestId]=useState('');
+ const [receivingId,setReceivingId]=useState<string|null>(null);const [deliveryRecords,setDeliveryRecords]=useState(receipts);
+ const receivingOrder=records.find(o=>o.id===receivingId);
+ function deliveryUpdate(order:PurchaseOrder,receipt:GoodsReceipt){setRecords(old=>old.map(o=>o.id===order.id?order:o));setDeliveryRecords(old=>[receipt,...old.filter(r=>r.id!==receipt.id)]);}
  const [editing,setEditing]=useState<PurchaseOrder|null>(null);
  function edit(order:PurchaseOrder){setEditing(order);setSaved(null);setRequestId('');setDate(order.order_date);setName(order.requested_by);setApproved(order.approved_by);setRequestedDate(order.requested_date);setApprovedDate(order.approved_date);setLines(order.items.map(item=>({...item,query:item.description})));setMessage('');window.scrollTo({top:0,behavior:'smooth'});}
  function reset(){setEditing(null);setSaved(null);setRequestId('');setDate(today);setName(requester);setApproved('');setRequestedDate(today);setApprovedDate('');setLines([blank()]);setMessage('');}
@@ -40,6 +45,7 @@ export function PurchaseOrders({items,orders,requester,canCreate}:{items:Item[];
  </fieldset></form>
  {editing&&!saved&&<button className="button secondary-button" type="button" disabled={busy} onClick={reset}>Cancel Edit</button>}{message&&<p role="status">{message}</p>}{saved&&<div className="section-head"><a className="button" href={`/api/purchase-orders/${saved.id}/pdf`}>Download PDF</a><button className="button secondary-button" onClick={reset}>New Purchase Order</button></div>}
  </section>}
- <section className="panel"><div className="section-head"><div><h2>Saved Purchase Orders</h2><p className="subtle">PO records stay in the system. Download the PDF again anytime.</p></div><input type="search" aria-label="Search purchase orders" placeholder="PO number, item code or name…" value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="table-wrap"><table className="table po-table po-history-table"><thead><tr><th>PO No.</th><th>Date</th><th>Requested by</th><th>Items</th><th>Actions</th></tr></thead><tbody>{records.filter(o=>`${o.po_no} ${o.requested_by} ${o.items.map(i=>`${i.code} ${i.description}`).join(' ')}`.toLowerCase().includes(search.toLowerCase())).map(o=><tr key={o.id}><td><strong>{o.po_no}</strong></td><td>{o.order_date}</td><td>{o.requested_by}</td><td>{o.items.map((item,index)=><div className="po-history-item" key={`${item.itemId}-${index}`}><span>{item.description} × {item.quantity}</span><small>{item.code}</small></div>)}</td><td><div className="po-record-actions">{canCreate&&<button className="button secondary-button" type="button" disabled={busy} onClick={()=>edit(o)}>Edit</button>}<a className="button secondary-button" href={`/api/purchase-orders/${o.id}/pdf`}>PDF</a></div><small className="po-item-code">Revision {o.revision||1}</small></td></tr>)}</tbody></table>{!records.length&&<p>No purchase orders saved yet.</p>}</div></section>
+ {receivingOrder&&<GoodsReceiving key={receivingOrder.id} order={receivingOrder} receipts={deliveryRecords.filter(r=>r.order_id===receivingOrder.id)} onUpdate={deliveryUpdate} onClose={()=>setReceivingId(null)}/>}
+ <section className="panel"><div className="section-head"><div><h2>Saved Purchase Orders</h2><p className="subtle">PO records stay in the system. Download the PDF again anytime.</p></div><input type="search" aria-label="Search purchase orders" placeholder="PO number, item code or name…" value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="table-wrap"><table className="table po-table po-history-table"><thead><tr><th>PO No.</th><th>Date</th><th>Requested by</th><th>Items</th><th>Actions</th></tr></thead><tbody>{records.filter(o=>`${o.po_no} ${o.requested_by} ${o.items.map(i=>`${i.code} ${i.description}`).join(' ')}`.toLowerCase().includes(search.toLowerCase())).map(o=><tr key={o.id}><td><strong>{o.po_no}</strong></td><td>{o.order_date}</td><td>{o.requested_by}</td><td>{o.items.map((item,index)=><div className="po-history-item" key={`${item.itemId}-${index}`}><span>{item.description} × {item.quantity}</span><small>{item.code}</small></div>)}</td><td><div className="po-record-actions">{canCreate&&<button className="button secondary-button" type="button" disabled={busy} onClick={()=>{setReceivingId(o.id);requestAnimationFrame(()=>document.querySelector(".po-receiving")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Receive Goods</button>}{canCreate&&<button className="button secondary-button" type="button" disabled={busy} onClick={()=>edit(o)}>Edit</button>}<a className="button secondary-button" href={`/api/purchase-orders/${o.id}/pdf`}>PDF</a></div><small className="po-item-code">Revision {o.revision||1} · {receivingLines(o).every(l=>l.remaining===0)?"Fully Received":receivingLines(o).some(l=>l.received>0)?"Partially Received":"Awaiting Delivery"}</small></td></tr>)}</tbody></table>{!records.length&&<p>No purchase orders saved yet.</p>}</div></section>
  </div>;
 }
