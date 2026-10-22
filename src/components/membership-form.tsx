@@ -4,6 +4,7 @@ import { useActionState, useState, useId } from "react";
 import { MembershipCountrySelect } from "./membership-country-select";
 import { MembershipDeclaration } from "./membership-declaration";
 import { MembershipPhoto } from "./membership-photo";
+import { MembershipReceiptSample } from "./membership-receipt-sample";
 import { MembershipPayment } from "./membership-payment";
 import { SubmitButton } from "./submit-button";
 import { registerMember, submitMemberRequest } from "@/app/membership/actions";
@@ -44,7 +45,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
     </>}
     <p className="fee-note wide">Payment receipts are reviewed manually by Admin. Your application is approved only after Admin confirms your payment.</p>
     <MembershipPayment amount={token ? (fee ?? 40) : 40}/>
-    <label className="wide receipt-field" htmlFor={receiptId}><span>Payment receipt{!receiptRequired ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
+    <div className="wide receipt-example-layout"><label className="receipt-field" htmlFor={receiptId}><span>Payment receipt{!receiptRequired ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
       {fileName ? <FileCheck2 size={26} aria-hidden="true"/> : <UploadCloud size={26} aria-hidden="true"/>}
       <span className="receipt-upload-copy"><strong>{fileName || "Upload payment receipt"}</strong><small>{fileName ? "Click to replace file" : "Click to browse or choose a photo"}</small></span><span className="receipt-browse">Browse files</span>
       <input id={receiptId} name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required={receiptRequired} aria-describedby={`${receiptId}-help`} onChange={event => {
@@ -54,7 +55,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
           setReceiptError("Choose a JPG, PNG or PDF file up to 3 MB.");setFileName("");event.currentTarget.value="";
         } else {setReceiptError("");setFileName(file?.name || "");}
       }}/>
-    </span><small id={`${receiptId}-help`}>JPG, PNG or PDF · Maximum 3 MB</small>{receiptError && <span className="error" role="alert">{receiptError}</span>}</label>
+    </span><small id={`${receiptId}-help`}>JPG, PNG or PDF · Maximum 3 MB</small>{receiptError && <span className="error" role="alert">{receiptError}</span>}</label><MembershipReceiptSample/></div>
     {!token && <MembershipDeclaration/>}
     <label className="wide member-consent"><input type="checkbox" name="consent" value="yes" required/>I confirm my details and any uploaded payment receipt are accurate. I agree to the use of these details for membership administration.</label>
     <div hidden aria-hidden="true"><input name="website" tabIndex={-1} autoComplete="off"/></div>

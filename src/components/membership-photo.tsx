@@ -1,4 +1,5 @@
 "use client";
+import "./membership-photo.css";
 import { Camera, UploadCloud, UserRound } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -36,6 +37,7 @@ export function MembershipPhoto({accessCard=false}:{accessCard?:boolean}) {
  }
  return <section className={accessCard?"wide membership-photo-field receipt-field":"membership-photo-field receipt-field"} aria-labelledby={id+"-label"} style={{position:"relative",...(accessCard?{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,260px),1fr))",gap:16}: {})}}>
   <strong style={accessCard?{gridColumn:"1/-1"}:undefined} id={id+"-label"}>{accessCard?"Access Card photo":"Personal photo"}</strong>
+  <div className={accessCard?"access-card-upload-layout":"personal-photo-layout"}>
   <div className="receipt-upload" style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:10,alignSelf:"start",minHeight:150}}>
    {preview?<img src={preview} alt="Your selected personal photo" style={{width:64,height:80,objectFit:"cover",borderRadius:12}}/>:<UserRound size={30} aria-hidden="true"/>}
    <div className="receipt-upload-copy"><strong>{busy?"Preparing photo…":photo?(accessCard?"Access Card added":"Personal photo added"):(accessCard?"Upload a clear Access Card photo":"Add your personal photo")}</strong><small>{accessCard?"Keep the entire code at the bottom clearly visible. You may cover your password.":"Take a photo or upload one from your device."}</small>
@@ -45,9 +47,11 @@ export function MembershipPhoto({accessCard=false}:{accessCard?:boolean}) {
     </div>
    </div>
   </div>
+  {!accessCard && <aside className="personal-photo-examples" aria-label="Personal photo examples"><strong>Photo examples</strong><div className="personal-photo-example-pair">{["male","female"].map(gender=><figure key={gender}><img src={`/personal-photo-example-${gender}-v3.jpg`} alt={`AI-generated ${gender} headshot showing a clear front-facing personal photo`} width={240} height={320}/><figcaption>{gender==="male"?"Male":"Female"}</figcaption></figure>)}</div><small>AI-generated examples only. Do not upload these photos.</small></aside>}
+  </div>
   <input ref={input} id={id} name={accessCard?"access_card":"personal_photo"} type="file" accept="image/jpeg,image/png,image/webp" required aria-label={accessCard?"Access Card photo":"Personal photo"} aria-describedby={id+"-help"} style={{position:"absolute",width:1,height:1,opacity:0,bottom:0,left:0}} onChange={event=>{const file=event.currentTarget.files?.[0];if(file)void prepare(file);}}/>
   {accessCard&&<figure style={{margin:"16px 0 0",maxWidth:360}}><a href="/access-card-sample-v2.png" target="_blank" rel="noreferrer"><img src="/access-card-sample-v2.png" alt="Access Card sample with password covered and bottom activation code clearly visible" style={{width:"100%",borderRadius:12,border:"1px solid #e5dcc8"}}/></a><figcaption style={{fontSize:12,marginTop:8}}>Sample · Click to enlarge. Photograph your own card with the bottom code in focus.</figcaption></figure>}
-  <small style={accessCard?{gridColumn:"1/-1"}:undefined} id={id+"-help"}>{accessCard?"Required for Residence tenants. Management needs the bottom code to activate your card.":"Required for new registration. Your photo will be saved with your membership details."}</small>
+  <small style={accessCard?{gridColumn:"1/-1"}:undefined} id={id+"-help"}>{accessCard?"Required for Residence tenants. Management needs the bottom code to activate your card.":"Upload a clear, recent photo of yourself with your full face visible. Admin may reject your registration if you do not upload your own photo."}</small>
 
   {error&&<p className="error" role="alert">{error}</p>}
  </section>;
