@@ -1,0 +1,20 @@
+.esign-compact{margin:0 0 14px;font-size:13px}
+.esign-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:42px}
+.esign-label{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:#48586b}
+.esign-preview{display:block;width:104px;height:34px;background:#fff;border-bottom:1px solid #ced6df}
+.esign-compact .esign-open{min-height:32px;height:32px;padding:5px 10px;font-size:12px}
+.esign-message{font-size:12px;margin:8px 0 0;color:#48586b}
+.esign-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(19,32,48,.36);backdrop-filter:blur(3px)}
+.esign-dialog{width:440px;max-width:100%;max-height:calc(100dvh - 32px);overflow:auto;padding:18px;border-radius:12px;background:#fff;box-shadow:0 18px 60px rgba(17,30,46,.2);color:#243447}
+.esign-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:10px}
+.esign-dialog-head h3{font-size:15px;margin:0;font-weight:600}
+.esign-dialog-head p{font-size:12px;color:#718095;margin:4px 0 0}
+.esign-close{padding:3px;background:none;border:0;color:#718095;display:flex;cursor:pointer}
+.esign-canvas-wrap{position:relative;border:1px solid #cdd6e0;border-radius:7px;overflow:hidden;background:#fff}
+.esign-canvas-wrap canvas{position:relative;z-index:1;display:block;width:100%;height:auto;aspect-ratio:10/3;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.esign-guide{position:absolute;left:14px;right:14px;bottom:13px;border-bottom:1px dashed #d8dfe7;color:#a0adbc;font-size:11px;padding-bottom:3px;pointer-events:none}
+.esign-tools{display:flex;align-items:center;gap:7px;margin-top:12px;flex-wrap:wrap}
+.esign-tools .button{min-height:34px;height:34px;font-size:12px;padding:6px 10px;gap:5px}
+.esign-save{margin-left:auto}
+.esign-cancel{display:block;margin:12px auto 0;padding:3px 10px;border:0;background:none;color:#718095;font-size:12px;cursor:pointer}
+@media(pointer:coarse){.esign-close{min-width:34px;min-height:34px;align-items:center;justify-content:center}.esign-tools .button{min-height:40px;height:40px}}
