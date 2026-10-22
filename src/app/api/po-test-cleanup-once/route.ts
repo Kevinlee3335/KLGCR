@@ -11,13 +11,13 @@ export async function POST(req:NextRequest){
  if(order.data.po_no!=='KH/KLG/PO/2026-0030')throw Error('Wrong test PO');
  const others=await db.from('inventory_purchase_orders').select('id').neq('id',orderId).gte('po_no','KH/KLG/PO/2026-0030');if(others.error||others.data.length)throw Error('Other orders exist; numbering cannot be reset');
  const history=await db.from('inventory_adjustment_history').select('qty,balance_before,balance_after,note').eq('id',18).maybeSingle();if(history.error)throw Error('History unavailable');
- const pending=await db.from('inventory_po_receipts').update({sheet_status:'pending',sheet_error:'Removing authorized test delivery'}).eq('id',receiptId).eq('order_id',orderId);if(pending.error)throw Error('Could not protect stock during cleanup');
+ const pending=await db.from('inventory_po_receipts').update({sheet_status:history.data?'synced':'pending',sheet_error:'Removing authorized test delivery'}).eq('id',receiptId).eq('order_id',orderId);if(pending.error)throw Error('Could not protect stock during cleanup');
  if(history.data){
   if(Number(history.data.qty)!==10||Number(history.data.balance_before)!==43||Number(history.data.balance_after)!==53||history.data.note!=='PO KH/KLG/PO/2026-0030 receipt 0df5f31d-789c-497c-baf1-eb8ffeac7b6a')throw Error('Unexpected test adjustment');
   const current=await db.from('inventory_items').select('balance_qty').eq('id',itemId).single();if(current.error)throw Error('Stock unavailable');
   if(Number(current.data.balance_qty)===53){const changed=await db.from('inventory_items').update({balance_qty:43}).eq('id',itemId).eq('balance_qty',53).select('id');if(changed.error||changed.data.length!==1)throw Error('Stock changed; retry');}
   else if(Number(current.data.balance_qty)!==43)throw Error('Stock changed since test; cleanup stopped');
-  const removed=await db.from('inventory_adjustment_history').delete().eq('id',18);if(removed.error)throw Error('History cleanup failed');
+  const protect=await db.from('inventory_po_receipts').update({sheet_status:'pending'}).eq('id',receiptId);if(protect.error)throw Error('Could not protect restored stock');\n  const check=await db.from('inventory_items').select('balance_qty').eq('id',itemId).single();if(check.error||Number(check.data.balance_qty)!==43)throw Error('Restored stock changed');\n  const removed=await db.from('inventory_adjustment_history').delete().eq('id',18);if(removed.error)throw Error('History cleanup failed');
  }
  const item=await db.from('inventory_items').select('item_code,description,category,movement_category,balance_qty,reorder_level,unit').eq('id',itemId).single();if(item.error||Number(item.data.balance_qty)!==43)throw Error('Unexpected restored stock');
  const pushed=await pushInventoryItemToGoogle(item.data);if(pushed.skipped||!pushed.ok)throw Error('Google Sheet rollback failed');
