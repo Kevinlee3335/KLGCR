@@ -7,8 +7,8 @@ import { cancelCleanerComplaint, finalizeCleanerComplaint, prepareCleanerComplai
 import { createClient } from "@/lib/supabase/client";
 
 type Block = { id: number; code: string };
-const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Other"];
-const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Kitchen Block C", "Kitchen Block D", "Other"];
+const externalAreas = ["Bungalow XA3/X3", "Futsal", "Car Park", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 const defectItems = {
   room: ["Door Handle", "Door Closer", "Door Lock / Key", "Ceiling Fan", "Air Conditioning", "Lighting", "Divan", "Headboard", "Mattress", "Study Table", "Utility Table", "Chair", "Bookshelf", "Wardrobe", "Curtain", "Curtain Hook / Holder", "Floor", "Wall", "Other"],
   bathroom: ["Door Knob", "Water Tap / Sink Tap", "Shower Valve", "Toilet Seat", "Flexible Hose", "Other"],
