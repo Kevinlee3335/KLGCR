@@ -53,6 +53,15 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
   for(const [x,label,name,date] of [[50.5,'Requested by:',order.requested_by,order.requested_date],[375,'Approved By:',order.approved_at?'James Ooi':'Pending approval',order.approved_at?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date(order.approved_at)):'']] as const){
     text(label,x,631.7,14);line(x,733,x+159,733);text(`Name: ${name}`,x,747.1,12);text(`Date: ${date}`,x,776.4,12);
   }
+  for(const [drawing,x] of [[order.requested_signature,50.5],[order.approved_at?order.approved_signature:null,375]] as const){
+    if(!drawing)continue;
+    const points=drawing.strokes.flat();if(!points.length)continue;
+    const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);const minX=Math.min(...xs),minY=Math.min(...ys);
+    const width=Math.max(...xs)-minX,height=Math.max(...ys)-minY;
+    const scale=Math.min(150/Math.max(width*600,1),64/Math.max(height*180,1));
+    const left=x+(159-width*600*scale)/2,base=841.9-724;
+    for(const stroke of drawing.strokes)for(let i=1;i<stroke.length;i++)page.drawLine({start:{x:left+(stroke[i-1][0]-minX)*600*scale,y:base+(height-(stroke[i-1][1]-minY))*180*scale},end:{x:left+(stroke[i][0]-minX)*600*scale,y:base+(height-(stroke[i][1]-minY))*180*scale},thickness:1.25,color:rgb(0.05,0.08,0.12)});
+  }
   if(order.approved_at) text(`Time: ${new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(order.approved_at))} MYT`,375,798,11);
   pdf.setTitle(order.po_no); pdf.setCreationDate(new Date(order.created_at));
   return pdf.save();

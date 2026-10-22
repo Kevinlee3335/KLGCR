@@ -8,15 +8,15 @@ it('opens the selected PO and approves the reviewed revision from Dashboard',asy
  const fetcher=vi.spyOn(global,'fetch').mockResolvedValue({ok:true,json:async()=>({order:{}})} as Response);
  render(<PoApprovalQueue orders={[order]} total={1}/>);
  expect(screen.getByRole('link',{name:'Review PO'})).toHaveAttribute('href','/admin/inventory/purchase-orders?po=sample');
- fireEvent.click(screen.getByRole('button',{name:'Approve'}));
+ fireEvent.click(screen.getByRole('button',{name:'Approve & Sign'}));
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('creator has been notified'));
- expect(fetcher).toHaveBeenCalledWith('/api/purchase-orders/sample/approve',expect.objectContaining({body:JSON.stringify({expectedRevision:3})}));
- expect(screen.queryByRole('button',{name:'Approve'})).not.toBeInTheDocument();
+ expect(fetcher).toHaveBeenCalledWith('/api/purchase-orders/sample/approve',expect.objectContaining({body:JSON.stringify({expectedRevision:3,useSignature:true})}));
+ expect(screen.queryByRole('button',{name:'Approve & Sign'})).not.toBeInTheDocument();
 });
 it('keeps a changed PO in the queue and displays the review error',async()=>{
  vi.spyOn(window,'confirm').mockReturnValue(true);
  vi.spyOn(global,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Refresh and review the latest PO.'})} as Response);
- render(<PoApprovalQueue orders={[order]} total={1}/>);fireEvent.click(screen.getByRole('button',{name:'Approve'}));
+ render(<PoApprovalQueue orders={[order]} total={1}/>);fireEvent.click(screen.getByRole('button',{name:'Approve & Sign'}));
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('review the latest PO'));
- expect(screen.getByRole('button',{name:'Approve'})).not.toBeDisabled();
+ expect(screen.getByRole('button',{name:'Approve & Sign'})).not.toBeDisabled();
 });

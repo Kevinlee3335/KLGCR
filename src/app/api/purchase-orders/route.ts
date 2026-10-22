@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     const db=await createClient();
     const {data,error}=await db.rpc(parsed.data.orderId?'edit_inventory_purchase_order':'save_inventory_purchase_order',{payload:parsed.data});
     if(error?.message.includes('changed by another'))return NextResponse.json({error:'This PO was changed by another user. Refresh the page and reopen the latest PO before editing.'},{status:409});
+    if(error?.message.includes('signature'))return NextResponse.json({error:'Please save your own e-signature before signing this PO.'},{status:400});
     if(error){console.error('PO save:',error.message);return NextResponse.json({error:'Unable to save PO. Please retry; the same request will not create a duplicate.'},{status:503});}
     await dispatchPoNotifications(data.id).catch(error=>console.error('PO notifications deferred',error));
     await archivedPurchaseOrderPdf(data);

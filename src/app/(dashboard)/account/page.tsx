@@ -1,5 +1,6 @@
 "use client";
 
+import {SignaturePad} from '@/components/signature-pad';
 import { type FormEvent, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -48,7 +49,7 @@ export default function AccountPage() {
           <p>Keep your company account secure.</p>
         </div>
       </section>
-      <section className="login-form-wrap">
+      <section className="login-form-wrap"><SignaturePad/>
         <form className="panel login-panel" onSubmit={changePassword}>
           <p className="eyebrow">Account security</p>
           <h2>Change Password</h2>
