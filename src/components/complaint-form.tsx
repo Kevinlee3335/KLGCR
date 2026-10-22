@@ -90,6 +90,8 @@ const defectOptions = {
   },
 } as const;
 
+const detailedLocations = ["Corridor", "Common Bathroom", "Drying Area", "Pantry", "Utility Room"];
+
 type DefectArea = keyof typeof defectOptions;
 
 function AssignmentSubmitButton({ defectCount }: { defectCount: number }) {
@@ -104,12 +106,15 @@ type ConfirmedDefect = {
   issue: string;
   note: string;
   location: string;
+  block: string;
+  level: string;
+  wing: string;
 };
 
 function newDefect(key: number, area: DefectArea = "Room", location = ""): ConfirmedDefect {
   const item = Object.keys(defectOptions[area])[0];
   const issue = (defectOptions[area][item as keyof (typeof defectOptions)[typeof area]] as readonly string[])[0];
-  return { key, area, item, issue, note: "", location };
+  return { key, area, item, issue, note: "", location, block: "", level: "", wing: "" };
 }
 
 type AssignmentFormProps = {
@@ -149,7 +154,10 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
         <p className="subtle">Add every verified defect in this complaint first. Maintenance will receive the complete defect list. You can add up to 10 defects.</p>
       </div>
       <div className="field field-wide assignment-action-bar"><button className="button assignment-submit" type="button" onClick={() => setDefects((current) => current.length >= 10 ? current : [...current, newDefect(existingCount + current.length + 1, defaultArea, matchedExternalArea)])} disabled={defects.length >= 10}>+ Add Another Defect</button></div>
-      <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note, location }) => ({ area, item, issue, note: location ? `${location}${note ? ` · ${note}` : ""}` : note })))} />
+      <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note, location, block, level, wing }) => {
+        const place = area === "Common Area" ? (detailedLocations.includes(location) ? `Block ${block} · Level ${level} · Wing ${wing} · ${location}` : location) : "";
+        return { area, item, issue, note: place ? `${place}${note ? ` · ${note}` : ""}` : note };
+      }))} />
       {defects.map((defect, index) => {
         const items = Object.keys(defectOptions[defect.area]);
         const issues = defectOptions[defect.area][defect.item as keyof (typeof defectOptions)[typeof defect.area]] as readonly string[];
@@ -159,6 +167,11 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
           <div className="form-grid">
             <label className="field"><span>Area *</span><select value={defect.area} onChange={(event) => updateDefect(defect.key, { area: event.target.value as DefectArea })}>{Object.keys(defectOptions).map((value) => <option key={value}>{value}</option>)}</select></label>
             {defect.area === "Common Area" && <label className="field"><span>Common Area Location *</span><select value={defect.location} onChange={(event) => updateDefect(defect.key, { location: event.target.value })} required><option value="">Choose location</option>{commonAreaLocations.map((value) => <option key={value}>{value}</option>)}</select></label>}
+            {defect.area === "Common Area" && detailedLocations.includes(defect.location) && <>
+              <label className="field"><span>Location Block *</span><select required value={defect.block} onChange={event => updateDefect(defect.key, { block: event.target.value })}><option value="">Choose block</option>{["A", "B", "C", "D"].map(value => <option key={value} value={value}>Block {value}</option>)}</select></label>
+              <label className="field"><span>Location Level *</span><select required value={defect.level} onChange={event => updateDefect(defect.key, { level: event.target.value })}><option value="">Choose level</option>{[1,2,3,4,5,6,7,8].map(value => <option key={value} value={value}>Level {value}</option>)}</select></label>
+              <label className="field"><span>Location Wing *</span><select required value={defect.wing} onChange={event => updateDefect(defect.key, { wing: event.target.value })}><option value="">Choose wing</option>{["A", "B"].map(value => <option key={value} value={value}>Wing {value}</option>)}</select></label>
+            </>}
             <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => updateDefect(defect.key, { item: event.target.value })}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => updateDefect(defect.key, { issue: event.target.value })}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Location / Note"}</span><input value={defect.note} onChange={(event) => updateDefect(defect.key, { note: event.target.value })} maxLength={500} required={needsOtherDetails} placeholder={needsOtherDetails ? "Write the problem clearly, for example: broken door stopper" : "Example: Near window, beside main door"}/></label>
