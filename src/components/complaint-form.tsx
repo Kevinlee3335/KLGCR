@@ -90,7 +90,7 @@ const defectOptions = {
   },
 } as const;
 
-const detailedLocations = ["Corridor", "Common Bathroom", "Drying Area", "Pantry", "Utility Room"];
+const detailedLocations = ["Corridor", "Common Bathroom", "Drying Area", "Pantry", "Utility Room", "Visitor Room", "Lobby", "Balcony"];
 
 type DefectArea = keyof typeof defectOptions;
 
