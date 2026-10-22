@@ -155,7 +155,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
       </div>
       <div className="field field-wide assignment-action-bar"><button className="button assignment-submit" type="button" onClick={() => setDefects((current) => current.length >= 10 ? current : [...current, newDefect(existingCount + current.length + 1, defaultArea, matchedExternalArea)])} disabled={defects.length >= 10}>+ Add Another Defect</button></div>
       <input type="hidden" name="defects" value={JSON.stringify(defects.map(({ area, item, issue, note, location, block, level, wing }) => {
-        const place = area === "Common Area" ? (detailedLocations.includes(location) ? `Block ${block} · Level ${level} · Wing ${wing} · ${location}` : location) : "";
+        const place = area === "Common Area" ? (detailedLocations.includes(location) ? `Block ${block} · Level ${level}${["Lobby", "Balcony"].includes(location) ? "" : ` · Wing ${wing}`} · ${location}` : location) : "";
         return { area, item, issue, note: place ? `${place}${note ? ` · ${note}` : ""}` : note };
       }))} />
       {defects.map((defect, index) => {
@@ -170,7 +170,7 @@ export function AssignmentForm({ complaintId, eligible, requiresAppointment = fa
             {defect.area === "Common Area" && detailedLocations.includes(defect.location) && <>
               <label className="field"><span>Location Block *</span><select required value={defect.block} onChange={event => updateDefect(defect.key, { block: event.target.value })}><option value="">Choose block</option>{["A", "B", "C", "D"].map(value => <option key={value} value={value}>Block {value}</option>)}</select></label>
               <label className="field"><span>Location Level *</span><select required value={defect.level} onChange={event => updateDefect(defect.key, { level: event.target.value })}><option value="">Choose level</option>{[1,2,3,4,5,6,7,8].map(value => <option key={value} value={value}>Level {value}</option>)}</select></label>
-              <label className="field"><span>Location Wing *</span><select required value={defect.wing} onChange={event => updateDefect(defect.key, { wing: event.target.value })}><option value="">Choose wing</option>{["A", "B"].map(value => <option key={value} value={value}>Wing {value}</option>)}</select></label>
+              {!["Lobby", "Balcony"].includes(defect.location) && <label className="field"><span>Location Wing *</span><select required value={defect.wing} onChange={event => updateDefect(defect.key, { wing: event.target.value })}><option value="">Choose wing</option>{["A", "B"].map(value => <option key={value} value={value}>Wing {value}</option>)}</select></label>}
             </>}
             <label className="field"><span>Defect Item *</span><select value={defect.item} onChange={(event) => updateDefect(defect.key, { item: event.target.value })}>{items.map((value) => <option key={value}>{value}</option>)}</select></label>
             <label className="field"><span>Problem *</span><select value={defect.issue} onChange={(event) => updateDefect(defect.key, { issue: event.target.value })}>{issues.map((value) => <option key={value}>{value}</option>)}</select></label>
