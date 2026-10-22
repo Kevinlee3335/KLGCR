@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
  try {
   const db = createAdminClient();
   const dates = reminderDates();
+  // Idempotent snapshots; catches up any closed months missed during an outage.
+  const {data:reports,error:reportError}=await db.rpc("generate_due_membership_committee_reports");
+  if(reportError) console.error("Committee report generation pending retry",reportError.code);
   // A terminated worker may leave a claimed email; recover after 15 minutes.
   const {error:resetError} = await db.from("membership_emails").update({status:"pending"}).eq("status","sending").lt("claimed_at",new Date(Date.now()-15*60*1000).toISOString());
   if (resetError) throw resetError;
@@ -28,6 +31,7 @@ export async function GET(request: NextRequest) {
    }
   }
   const sent = await deliverMembershipEmails();
-  return NextResponse.json({ok:true,sent,date:dates.day});
+  if(reportError) return NextResponse.json({error:"Committee report generation pending retry.",sent},{status:500});
+  return NextResponse.json({ok:true,sent,reports,date:dates.day});
  } catch (error) { console.error("Membership cron failed",error); return NextResponse.json({error:"Membership reminders could not be completed."},{status:500}); }
 }
