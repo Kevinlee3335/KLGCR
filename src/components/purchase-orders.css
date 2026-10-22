@@ -60,3 +60,9 @@
 .po-workspace .po-sync-pending small{display:block;width:100%;color:#815e19}
 .po-workspace .po-receive-message{padding:12px;background:#f6f1e6;border-radius:7px}
 .po-workspace .po-receiving{scroll-margin-top:100px}
+
+.po-workspace .po-history-table th:nth-child(5){width:330px}
+.po-workspace .po-history-table .po-record-actions{flex-wrap:nowrap;gap:8px}
+.po-workspace .po-history-table .po-record-actions .button{height:40px;min-height:40px;font-size:13px;padding:8px 12px;gap:7px}
+.po-workspace .po-record-actions svg{width:21px;height:21px;stroke-width:1.8;flex:none}
+@media(max-width:760px){.po-workspace .po-history-table{min-width:1000px}}
