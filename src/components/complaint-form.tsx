@@ -14,12 +14,12 @@ type ComplaintFormProps = {
 
 // These are shared external facilities, so they deliberately do not belong to
 // a residential block. Keep the labels exactly as staff use them onsite.
-const externalAreas = ["Bungalow XA3/X3", "Futsal", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
+const externalAreas = ["Bungalow XA3/X3", "Futsal", "Car Park", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 
 // Keep the original shared-building locations as well as the external
 // facilities. The external-area change must not remove existing Common Area
 // choices used for complaints inside Blocks A–D.
-const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lobby · Male Toilet", "Lobby · Female Toilet", "Lift", "Staircase", "Utility Room", "Pantry", "Other", ...externalAreas];
+const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lobby · Male Toilet", "Lobby · Female Toilet", "Lift", "Staircase", "Utility Room", "Pantry", "Kitchen Block C", "Kitchen Block D", "Other", ...externalAreas];
 
 export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
   const action = mode === "create" ? createComplaint : reviewComplaint.bind(null, complaint!.id);
@@ -33,7 +33,8 @@ export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
       <label className="field"><span>Location type</span><select value={locationType} onChange={event => setLocationType(event.target.value)}><option value="block">Block</option><option value="external">External Area</option></select></label>
       {locationType === "block" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue={complaint?.block?.id}><option value="">Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
       {locationType === "external" && <label className="field"><span>External Area *</span><select required value={area} onChange={event => setArea(event.target.value)}><option value="">Choose location</option>{externalAreas.map(value => <option key={value}>{value}</option>)}</select></label>}
-      <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
+      <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input list="complaint-block-locations" required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
+      <datalist id="complaint-block-locations">{commonAreaLocations.filter(value => !externalAreas.includes(value)).map(value => <option key={value} value={value}/>)}</datalist>
       <input type="hidden" name="room" value={locationType === "external" ? `${area}${room.trim() ? ` · ${room.trim()}` : ""}` : room}/>
       <input type="hidden" name="category" value={complaint?.category || (locationType === "external" ? "Common Area" : "Room Maintenance")}/>
       <label className="field"><span>Complainant name</span><input name="name" defaultValue={complaint?.complainant_name || ""}/></label>
