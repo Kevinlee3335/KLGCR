@@ -1,0 +1,116 @@
+/* Shared screen-only refinement. Existing brand and status colours are preserved.
+   Scope to the application shell so public portals and printed documents retain
+   their established layout. */
+@media screen {
+  .shell {
+    --ui-radius: 12px;
+    --ui-shadow: 0 2px 5px #30271905, 0 8px 24px #30271907;
+    --ui-focus: 0 0 0 3px #c59a3d24;
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+  }
+  .shell :is(h1,h2,h3) { text-wrap: balance; letter-spacing: -.025em; }
+  .shell :is(.panel,.dashboard-card,.calendar-event-card,.calendar-settings) {
+    border-radius: var(--ui-radius)!important;
+    box-shadow: var(--ui-shadow)!important;
+  }
+  .shell .topbar { box-shadow: 0 1px 8px #30271905; }
+  .shell .topbar h1 { font-weight: 700; letter-spacing: -.02em; }
+  .shell .topbar-label { letter-spacing: .1em; font-size: .65rem; }
+  .shell :is(.button,.button-link,.secondary-button) {
+    min-height: 40px;
+    padding: 0 15px;
+    border-radius: 9px;
+    font-size: .82rem;
+    font-weight: 700;
+    line-height: 1.25;
+    box-shadow: 0 1px 2px #30271912, inset 0 1px 0 #ffffff30;
+    transition: box-shadow .16s ease, border-color .16s ease, filter .16s ease;
+  }
+  .shell :is(.button,.button-link,.secondary-button):hover {
+    transform: none;
+    box-shadow: 0 3px 8px #30271918;
+  }
+  .shell :is(.button,.button-link,.secondary-button):active { box-shadow: inset 0 1px 3px #30271920; }
+  .shell :is(button,a,input,select,textarea,summary):focus-visible {
+    outline: 2px solid var(--gold-dark);
+    outline-offset: 3px;
+  }
+  .shell :is(.button,.button-link,.secondary-button):is(:disabled,[aria-disabled="true"]) {
+    transform: none; box-shadow: none; filter: none; opacity: .55; cursor: not-allowed;
+  }
+  .shell :is(.button,.button-link)[aria-busy="true"] { cursor: progress; }
+  .shell :is(.field,.filter-bar,.inventory-form,.inline-form) :is(input,select,textarea) {
+    border-radius: 9px!important;
+    font-size: .875rem;
+    box-shadow: inset 0 1px 2px #30271904;
+  }
+  .shell :is(input,textarea)::placeholder { color: var(--muted); opacity: .8; }
+  .shell input[type="file"] { max-width: 100%; padding: 6px; }
+  .shell input[type="file"]::file-selector-button {
+    margin-right: 12px; padding: 8px 12px; border: 1px solid var(--premium-line);
+    border-radius: 6px; background: var(--paper); color: var(--ink); font: inherit;
+    font-weight: 600; cursor: pointer;
+  }
+  .shell :is(.filter-bar,.daily-task-search-controls) { gap: 10px; }
+  .shell .filter-bar { padding: 14px; box-shadow: none!important; border-radius: 10px!important; }
+  .shell :is(.table,.dashboard-table) { font-size: .82rem; font-variant-numeric: tabular-nums; }
+  .shell :is(.table,.dashboard-table) th { padding: 12px 14px; line-height: 1.4; font-weight: 700; }
+  .shell :is(.table,.dashboard-table) td { padding: 13px 14px; line-height: 1.45; }
+  .shell :is(.status-badge,.priority-badge,.stock-state,.badge) {
+    box-shadow: none; font-weight: 700!important; font-size: .7rem; line-height: 1.4;
+  }
+  .shell :is(.section-head,.dashboard-section-title) h3 { font-size: 1.05rem; }
+  .shell .dashboard-section-title { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .shell .command-welcome { align-items: center; gap: 16px; margin-bottom: 24px; }
+  .shell .command-welcome h2 { font-size: clamp(1.55rem,2.4vw,2.15rem); font-weight: 700; line-height: 1.2; }
+  .shell .command-time { font-size: .75rem; border-radius: 8px; white-space: nowrap; }
+  .shell .admin-kpis {
+    display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; overflow: visible;
+  }
+  .shell .kpi-card {
+    position: relative; display: grid; grid-template-columns: minmax(0,1fr) 32px;
+    align-items: start; gap: 8px; padding: 18px; min-height: 148px;
+    border-radius: var(--ui-radius); box-shadow: var(--ui-shadow); transition: box-shadow .16s ease;
+  }
+  .shell .kpi-card:hover { transform: none; box-shadow: 0 5px 18px #30271914; }
+  .shell .kpi-card > div { grid-column: 1; grid-row: 1; min-width: 0; }
+  .shell .kpi-icon { grid-column: 2; grid-row: 1; width: 32px; height: 32px; border-radius: 9px; }
+  .shell .kpi-icon svg { width: 17px; height: 17px; }
+  .shell .kpi-title { min-height: 34px; font-size: .75rem; font-weight: 600; line-height: 1.4; }
+  .shell .kpi-card strong { font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+  .shell .kpi-card small { font-size: .68rem; line-height: 1.4; padding-right: 8px; }
+  .shell .kpi-arrow { right: 12px; bottom: 12px; width: 13px; height: 13px; opacity: .45; }
+  .shell .quick-actions { gap: 10px; }
+  .shell .quick-actions a { min-height: 52px; padding: 13px; border-radius: 9px; font-size: .78rem; box-shadow: none; }
+  .shell .quick-actions a:hover { transform: none; box-shadow: 0 2px 8px #3027190c; }
+  .shell .nav :is(a,.admin-nav-group-trigger,summary) { transition: background .16s ease,color .16s ease; }
+  .shell .nav a:hover { transform: none; }
+  .shell .admin-nav-group-links { padding: 8px; border-radius: 10px; }
+  .shell .nav a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--gold); }
+  .shell .nav a { line-height: 1.4; }
+  .shell :is(.success,.error) { border-radius: 9px; font-size: .85rem; line-height: 1.5; }
+}
+@media screen and (min-width: 851px) and (max-width: 1250px) {
+  .shell .admin-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+@media screen and (max-width: 850px) {
+  .shell .admin-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .shell .kpi-card { padding: 14px; min-height: 144px; }
+  .shell :is(.button,.button-link,.secondary-button) { min-height: 44px; }
+  .shell :is(.field,.filter-bar,.inventory-form,.inline-form) :is(input,select,textarea) { font-size: 16px; }
+  .shell .command-welcome { align-items: flex-start; }
+  .shell .command-time { align-self: flex-start; }
+  .shell .quick-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .shell .quick-actions a { min-width: 0; }
+  .shell .mobile-nav { padding-bottom: env(safe-area-inset-bottom,0px); height: calc(68px + env(safe-area-inset-bottom,0px)); }
+}
+@media screen and (max-width: 360px) {
+  .shell .kpi-card { grid-template-columns: minmax(0,1fr); }
+  .shell .kpi-icon { display: none; }
+  .shell .quick-actions { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell *, .shell *::before, .shell *::after { transition: none!important; animation: none!important; scroll-behavior: auto!important; }
+}
