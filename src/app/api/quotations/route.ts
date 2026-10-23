@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {getSessionProfile} from '@/lib/auth';
 import {createClient} from '@/lib/supabase/server';
-import {appendQuotation,initialRegistry,quotationInput,type Registry} from '@/lib/quotations/model';
+import {appendQuotation,customerDirectory,customerInput,saveCustomer,initialRegistry,quotationInput,type Registry} from '@/lib/quotations/model';
 import {z} from 'zod';
 export const dynamic='force-dynamic';
 const reply=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'no-store'}});
@@ -18,13 +18,25 @@ async function load(){
  if(result.error||!result.data)throw Error('Unable to load quotations');
  return result.data.value as Registry;
 }
-export async function GET(){if(!await authorized())return reply({error:'Access denied'},403);try{return reply(await load())}catch{return reply({error:'Unable to load quotations. Please try again.'},503)}}
+export async function GET(){if(!await authorized())return reply({error:'Access denied'},403);try{const registry=await load();return reply({...registry,customers:customerDirectory(registry)})}catch{return reply({error:'Unable to load quotations. Please try again.'},503)}}
 export async function POST(req:NextRequest){
  const p=await authorized();if(!p)return reply({error:'Access denied'},403);
  if(req.headers.get('origin')!==req.nextUrl.origin)return reply({error:'Invalid origin'},403);
  const raw=await req.text();if(Buffer.byteLength(raw)>250000)return reply({error:'Quotation too large'},413);
  try{
-  const {input,id}=z.object({input:quotationInput,id:z.string().uuid()}).parse(JSON.parse(raw));
+  const body=JSON.parse(raw);
+  if(body.action==='saveCustomer'){
+   const {customer,id}=z.object({customer:customerInput,id:z.string().min(1).max(150)}).parse(body);
+   const db=await createClient();
+   for(let attempt=0;attempt<5;attempt++){
+    const registry=await load(),next=saveCustomer(registry,customer,id);
+    const result=await db.from('quotation_registry').update({value:next,updated_at:new Date().toISOString()}).eq('id',1).eq('value->>revision',String(registry.revision)).select('id').maybeSingle();
+    if(result.error)throw Error('Unable to save customer');
+    if(result.data)return reply({customers:customerDirectory(next)});
+   }
+   return reply({error:'Customer could not be saved. Please retry.'},409);
+  }
+  const {input,id}=z.object({input:quotationInput,id:z.string().uuid()}).parse(body);
   const db=await createClient();
   for(let attempt=0;attempt<5;attempt++){
    const registry=await load(),existing=registry.quotes.find(q=>q.id===id);

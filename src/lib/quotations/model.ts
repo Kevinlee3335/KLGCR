@@ -10,7 +10,25 @@ export const quotationInput = z.object({
 });
 export type QuotationInput = z.infer<typeof quotationInput>;
 export type Quotation = QuotationInput & { id: string; number: string; createdBy: string; createdAt: string };
-export type Registry = { revision: number; counters: Record<string, number>; quotes: Quotation[] };
+export const customerInput = quotationInput.pick({customer:true,address:true,attention:true,phone:true,email:true});
+export type Customer = z.infer<typeof customerInput> & {id:string};
+export type Registry = { revision: number; counters: Record<string, number>; quotes: Quotation[]; customers?:Customer[] };
+const customerKey=(name:string)=>name.trim().replace(/\s+/g,' ').toLowerCase();
+export function customerDirectory(registry:Registry):Customer[]{
+ if(registry.customers)return [...registry.customers].sort((a,b)=>a.customer.localeCompare(b.customer));
+ const customers:Customer[]=[];
+ for(const q of [...registry.quotes].reverse()){
+  const data=customerInput.parse(q),index=customers.findIndex(c=>customerKey(c.customer)===customerKey(q.customer));
+  if(index>=0)customers[index]={...data,id:customers[index].id};else customers.push({...data,id:'customer-'+q.id});
+ }
+ return customers.sort((a,b)=>a.customer.localeCompare(b.customer));
+}
+export function saveCustomer(registry:Registry,data:z.infer<typeof customerInput>,id:string):Registry{
+ const customers=customerDirectory(registry),index=customers.findIndex(c=>c.id===id||customerKey(c.customer)===customerKey(data.customer));
+ const customer={...data,customer:data.customer.trim(),id:index>=0?customers[index].id:id};
+ if(index>=0)customers[index]=customer;else customers.push(customer);
+ return {...registry,revision:registry.revision+1,customers};
+}
 export const lineAmount = (item: QuotationInput['items'][number]) => Math.round((item.quantity * item.price + Number.EPSILON) * 100) / 100;
 export const totalAmount = (q: QuotationInput) => Math.round(q.items.reduce((n, i) => n + lineAmount(i), 0) * 100) / 100;
 export function blankQuotation(): QuotationInput {
@@ -24,5 +42,6 @@ export function appendQuotation(registry: Registry, input: QuotationInput, id: s
   const period=input.date.slice(0,7), next=(registry.counters[period]??0)+1;
   if(next>9999)throw Error('Monthly quotation number limit reached');
   const number=period.slice(2).replace('-','')+'-'+String(next).padStart(4,'0');
-  return {revision:registry.revision+1,counters:{...registry.counters,[period]:next},quotes:[{...input,id,number,createdBy,createdAt:new Date().toISOString()},...registry.quotes]};
+  const withCustomer=saveCustomer(registry,customerInput.parse(input),'customer-'+id);
+  return {...withCustomer,counters:{...registry.counters,[period]:next},quotes:[{...input,id,number,createdBy,createdAt:new Date().toISOString()},...registry.quotes]};
 }

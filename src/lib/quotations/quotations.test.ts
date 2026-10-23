@@ -1,7 +1,16 @@
 import {describe,it,expect} from 'vitest';
-import {appendQuotation,blankQuotation,initialRegistry,totalAmount,quotationInput} from './model';
+import {appendQuotation,blankQuotation,customerDirectory,customerInput,saveCustomer,initialRegistry,totalAmount,quotationInput} from './model';
 import {quotationPrintHtml} from './print';
 describe('quotation register',()=>{
+ it('automatically saves customers without consuming quotation numbers and keeps old quotes unchanged',()=>{
+  const initial=initialRegistry(),data=customerInput.parse(initial.quotes[0]);
+  expect(customerDirectory(initial)[0].customer).toBe('UTMSPACE');
+  let r=saveCustomer(initial,{...data,customer:'New Company',phone:'0123456789'},'new-customer');
+  r=saveCustomer(r,{...data,customer:'New Company',phone:'0199999999'},'new-customer');
+  expect(customerDirectory(r)).toHaveLength(2);expect(customerDirectory(r).find(c=>c.customer==='New Company')?.phone).toBe('0199999999');
+  expect(r.counters).toEqual(initial.counters);expect(r.quotes).toEqual(initial.quotes);
+  r=saveCustomer(r,{...data,customer:'Renamed Company'},'new-customer');expect(customerDirectory(r)).toHaveLength(2);expect(customerDirectory(r).some(c=>c.customer==='New Company')).toBe(false);
+ });
  it('retains the original and starts the next October quotation at 0002',()=>{
   const initial=initialRegistry();expect(initial.quotes[0].number).toBe('2610-0001');expect(totalAmount(initial.quotes[0])).toBe(1000);
   const next=appendQuotation(initial,{...initial.quotes[0],date:'2026-10-23'},'next','Kevin');expect(next.quotes[0].number).toBe('2610-0002');expect(next.quotes[1]).toEqual(initial.quotes[0]);

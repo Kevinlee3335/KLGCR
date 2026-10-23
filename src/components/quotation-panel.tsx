@@ -1,13 +1,29 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {blankQuotation,lineAmount,quotationInput,totalAmount,type Quotation,type QuotationInput} from '@/lib/quotations/model';
+import {blankQuotation,lineAmount,quotationInput,totalAmount,type Customer,type Quotation,type QuotationInput} from '@/lib/quotations/model';
 import {quotationPrintHtml} from '@/lib/quotations/print';
 
 export function QuotationPanel(){
  const [quotes,setQuotes]=useState<Quotation[]>([]),[input,setInput]=useState(blankQuotation),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[selected,setSelected]=useState<Quotation|null>(null);
  const requestId=useRef('');
- async function reload(){try{const r=await fetch('/api/quotations',{cache:'no-store'}),j=await r.json();if(!r.ok)throw Error(j.error);setQuotes(j.quotes);setLoaded(true)}catch(e){setMessage(e instanceof Error?e.message:'Unable to load quotations')}}
+ const customerId=useRef(''),customerQueue=useRef<Promise<void>>(Promise.resolve());
+ const [customers,setCustomers]=useState<Customer[]>([]),[customerSearch,setCustomerSearch]=useState(''),[customerStatus,setCustomerStatus]=useState(''),[retryCustomer,setRetryCustomer]=useState(0);
+ async function reload(){try{const r=await fetch('/api/quotations',{cache:'no-store'}),j=await r.json();if(!r.ok)throw Error(j.error);setQuotes(j.quotes);setCustomers(j.customers??[]);setLoaded(true)}catch(e){setMessage(e instanceof Error?e.message:'Unable to load quotations')}}
  useEffect(()=>{void reload()},[]);
+ const customerData=JSON.stringify({customer:input.customer,address:input.address,attention:input.attention,phone:input.phone,email:input.email});
+ useEffect(()=>{
+  if(!loaded||selected||!input.customer.trim())return;
+  let active=true;
+  setCustomerStatus('Saving customer…');
+  const timer=setTimeout(()=>{
+   if(!customerId.current)customerId.current=crypto.randomUUID();
+   const id=customerId.current;
+   customerQueue.current=customerQueue.current.catch(()=>{}).then(async()=>{
+    try{const r=await fetch('/api/quotations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'saveCustomer',id,customer:JSON.parse(customerData)})}),j=await r.json();if(!r.ok)throw Error(j.error);if(active){setCustomers(j.customers);setCustomerStatus('Customer saved automatically')}}catch{if(active)setCustomerStatus('Customer not saved — please retry')}
+   });
+  },1000);
+  return ()=>{active=false;clearTimeout(timer)};
+ },[customerData,loaded,selected,input.customer,retryCustomer]);
  function change<K extends keyof QuotationInput>(key:K,value:QuotationInput[K]){setInput(v=>({...v,[key]:value}));setMessage('')}
  function print(q:Quotation){const w=window.open('','_blank');if(!w){setMessage('Please allow the print preview window.');return}w.opener=null;w.document.open();w.document.write(quotationPrintHtml(q));w.document.close()}
  async function save(){
@@ -15,12 +31,13 @@ export function QuotationPanel(){
   setBusy(true);setMessage('');if(!requestId.current)requestId.current=crypto.randomUUID();
   try{const r=await fetch('/api/quotations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:requestId.current,input:parsed.data})}),j=await r.json();if(!r.ok)throw Error(j.error);setSelected(j.quote);setQuotes(v=>[j.quote,...v.filter(q=>q.id!==j.quote.id)]);setMessage('Saved successfully — QT '+j.quote.number)}catch(e){setMessage(e instanceof Error?e.message:'Unable to save quotation')}finally{setBusy(false)}
  }
- function newQuote(){if(!selected&&input.customer&&!window.confirm('Start a new quotation and discard this unsaved form?'))return;setSelected(null);setInput(blankQuotation());requestId.current='';setMessage('')}
+ function newQuote(){if(!selected&&input.customer&&!window.confirm('Start a new quotation and discard this unsaved form?'))return;setSelected(null);setInput(blankQuotation());requestId.current='';customerId.current='';setCustomerStatus('');setMessage('')}
  const field=(label:string,key:Exclude<keyof QuotationInput,'items'>,multiline=false)=><label key={key}>{label}{multiline?<textarea rows={3} value={input[key]} disabled={busy||!!selected} onChange={e=>change(key,e.target.value)}/>:<input type={key==='date'?'date':'text'} value={input[key]} disabled={busy||!!selected} onChange={e=>change(key,e.target.value)}/>}</label>;
  return <div className="billing-module quotation-module"><style>{`.quotation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.quotation-module label{display:flex;flex-direction:column;gap:5px;font-size:13px}.quotation-module input,.quotation-module textarea{width:100%;min-width:0;padding:9px;border:1px solid #d9e1e8;border-radius:7px;font:inherit}.quotation-module textarea{resize:vertical}.quotation-items{min-width:680px;width:100%;border-collapse:collapse}.quotation-items td,.quotation-items th{padding:7px;text-align:left}.quotation-items th{font-size:12px}.quotation-items .description{width:36%}.quotation-items input{padding:7px}.quotation-module .billing-toolbar{gap:8px}.quotation-total{text-align:right;font-size:20px;font-weight:700}.quotation-module .billing-history{gap:12px}@media(max-width:640px){.quotation-grid{grid-template-columns:1fr}}`}</style>
   <div className="billing-hero"><div><span className="billing-eyebrow">KLG CAMPUS RESIDENCE</span><h2>Quotations</h2><p>Manual customer and item entry · Monthly running numbers · Letterhead printing</p></div><button className="button" disabled={busy} onClick={newQuote}>New Quotation</button></div>
   {message&&<p className="billing-message" role="status">{message}</p>}
   <section className="billing-card"><h3>{selected?'QT '+selected.number:'New quotation'}</h3><p className="subtle">{selected?'Saved quotation. You can reopen and print this record any time.':'A number is assigned when saved. The original QT 2610-0001 is retained.'}</p>
+   {!selected&&<div style={{padding:16,background:'#f3f6fa',borderRadius:10,marginBottom:18}}><div className="quotation-grid"><label>Search saved customers<input value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Company, contact, phone or email"/></label><label>Select customer<select style={{padding:10,border:'1px solid #d9e1e8',borderRadius:7}} value="" disabled={busy||!loaded} onChange={e=>{const c=customers.find(v=>v.id===e.target.value);if(!c)return;customerId.current=c.id;setInput(v=>({...v,customer:c.customer,address:c.address,attention:c.attention,phone:c.phone,email:c.email}));setCustomerStatus('Customer details loaded')}}><option value="">Choose an existing customer…</option>{customers.filter(c=>(c.customer+' '+c.attention+' '+c.phone+' '+c.email).toLowerCase().includes(customerSearch.toLowerCase())).map(c=><option key={c.id} value={c.id}>{c.customer}{c.attention?' · '+c.attention:''}</option>)}</select></label></div><p className="subtle">Choose a saved customer, or enter a new customer below. Customer details save automatically.</p><small role="status">{customerStatus}</small>{customerStatus.includes('not saved')&&<button className="button secondary-button" onClick={()=>setRetryCustomer(v=>v+1)}>Retry customer save</button>}</div>}
    <div className="quotation-grid">{field('Quotation date','date')}{field('Customer / company name','customer')}{field('Address','address',true)}{field('Attention','attention')}{field('Mobile / fax number','phone')}{field('Email','email')}{field('Salutation','salutation')}{field('Introduction','introduction',true)}</div>
   </section>
   <section className="billing-card"><h3>Items</h3>{field('Quantity column heading','quantityHeading')}
