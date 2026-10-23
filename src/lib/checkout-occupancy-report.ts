@@ -1,0 +1,8 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+export type OccupancyRow = {id:string;room_no:string;ready_at:string;occupancy_pax:number|null;block:{code:string}|null};
+export function malaysiaDate(now=new Date()) {return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);}
+export function reportDate(value:string) {if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;const d=new Date(`${value}T00:00:00Z`);return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value?value:null;}
+export function reportBounds(date:string){if(!reportDate(date))throw new Error('Invalid report date');const start=new Date(`${date}T00:00:00+08:00`);return {start:start.toISOString(),end:new Date(start.getTime()+86400000).toISOString()};}
+export function displayReportDate(date:string){return date.split('-').reverse().join('/');}
+export function occupancyRoom(row:OccupancyRow){const room=row.room_no.toUpperCase().replace(/[^A-Z0-9]/g,'');return /^[A-D]/.test(room)?room:`${row.block?.code||''}${room}`;}
+export async function loadOccupancyReport(db:SupabaseClient,date:string){const {start,end}=reportBounds(date);const rows:OccupancyRow[]=[];for(let offset=0;;offset+=1000){const {data,error}=await db.from('checkout_rooms').select('id,room_no,ready_at,occupancy_pax,block:blocks!block_id(code)').eq('status','ready_for_occupancy').gte('ready_at',start).lt('ready_at',end).order('id').range(offset,offset+999);if(error)throw new Error('Unable to load occupancy report. Please try again.');rows.push(...data as unknown as OccupancyRow[]);if(data.length<1000)break;}return rows.sort((a,b)=>occupancyRoom(a).localeCompare(occupancyRoom(b),undefined,{numeric:true}));}
