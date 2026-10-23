@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowRight, Boxes, CheckCircle2, ClipboardCheck,
@@ -62,7 +63,14 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
       <div><p className="eyebrow">Operations Command Centre</p><h2>{greeting}, {name.toUpperCase()}</h2><p className="subtle">{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now)}</p></div>
       <div className="command-time"><Clock3 size={17}/><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit", hour12: true }).format(now)} MYT</span></div>
     </section>
-    <section className="admin-kpis" aria-label="Operational summary">{kpis.map(({ icon: Icon, ...kpi }) => <Link className={`kpi-card kpi-${kpi.tone}`} href={kpi.href} key={kpi.title}><span className="kpi-icon"><Icon size={20}/></span><div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0}}><span className="kpi-title" style={{display:"block"}}>{kpi.title}</span><strong style={{display:"block",fontSize:"1.8rem",lineHeight:1.1,marginTop:"5px"}}>{kpi.value}</strong><small style={{display:"block",marginTop:"5px"}}>{kpi.subtitle}</small></div><ArrowRight className="kpi-arrow" size={16}/></Link>)}</section>
+    <div className="dashboard-summary-groups">{[
+      {title:"Today at a glance",subtitle:"Today's intake, work and appointments",items:["Today's Complaints","Today's Jobs","Completed Today","Today's Appointments"]},
+      {title:"Action & follow-up",subtitle:"Items requiring review or continued attention",items:["New Complaints","Tenant Not Available","Pending Material","Under Monitoring","In Progress"]},
+      {title:"Evidence & records",subtitle:"Completed work documentation",items:["Completion Photos"]},
+    ].map(group=><section className="dashboard-summary-group" key={group.title} aria-label={group.title}>
+      <div className="summary-group-heading"><h3>{group.title}</h3><span>{group.subtitle}</span></div>
+      <div className="admin-kpis" style={{"--summary-columns":Math.min(group.items.length,5)} as CSSProperties}>{group.items.map(title=>kpis.find(kpi=>kpi.title===title)!).map(({icon:Icon,...kpi})=><Link className={`kpi-card kpi-${kpi.tone}`} href={kpi.href} key={kpi.title}><span className="kpi-icon"><Icon size={20}/></span><div><span className="kpi-title">{kpi.title}</span><strong>{kpi.value ?? 0}</strong><small>{kpi.subtitle}</small></div><ArrowRight className="kpi-arrow" size={16}/></Link>)}</div>
+    </section>)}</div>
     {data.tenantNoShows.length > 0 && <section className="tenant-dashboard-alert" aria-label="Tenant not available alerts">
       <div className="tenant-alert-heading">
         <span className="tenant-alert-icon"><UserX size={22}/></span>

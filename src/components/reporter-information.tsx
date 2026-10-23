@@ -1,4 +1,6 @@
+import { RecordFacts } from "./record-facts";
 type ReporterInformationProps = {
+  compact?: boolean;
   name?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -23,7 +25,15 @@ function formatAvailabilityTime(value: string) {
   });
 }
 
-export function ReporterInformation({ name, phone, email, availabilityDate, availabilityTime, roomAccessPermission }: ReporterInformationProps) {
+export function ReporterInformation({ name, phone, email, availabilityDate, availabilityTime, roomAccessPermission, compact = false }: ReporterInformationProps) {
+  if (compact) return <RecordFacts title="Reporter Information" facts={[
+    { label: "Reporter Name", value: name || "—" },
+    { label: "Phone", value: phone || "—" },
+    ...(email ? [{ label: "Email", value: email }] : []),
+    ...(availabilityDate ? [{ label: "Preferred Availability Date", value: formatAvailabilityDate(availabilityDate) }] : []),
+    ...(availabilityTime ? [{ label: "Preferred Availability Time", value: formatAvailabilityTime(availabilityTime) }] : []),
+    ...(roomAccessPermission ? [{ label: "Room Access Permission", value: roomAccessPermission.toUpperCase() }] : []),
+  ]}/>;
   return <section className="panel detail-grid" style={{marginBottom:18}}>
     <div className="field-wide"><h3>Reporter Information</h3></div>
     {name && <div><span>Reporter Name</span><strong>{name}</strong></div>}
