@@ -19,10 +19,10 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
  const q = (search.q || "").replace(/[^\p{L}\p{N}@.\s-]/gu,"").slice(0,100);
  const today = malaysiaDay();
  const db = createAdminClient();
- let query = db.from("memberships").select("id,full_name,email,room_no,member_type,status,created_at,expires_on",{count:"exact"}).order("created_at",{ascending:false});
+ let query = db.from("memberships").select("id,full_name,email,room_no,member_type,status,created_at,starts_on,expires_on",{count:"exact"}).order("created_at",{ascending:false});
  if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,room_no.ilike.%${q}%`);
  if (search.status === "block") query = query.or(`status.eq.cancelled,status.eq.suspended,and(status.eq.active,expires_on.lt.${today})`);
- else if (search.status === "active") query = query.eq("status","active").gte("expires_on",today);
+ else if (search.status === "active") query = query.eq("status","active").gte("expires_on",today).or(`starts_on.is.null,starts_on.lte.${today}`);
  else if (["pending","cancelled","suspended"].includes(search.status || "")) query = query.eq("status",search.status!);
  const [members, pending, emails] = await Promise.all([
   query.range((page-1)*50,page*50-1),
@@ -46,7 +46,7 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
   return {...request,receiptUrl:data?.signedUrl};
  }));
  const selected = search.id && /^[a-f0-9-]{36}$/.test(search.id) ? search.id : null;
- const detail = selected ? await db.from("memberships").select("full_name,email,id_type,identification,gender,nationality,room_no,student_id,address,member_type,status,expires_on,photo_path,emergency_contact,emergency_relationship,access_card_path,member_number").eq("id",selected).maybeSingle() : null;
+ const detail = selected ? await db.from("memberships").select("full_name,email,id_type,identification,gender,nationality,room_no,student_id,address,member_type,status,starts_on,expires_on,photo_path,emergency_contact,emergency_relationship,access_card_path,member_number").eq("id",selected).maybeSingle() : null;
  const {data:detailPhoto}=detail?.data?.photo_path ? await db.storage.from("membership-photos").createSignedUrl(detail.data.photo_path,300) : {data:null};
  const {data:detailCard}=detail?.data?.access_card_path ? await db.storage.from("membership-photos").createSignedUrl(detail.data.access_card_path,300) : {data:null};
  const history = selected ? await db.from("membership_activity").select("id,event,created_at,actor_id,details").eq("member_id",selected).order("created_at",{ascending:false}).limit(100) : null;
@@ -81,7 +81,7 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
    <div className="member-profile-layout"><aside className="member-identity">
     {detailPhoto?.signedUrl ? <a href={detailPhoto.signedUrl} target="_blank" rel="noreferrer"><img className="member-portrait" src={detailPhoto.signedUrl} alt={`Personal photo of ${detail.data.full_name}`}/></a> : <div className="member-portrait member-portrait-empty"><strong>{detail.data.full_name.split(/\s+/).map((part:string)=>part[0]).slice(0,2).join("")}</strong><span>No photo uploaded</span></div>}
     <span className={`member-state member-state-${detail.data.status}`}>{memberStatus(detail.data,today)}</span>
-    <p>{detail.data.member_type==="outsider" ? "Non Residence" : "Residence tenant"}</p><small>Valid until</small><strong>{detail.data.expires_on ? new Date(detail.data.expires_on+"T00:00:00+08:00").toLocaleDateString("en-MY",{day:"numeric",month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"}) : "Not activated"}</strong>
+    <p>{detail.data.member_type==="outsider" ? "Non Residence" : "Residence tenant"}</p><small>Valid from</small><strong>{detail.data.starts_on || "—"}</strong><small>Valid until</small><strong>{detail.data.expires_on ? new Date(detail.data.expires_on+"T00:00:00+08:00").toLocaleDateString("en-MY",{day:"numeric",month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"}) : "Not activated"}</strong>
    </aside><div className="member-profile-info"><h3>Personal information</h3><dl className="member-info-grid">{[
     ["Full name",detail.data.full_name],["Email address",detail.data.email],["Identification type",detail.data.id_type],["IC / Passport number",detail.data.identification],["Gender",detail.data.gender],["Nationality",detail.data.nationality],["Student ID",detail.data.student_id],[detail.data.member_type === "resident" ? "ROOM NO" : "Address",detail.data.member_type === "resident" ? detail.data.room_no : detail.data.address||detail.data.room_no],["Member number",detail.data.member_number],
    ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl>

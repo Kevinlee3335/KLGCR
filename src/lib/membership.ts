@@ -46,7 +46,8 @@ export function nextPeriod(expiry: string | null, today = malaysiaDay()) {
   const date = new Date(`${expiry}T12:00:00Z`);
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
 }
-export function memberStatus(member: { status: string; expires_on: string | null }, today = malaysiaDay()) {
+export function memberStatus(member: { status: string; expires_on: string | null; starts_on?: string | null }, today = malaysiaDay()) {
+  if (member.status === "active" && member.starts_on && member.starts_on > today) return `Approved — starts ${member.starts_on}`;
   if (member.status === "active" && member.expires_on && member.expires_on < today) return "Expired — block access card";
   return member.status.replaceAll("_", " ");
 }
@@ -66,4 +67,8 @@ export function memberLink(token: string) { return `${appOrigin()}/membership/ma
 
 export function membershipEmailConfigured() {
  return Boolean((process.env.KLGCR_GMAIL_WEB_APP_URL && process.env.KLGCR_GMAIL_WEB_APP_SECRET) || (process.env.KLGCR_EMAIL_ENABLED === "true" && process.env.RESEND_API_KEY && process.env.KLGCR_EMAIL_FROM));
+}
+
+export function registrationPeriod(today=malaysiaDay()) {
+ return today >= '2026-10-23' && today <= '2026-10-31' ? '2026-11-01' : today.slice(0,7)+'-01';
 }

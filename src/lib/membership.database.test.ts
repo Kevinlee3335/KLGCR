@@ -204,3 +204,33 @@ it('restores source receipt numbers and audits authorized manual changes with st
  await db.exec('reset role');
  }
 });
+it('records manual RM10 deposits once with receipt and Admin audit, without creating a member payment',async()=>{
+ await db.exec(readFileSync('supabase/migrations/20261023063722_membership_manual_deposit_rows.sql','utf8'));
+ const id='60000000-0000-4000-8000-000000000001';
+ const before=(await db.query('select id from membership_payments')).rows.length;
+ const add=(actor:string)=>db.query("select add_membership_deposit_entry($1,$2,'2026-10-23','Deposit Member','KLGCR / D100','B111')",[id,actor]);
+ await expect(add(staff)).rejects.toThrow('Admin');await add(admin);await add(admin);
+ const rows=(await db.query('select source,amount,kind,receipt_no,created_by from membership_payment_ledger where id=$1',[id])).rows;
+ expect(rows).toEqual([{source:'manual',amount:'10.00',kind:'access_card_deposit',receipt_no:'KLGCR / D100',created_by:admin}]);
+ expect((await db.query('select id from membership_payments')).rows).toHaveLength(before);
+ await expect(db.query("select add_membership_deposit_entry(gen_random_uuid(),$1,'2026-10-23','Name','','')",[admin])).rejects.toThrow('Invalid');
+ await db.exec('set role anon');await expect(add(admin)).rejects.toThrow('permission denied');await db.exec('reset role');
+});
+it('assigns the October transition to November only, and approval sets its start and expiry dates',async()=>{
+ await db.exec(readFileSync('supabase/migrations/20261020082437_membership_access_card_photo.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261023063723_membership_november_transition.sql','utf8'));
+ for(const [date,period] of [['2026-10-22T15:59:59Z','2026-10-01'],['2026-10-22T16:00:00Z','2026-11-01'],['2026-10-31T15:59:59Z','2026-11-01'],['2026-10-31T16:00:00Z','2026-11-01'],['2027-10-23T00:00:00Z','2027-10-01']]){
+ expect((await db.query<{p:string}>('select membership_registration_period($1)::text p',[date])).rows[0].p).toBe(period);
+ }
+ const mid='60000000-0000-4000-8000-000000000002';
+ const input={id:mid,full_name:'November Member',email:'nov@example.com',member_type:'resident',id_type:'IC',identification:'november-123',gender:'Male',nationality:'Malaysia',room_no:'A421',student_id:'123',address:'UTM',emergency_contact:'+60123456789',emergency_relationship:'Parent',photo_path:mid+'/photo.jpg',token_hash:'nov-hash',token_ciphertext:'encrypted',declaration_accepted:true,declaration_version:'2026-10-17-v1',declaration_clauses:['a','b','c','d']};
+ await db.query('select register_membership($1,$2)',[JSON.stringify(input),'private/nov.pdf']);
+ const row=(await db.query<{id:string;period:string}>('select id,period_start::text period from membership_payments where member_id=$1',[mid])).rows[0];
+ const expected=(await db.query<{p:string}>('select membership_registration_period(now())::text p')).rows[0].p;
+ expect(row.period).toBe(expected);
+ await db.query('select review_membership_payment($1,$2,true,null)',[row.id,admin]);
+ const approved=(await db.query<{start:string;expiry:string}>('select starts_on::text start,expires_on::text expiry from memberships where id=$1',[mid])).rows[0];
+ expect(approved.start).toBe(expected);
+ expect(approved.expiry).toBe((await db.query<{e:string}>("select ($1::date+interval '1 month'-interval '1 day')::date::text e",[expected])).rows[0].e);
+ expect((await db.query<{p:string}>("select period_start::text p from membership_emails where member_id=$1 and kind='approved'",[mid])).rows[0].p).toBe(expected);
+});

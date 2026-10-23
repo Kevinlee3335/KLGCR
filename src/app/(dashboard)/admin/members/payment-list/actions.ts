@@ -25,3 +25,13 @@ export async function deletePaymentListEntry(form:FormData):Promise<{success?:bo
  revalidatePath('/admin/members/committee-reports');
  return {success:true};
 }
+export async function addDepositEntry(form:FormData):Promise<{success?:boolean;error?:string}>{
+ const profile=await requireRole(['admin']);
+ if(!membershipEnabled())return {error:'Membership is not enabled.'};
+ const id=String(form.get('id')||''),date=String(form.get('date')||''),name=String(form.get('name')||'').trim(),receipt=String(form.get('receipt')||'').trim(),reference=String(form.get('reference')||'').trim();
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!name||name.length>200||!receipt||receipt.length>100||reference.length>100||/[\u0000-\u001f\u007f]/.test(name+receipt+reference))return {error:'Enter a date, name and receipt number.'};
+ const {error}=await createAdminClient().rpc('add_membership_deposit_entry',{p_id:id,p_actor:profile.id,p_date:date,p_name:name,p_receipt:receipt,p_reference:reference});
+ if(error)return {error:'Unable to save deposit. Please check the details and try again.'};
+ revalidatePath('/admin/members/payment-list');
+ return {success:true};
+}
