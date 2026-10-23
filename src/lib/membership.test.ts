@@ -61,3 +61,7 @@ it('only permits optional receipt testing in preview or local development',()=>{
  vi.stubEnv('VERCEL_ENV','production');
  expect(receiptOptionalForTesting()).toBe(false);
 });
+it('shows future approved memberships as starting later rather than already active',()=>{
+ expect(memberStatus({status:'active',starts_on:'2026-11-01',expires_on:'2026-11-30'},'2026-10-31')).toContain('starts 2026-11-01');
+ expect(memberStatus({status:'active',starts_on:'2026-11-01',expires_on:'2026-11-30'},'2026-11-01')).toBe('active');
+});

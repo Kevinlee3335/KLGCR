@@ -14,6 +14,9 @@ beforeAll(async()=>{
  insert into public.memberships values('${actor}','Original Name');`);
  await db.exec(readFileSync('supabase/migrations/20261022091513_membership_committee_reports.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261022092557_committee_zero_collection_months.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261023041910_committee_excel_sources_and_first_day_close.sql','utf8'));
+ await db.exec("create table public.membership_payment_ledger(id uuid primary key,payment_id uuid,source text,collected_on date,full_name text);");
+ await db.exec(readFileSync('supabase/migrations/20261023044541_membership_payment_list_delete.sql','utf8'));
  month=(await db.query<{m:string}>("select (date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')-interval '1 month')::date::text m")).rows[0].m;
 },30000);
 afterAll(()=>db.close());
@@ -55,4 +58,35 @@ it('calculates the RM1,000 boundary and RM3,000 cap in the database',async()=>{
  const row=(await db.query<{remuneration:string}>('select remuneration from membership_committee_reports where month=$1',[period])).rows[0];
  expect(Number(row.remuneration)).toBe(payable);
  }
+});
+
+it('merges imported rows with new approvals while keeping the open month unprinted',async()=>{
+ const m=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
+ await db.query("insert into membership_committee_sources(month,entries,source_file,source_sha256) values($1,$2,'October.xlsx','sha')",[m,JSON.stringify([{member_id:'legacy:1',full_name:'Imported Member',amount:40,payments:[]}])]);
+ const initial=(await db.query<{r:{total_amount:number}}>('select preview_membership_committee_report($1) r',[m])).rows[0].r;
+ await db.query("insert into membership_payments values(gen_random_uuid(),$1,'renewal',40,'approved',($2::timestamp+interval '2 days') at time zone 'Asia/Kuala_Lumpur',$2::date)",[actor,m]);
+ const next=(await db.query<{r:{total_amount:number;entries:{full_name:string}[]}}>('select preview_membership_committee_report($1) r',[m])).rows[0].r;
+ expect(next.total_amount).toBe(initial.total_amount+40);
+ expect(next.entries.some(e=>e.full_name==='Imported Member')).toBe(true);
+ await expect(db.query('select save_membership_committee_report($1,null)',[m])).rejects.toThrow('completed');
+ expect((await db.query('select * from membership_committee_reports where month=$1',[m])).rows).toHaveLength(0);
+});
+
+it('only admins can delete a list entry and deleted payments leave live reports but preserve saved reports',async()=>{
+ const m=(await db.query<{m:string}>("select date_trunc('month',now() at time zone 'Asia/Kuala_Lumpur')::date::text m")).rows[0].m;
+ const payment='00000000-0000-4000-8000-000000000090',ledger='00000000-0000-4000-8000-000000000091';
+ await db.query("insert into membership_payments values($1,$2,'renewal',40,'approved',($3::timestamp+interval '3 days') at time zone 'Asia/Kuala_Lumpur',$3::date)",[payment,actor,m]);
+ await db.query("insert into membership_payment_ledger(id,payment_id,source,collected_on,full_name) values($1,$2,'system',$3,'Test')",[ledger,payment,m]);
+ const before=(await db.query<{r:{total_amount:number}}>('select preview_membership_committee_report($1) r',[m])).rows[0].r;
+ await expect(db.query('select delete_membership_payment_list_entry($1,$2)',[ledger,null])).rejects.toThrow('Admin');
+ await db.query('select delete_membership_payment_list_entry($1,$2)',[ledger,actor]);
+ await db.query('select delete_membership_payment_list_entry($1,$2)',[ledger,actor]);
+ const after=(await db.query<{r:{total_amount:number}}>('select preview_membership_committee_report($1) r',[m])).rows[0].r;
+ expect(after.total_amount).toBe(before.total_amount-40);
+ expect((await db.query('select * from membership_payment_ledger where deleted_at is null and id=$1',[ledger])).rows).toHaveLength(0);
+ expect((await db.query('select * from membership_payments where id=$1',[payment])).rows).toHaveLength(1);
+ expect((await db.query<{deleted_by:string}>('select deleted_by from membership_payment_ledger where id=$1',[ledger])).rows[0].deleted_by).toBe(actor);
+ await db.exec('set role anon');
+ await expect(db.query('select delete_membership_payment_list_entry($1,$2)',[ledger,actor])).rejects.toThrow('permission denied');
+ await db.exec('reset role');
 });

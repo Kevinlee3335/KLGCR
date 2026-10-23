@@ -28,7 +28,9 @@ export function renderCommitteeReport(report:CommitteeReport, printable=true) {
  let index=0;
  const pages=chunks.map((entries,page)=>{
   const first=page===0,last=page===chunks.length-1;
-  const header=rows(first?template.first:template.continued,{'C1':`SPORTS CLUB COMMITTEE FEES - ${label}`,'C4':`AMOUNT PAYABLE TO SPORTS COMMITTEE : RM ${money(report.remuneration)}`,'C52':`AMOUNT PAYABLE TO SPORTS COMMITTEE : RM ${money(report.remuneration)}`,'L13':`${label}\n(MYR)`,'L61':`${label}\n(MYR)`});
+  // Continuation pages begin at the list header; payment terms appear only on page one.
+  const continuation=template.continued.slice(template.continued.findIndex(row=>row.cells.some(cell=>cell.ref==="C61")));
+  const header=rows(first?template.first:continuation,{'A61':'','C1':`SPORTS CLUB COMMITTEE FEES - ${label}`,'C4':`AMOUNT PAYABLE TO SPORTS COMMITTEE : RM ${money(report.remuneration)}`,'C52':`AMOUNT PAYABLE TO SPORTS COMMITTEE : RM ${money(report.remuneration)}`,'L13':`${label}\n(MYR)`,'L61':`${label}\n(MYR)`});
   const count=last?Math.max(entries.length,first?0:24):36;
   const body=Array.from({length:count},(_,i)=>{
    const entry=entries[i];
