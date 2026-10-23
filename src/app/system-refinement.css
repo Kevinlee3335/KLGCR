@@ -245,41 +245,19 @@
   .compact-record-page .record-action > :not(summary) { margin-left: 12px; margin-right: 12px; }
   .compact-record-page .assignment-submit { min-width: 0; width: 100%; }
 }
-/* Case workspace: information and actions visible together, without accordions. */
-@media screen {
-  .case-workspace { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(340px,1fr); gap: 14px; align-items: start; }
-  .case-workspace > * { min-width: 0; margin-bottom: 0!important; }
-  .case-workspace > :is(.section-head,.success,.error,.workflow-notice,.record-history,.case-defects) { grid-column: 1/-1; }
-  .case-workspace > .case-primary { grid-column: 1; grid-row: auto; }
-  .case-workspace > .case-reporter { grid-column: 2; }
-  .case-workspace > :is(.case-assignment,.case-appointment) { grid-column: 2; }
-  .case-workspace > :is(.case-source,.case-edit,.case-review,.case-transfer) { grid-column: 1; }
-  .case-workspace .record-facts { grid-template-columns: 1fr; }
-  .case-workspace .record-fact:nth-child(odd):not(.wide) { border-right: 0; }
-  .compact-record-page .case-action-title { display: block; margin: 0 0 12px!important; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: .9rem; }
-  .case-workspace .record-action > :not(.case-action-title) { margin-left: 14px; margin-right: 14px; }
-  .case-workspace .record-action .form-grid { grid-template-columns: 1fr; }
-  .case-workspace .record-sheet { padding: 14px!important; }
-  .case-workspace .record-fact :is(dt,dd) { padding: 9px 11px; }
-  .case-workspace .record-action { padding-bottom: 14px!important; }
-  .case-workspace .record-action .assignment-confirmation { display: none; }
-  .case-workspace .record-action .assignment-action-bar { justify-content: flex-start; }
-}
-@media screen and (max-width: 1100px) {
-  .case-workspace { grid-template-columns: 1fr; }
-  .case-workspace > :is(.case-primary,.case-reporter,.case-assignment,.case-appointment,.case-source,.case-edit,.case-review,.case-transfer) { grid-column: 1; }
-}
+/* Single-column case pages with compact Membership-style paired fields. */
 @media screen {
   .case-workspace { display: block; }
-  .case-columns { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(350px,1fr); gap: 16px; align-items: start; }
-  .case-information,.case-controls { display: grid; gap: 12px; min-width: 0; }
-  .case-columns :is(.record-sheet,.record-history,.record-action,.list-panel) { margin-bottom: 0!important; }
-  .case-columns .record-history { padding: 14px!important; }
-  .case-columns .record-history-table { min-width: 520px; }
-  .case-columns .record-action .form-grid { grid-template-columns: 1fr; }
-  .case-columns .record-facts { grid-template-columns: 1fr; }
-  .case-columns .case-action-title { margin-left: 0!important; margin-right: 0!important; }
+  .case-columns,.case-information,.case-controls { display: contents; }
+  .case-workspace .record-sheet,.case-workspace .record-history,.case-workspace .record-action { margin-bottom: 14px!important; }
+  .case-workspace .record-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .case-workspace .case-action-title { display: block; margin: 0 0 12px!important; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: .9rem; }
+  .case-workspace .record-action > :not(.case-action-title) { margin-left: 16px; margin-right: 16px; }
+  .case-workspace .record-action .operational-form { padding: 0; }
+  .case-workspace .record-action { padding-bottom: 14px!important; }
+  .case-workspace .record-action .assignment-confirmation { display: none; }
 }
-@media screen and (max-width: 1100px) {
-  .case-columns { grid-template-columns: 1fr; }
+@media screen and (max-width: 850px) {
+  .case-workspace .record-facts { grid-template-columns: 1fr; }
+  .case-workspace .record-action > :not(.case-action-title) { margin-left: 12px; margin-right: 12px; }
 }
