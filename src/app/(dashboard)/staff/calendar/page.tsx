@@ -1,3 +1,4 @@
+import { companyHolidayItems } from "@/lib/company-holidays";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { AppShell } from "@/components/app-shell";
 import { AppointmentCalendar, type CalendarItem } from "@/components/appointment-calendar";
@@ -43,6 +44,7 @@ export default async function StaffCalendar({ searchParams }: { searchParams: Pr
     for (const person of people || []) visibleStaffNames.set(person.id, person.full_name);
   }
   const items: CalendarItem[] = [
+    ...companyHolidayItems(month),
     ...events.flatMap((event) => {
       const leaveStaffId = event.subject_staff_id || event.assigned_to;
       const leaveStaffName = leaveStaffId ? visibleStaffNames.get(leaveStaffId) : null;
@@ -57,6 +59,7 @@ export default async function StaffCalendar({ searchParams }: { searchParams: Pr
   const error = appointmentResult.error || eventResult.error || recurrenceResult.error || dailyTaskResult.error;
 
   return <AppShell profile={profile} title="Calendar">
+    <p className="subtle">KLG company holidays: 12 days per year. Sunday holidays are replaced on the next available working day. {Number(month.slice(0,4)) > 2027 ? "Future dates are provisional; some festival dates await publication." : "Festival dates are subject to official changes."}</p>
     {error ? <p className="error">{error.message}</p> : <AppointmentCalendar month={month} items={items}/>}
   </AppShell>;
 }

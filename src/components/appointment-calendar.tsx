@@ -12,7 +12,7 @@ export type CalendarItem = {
   expandedDetail?: string;
   href: string | null;
   tone?: string;
-  kind?: "maintenance" | "daily_task" | "meeting" | "leave" | "other";
+  kind?: "maintenance" | "daily_task" | "meeting" | "leave" | "other" | "holiday";
 };
 
 function monthName(year: number, monthIndex: number) {
@@ -51,7 +51,7 @@ export function AppointmentCalendar({ month, items, compact = false }: { month: 
     setSelectedDate(date);
     detailsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
-  const filters = [["all", "All"], ["maintenance", "Maintenance"], ["daily_task", "Daily Task"], ["meeting", "Meeting"], ["leave", "Leave"], ["other", "Work / Other"]];
+  const filters = [["all", "All"], ["maintenance", "Maintenance"], ["daily_task", "Daily Task"], ["meeting", "Meeting"], ["leave", "Leave"], ["other", "Work / Other"], ["holiday", "Public Holiday"]];
 
   useEffect(() => {
     setSelectedDate(firstUsefulDate);
@@ -77,7 +77,7 @@ export function AppointmentCalendar({ month, items, compact = false }: { month: 
   return <section className={`calendar-panel${compact ? " calendar-compact" : ""}`}>
     <header className="calendar-heading">
       <div><p className="eyebrow">Monthly work view</p><h2>{monthName(year, monthIndex)}</h2><p className="subtle">Tap a date to see every item in full below the calendar.</p></div>
-      <div className="calendar-controls"><Link href={`?month=${monthKey(previous.getFullYear(), previous.getMonth())}`}>‹ Previous</Link><Link href={`?month=${monthKey(new Date().getFullYear(), new Date().getMonth())}`}>Today</Link><Link href={`?month=${monthKey(next.getFullYear(), next.getMonth())}`}>Next ›</Link></div>
+      <div className="calendar-controls"><form method="get"><label className="sr-only" htmlFor="calendar-month">Select month and year</label><input id="calendar-month" type="month" name="month" defaultValue={month} required/><button type="submit" className="button secondary">Go</button></form><Link href={`?month=${monthKey(previous.getFullYear(), previous.getMonth())}`}>‹ Previous</Link><Link href={`?month=${monthKey(new Date().getFullYear(), new Date().getMonth())}`}>Today</Link><Link href={`?month=${monthKey(next.getFullYear(), next.getMonth())}`}>Next ›</Link></div>
     </header>
     {compact && <div className="calendar-type-filters" aria-label="Calendar categories">{filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} className={`button secondary${filter === value ? " calendar-filter-active" : ""}`} onClick={() => setFilter(value)}>{label}</button>)}</div>}
     <div className="calendar-grid-wrap">
