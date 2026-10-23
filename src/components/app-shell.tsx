@@ -38,6 +38,10 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
     ] as const },
     { label: "Materials", Icon: Boxes, links: adminNav.filter(([label]) => ["Material Requests", "Inventory"].includes(label)) },
+    { label: "Quotation & PO", Icon: FileBarChart, links: [
+      ["Quotations", "/admin/quotations", FileBarChart],
+      ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],
+    ] as const },
     { label: "Documents & Reports", Icon: FolderOpen, links: adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)) },
     { label: "System", Icon: Settings, links: adminNav.filter(([label]) => ["Notifications", "Users", "Settings"].includes(label)) },
   ];

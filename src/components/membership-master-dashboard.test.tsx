@@ -2,7 +2,7 @@ import {fireEvent,render,screen,within} from '@testing-library/react';
 import {beforeAll,describe,expect,it,vi} from 'vitest';
 import {MembershipMasterDashboard} from './membership-master-dashboard';
 beforeAll(()=>{HTMLDialogElement.prototype.showModal=vi.fn();HTMLDialogElement.prototype.close=vi.fn();});
-const data={months:['2026-09','2026-10','2026-11'],records:[{id:5,name:'Kevin',originalName:'Kevin (KLGCR / 123)',serial:'2026-01',reference:'A-10',status:'ACTIVE',fees:{'2026-10':40,'2026-11':40}},{id:6,name:'Mary',originalName:'Mary',serial:'2026-02',reference:'GYM01',status:'REFUNDED',fees:{'2026-09':40}}]};
+const data: import('@/lib/membership-master-dashboard').MasterDashboard={months:['2026-09','2026-10','2026-11'],records:[{id:5,name:'Kevin',originalName:'Kevin (KLGCR / 123)',serial:'2026-01',reference:'A-10',status:'ACTIVE',fees:{'2026-10':40,'2026-11':40}},{id:6,name:'Mary',originalName:'Mary',serial:'2026-02',reference:'GYM01',status:'REFUNDED',fees:{'2026-09':40}}]};
 describe('membership master workspace',()=>{
  it('filters the current month, searches notes and opens annual history',()=>{
  render(<MembershipMasterDashboard data={data} initialMonth="2026-10"/>);
