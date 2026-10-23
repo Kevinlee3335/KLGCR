@@ -233,4 +233,8 @@ it('assigns the October transition to November only, and approval sets its start
  expect(approved.start).toBe(expected);
  expect(approved.expiry).toBe((await db.query<{e:string}>("select ($1::date+interval '1 month'-interval '1 day')::date::text e",[expected])).rows[0].e);
  expect((await db.query<{p:string}>("select period_start::text p from membership_emails where member_id=$1 and kind='approved'",[mid])).rows[0].p).toBe(expected);
+ await db.query('update memberships set starts_on=null where id=$1',[mid]);
+ const renewal=(await db.query<{id:string}>("insert into membership_payments(member_id,kind,period_start,amount) values($1,'renewal',($2::date+interval '1 month')::date,40) returning id",[mid,expected])).rows[0];
+ await db.query('select review_membership_payment($1,$2,true,null)',[renewal.id,admin]);
+ expect((await db.query<{starts_on:string|null}>('select starts_on from memberships where id=$1',[mid])).rows[0].starts_on).toBeNull();
 });

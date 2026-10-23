@@ -49,7 +49,7 @@ begin
   if payment.period_start < current_month then raise exception 'Payment month has passed. Reject with instructions to resubmit for the current month'; end if;
   if member.expires_on is not null and payment.period_start <= member.expires_on then raise exception 'This membership month is already covered'; end if;
   expiry := (payment.period_start+interval '1 month'-interval '1 day')::date;
-  update public.memberships set status='active',expires_on=expiry,starts_on=case when payment.kind='registration' then payment.period_start else coalesce(starts_on,payment.period_start) end where id=member.id;
+  update public.memberships set status='active',expires_on=expiry,starts_on=case when payment.kind='registration' then payment.period_start else starts_on end where id=member.id;
   insert into public.membership_emails(member_id,event_key,kind,payment_id,period_start)
   values(member.id,'approved:'||payment.id,'approved',payment.id,payment.period_start);
  end if;
