@@ -13,3 +13,15 @@ export async function saveReceiptNumber(form:FormData):Promise<{success?:boolean
  revalidatePath('/admin/members/payment-list');
  return {success:true,value};
 }
+
+export async function deletePaymentListEntry(form:FormData):Promise<{success?:boolean;error?:string}>{
+ const profile=await requireRole(['admin']);
+ if(!membershipEnabled())return {error:'Membership is not enabled.'};
+ const id=String(form.get('ledger')||'');
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))return {error:'Invalid payment entry.'};
+ const {error}=await createAdminClient().rpc('delete_membership_payment_list_entry',{p_ledger:id,p_actor:profile.id});
+ if(error)return {error:'Unable to delete. Please try again.'};
+ revalidatePath('/admin/members/payment-list');
+ revalidatePath('/admin/members/committee-reports');
+ return {success:true};
+}
