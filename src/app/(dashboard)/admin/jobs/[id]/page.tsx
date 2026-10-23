@@ -2,6 +2,7 @@ import { signEvidencePhotos } from "@/lib/evidence-urls";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PriorityBadge, StatusBadge } from "@/components/phase2-ui";
+import { RecordFacts } from "@/components/record-facts";
 import { ReporterInformation } from "@/components/reporter-information";
 import { MaintenanceAppointment } from "@/components/maintenance-appointment";
 import { JobActivityTimeline } from "@/components/job-activity-timeline";
@@ -46,16 +47,34 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
     if (photo.url && event) (event.photos ??= []).push({id:photo.id,url:photo.url});
   }
 
-  return <AppShell profile={profile} title="Maintenance Job Detail">
+  return <AppShell profile={profile} title="Maintenance Job Detail"><div className="compact-record-page case-workspace job-workspace">
     <div className="section-head"><div><p className="eyebrow">{job.job_no}</p><h2>Block {job.block?.code} · {job.room_no}</h2><p className="subtle">Assigned {formatDate(job.assigned_at)}</p></div><div className="actions"><PriorityBadge value={job.priority}/><StatusBadge value={job.status}/></div></div>
-    <section className="panel detail-grid" style={{marginBottom:18}}><div><span>Complaint</span><strong>{job.complaint?.complaint_no}</strong></div><div><span>Assigned Staff</span><strong>{job.assignee?.full_name||"—"}</strong></div><div><span>Category</span><strong>{job.category}</strong></div><div className="field-wide"><span>Description</span><p>{job.description}</p></div></section>
-    {profile.role === "admin" && !["completed","cancelled"].includes(job.status) && <section className="panel"><h3>Transfer task</h3><form action={transferJob.bind(null,id)} className="form-grid"><label className="field">Assign to<select name="staffId" required defaultValue=""><option value="">Choose employee</option>{staff?.filter(person => person.id !== job.assignee?.id && person.profile_blocks.some(block => block.block_id === job.block?.id)).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label className="field">Reason<input name="reason" required maxLength={1000}/></label><button className="button">Transfer task</button></form></section>}
-    <ReporterInformation name={job.complaint?.reporter_name||job.complaint?.complainant_name} phone={job.complaint?.reporter_phone||job.complaint?.complainant_contact} email={job.complaint?.reporter_email} availabilityDate={job.complaint?.availability_date} availabilityTime={job.complaint?.availability_time} roomAccessPermission={job.complaint?.room_access_permission}/>
+    <RecordFacts className="case-primary" title="Job Details" facts={[
+      {label:"Job No.",value:job.job_no},
+      {label:"Complaint",value:job.complaint?.complaint_no},
+      {label:"Block",value:job.block ? `Block ${job.block.code}` : "External Area"},
+      {label:"Room / Location",value:job.room_no},
+      {label:"Category",value:job.category},
+      {label:"Assigned Staff",value:job.assignee?.full_name || "—"},
+      {label:"Status",value:<StatusBadge value={job.status}/>},
+      {label:"Priority",value:<PriorityBadge value={job.priority}/>},
+      {label:"Assigned",value:formatDate(job.assigned_at)},
+      {label:"Started",value:job.started_at ? formatDate(job.started_at) : "—"},
+      {label:"Completed",value:job.completed_at ? formatDate(job.completed_at) : "—"},
+      {label:"Last Updated",value:job.updated_at ? formatDate(job.updated_at) : "—"},
+      {label:"Description / Defect",value:job.description,wide:true},
+      ...(job.action_taken ? [{label:"Action Taken",value:job.action_taken,wide:true}] : []),
+      ...(job.pending_material_note ? [{label:"Pending Material Note",value:job.pending_material_note,wide:true}] : []),
+      ...(job.monitoring_note ? [{label:"Monitoring Note",value:job.monitoring_note,wide:true}] : []),
+    ]}/>
+
+    <ReporterInformation compact className="case-reporter" name={job.complaint?.reporter_name||job.complaint?.complainant_name} phone={job.complaint?.reporter_phone||job.complaint?.complainant_contact} email={job.complaint?.reporter_email} availabilityDate={job.complaint?.availability_date} availabilityTime={job.complaint?.availability_time} roomAccessPermission={job.complaint?.room_access_permission}/>
     {message.error&&<p className="error">{message.error}</p>}{message.appointment&&<p className="success">Appointment saved.</p>}
-    <MaintenanceAppointment appointment={appointment}/>
-    {appointments.some(({status})=>status==="no_show")&&<section className="panel list-panel" style={{marginBottom:18}}><h3>Appointment History</h3>{appointments.filter(({status})=>status==="no_show").map((past)=><div className="list-row" key={past.id}><div><strong>No Show · {past.appointment_date} {past.appointment_time.slice(0,5)}</strong><p>Attendance / No-Show Time: {past.attended_at?formatDate(past.attended_at):"—"}</p>{past.attendee?.full_name&&<p>Recorded by: {past.attendee.full_name}</p>}{past.no_show_remarks&&<p>No-Show Remarks: {past.no_show_remarks}</p>}</div></div>)}</section>}
-    {profile.role==="admin"&&<section className="panel assignment-panel" style={{marginBottom:18}}><h3>{appointment?"Manage / Reschedule Appointment":"Add Appointment"}</h3><p className="subtle">Schedule the maintenance visit without changing the reporter&apos;s preferred availability or room access response.</p><form action={saveJobAppointment.bind(null,id,appointment?.id??null)} className="form-grid"><label className="field"><span>Maintenance Date *</span><input name="appointmentDate" type="date" defaultValue={appointment?.appointment_date} required/></label><label className="field"><span>Maintenance Time *</span><select name="appointmentTime" defaultValue={appointment?.appointment_time?.slice(0,5)||""} required><option value="" disabled>Choose a time slot</option>{appointmentTimeSlots.map(slot=><option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>{appointment&&<label className="field"><span>Status *</span><select name="status" defaultValue={appointment.status}>{appointmentStatuses.map(status=><option key={status} value={status}>{titleCase(status)}</option>)}</select></label>}<label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000} defaultValue={appointment?.remarks||""}/></label><div className="field-wide"><button className="button">{appointment?"Save / Reschedule Appointment":"Add Appointment"}</button></div></form></section>}
+    <MaintenanceAppointment compact appointment={appointment}/>
+    {appointments.some(({status})=>status==="no_show")&&<section className="panel record-history"><h3>Appointment History</h3><div className="table-wrap"><table className="table record-history-table"><thead><tr><th>Appointment</th><th>Attendance / No-Show Time</th><th>Recorded by</th><th>No-Show Remarks</th></tr></thead><tbody>{appointments.filter(({status})=>status==="no_show").map(past=><tr key={past.id}><td>No Show · {past.appointment_date} {past.appointment_time.slice(0,5)}</td><td>{past.attended_at?formatDate(past.attended_at):"—"}</td><td>{past.attendee?.full_name||"—"}</td><td>{past.no_show_remarks||"—"}</td></tr>)}</tbody></table></div></section>}
     {photoLoadFailed && <p className="error">Some completion photos could not be loaded. Please refresh and try again.</p>}
-    <JobActivityTimeline events={events}/>
-  </AppShell>;
+
+{profile.role==="admin"&&<section className="panel assignment-panel record-action case-appointment"><h3 className="case-action-title">{appointment?"Manage / Reschedule Appointment":"Add Appointment"}</h3><p className="subtle">Schedule the maintenance visit without changing the reporter&apos;s preferred availability or room access response.</p><form action={saveJobAppointment.bind(null,id,appointment?.id??null)} className="form-grid"><label className="field"><span>Maintenance Date *</span><input name="appointmentDate" type="date" defaultValue={appointment?.appointment_date} required/></label><label className="field"><span>Maintenance Time *</span><select name="appointmentTime" defaultValue={appointment?.appointment_time?.slice(0,5)||""} required><option value="" disabled>Choose a time slot</option>{appointmentTimeSlots.map(slot=><option key={slot.value} value={slot.value}>{slot.label}</option>)}</select></label>{appointment&&<label className="field"><span>Status *</span><select name="status" defaultValue={appointment.status}>{appointmentStatuses.map(status=><option key={status} value={status}>{titleCase(status)}</option>)}</select></label>}<label className="field field-wide"><span>Remarks</span><textarea name="remarks" rows={3} maxLength={1000} defaultValue={appointment?.remarks||""}/></label><div className="field-wide"><button className="button">{appointment?"Save / Reschedule Appointment":"Add Appointment"}</button></div></form></section>}
+    {profile.role === "admin" && !["completed","cancelled"].includes(job.status) && <section className="panel record-action case-transfer"><h3 className="case-action-title">Transfer task</h3><form action={transferJob.bind(null,id)} className="form-grid"><label className="field">Assign to<select name="staffId" required defaultValue=""><option value="">Choose employee</option>{staff?.filter(person => person.id !== job.assignee?.id && person.profile_blocks.some(block => block.block_id === job.block?.id)).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label className="field">Reason<input name="reason" required maxLength={1000}/></label><button className="button">Transfer task</button></form></section>}
+    <JobActivityTimeline compact events={events}/>  </div></AppShell>;
 }
