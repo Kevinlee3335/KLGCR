@@ -1,3 +1,4 @@
+import { RecordFacts } from "./record-facts";
 type Appointment = {
   appointment_date: string;
   appointment_time: string;
@@ -6,8 +7,15 @@ type Appointment = {
   staff?: { full_name: string } | null;
 };
 
-export function MaintenanceAppointment({ appointment }: { appointment: Appointment | null }) {
+export function MaintenanceAppointment({ appointment, compact = false }: { appointment: Appointment | null; compact?: boolean }) {
   if (!appointment) return null;
+  if (compact) return <RecordFacts title="Maintenance Appointment" facts={[
+    {label:"Maintenance Date",value:appointment.appointment_date},
+    {label:"Maintenance Time",value:appointment.appointment_time.slice(0,5)},
+    {label:"Assigned Staff",value:appointment.staff?.full_name || "—"},
+    {label:"Appointment Status",value:appointment.status.replaceAll("_"," ")},
+    ...(appointment.remarks ? [{label:"Remarks",value:appointment.remarks,wide:true}] : []),
+  ]}/>;
   return <section className="panel detail-grid" style={{marginBottom:18}}>
     <div className="field-wide"><h3>Maintenance Appointment</h3></div>
     <div><span>Maintenance Date</span><strong>{appointment.appointment_date}</strong></div>

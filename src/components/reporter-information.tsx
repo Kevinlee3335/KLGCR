@@ -1,6 +1,7 @@
 import { RecordFacts } from "./record-facts";
 type ReporterInformationProps = {
   compact?: boolean;
+  className?: string;
   name?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -25,8 +26,8 @@ function formatAvailabilityTime(value: string) {
   });
 }
 
-export function ReporterInformation({ name, phone, email, availabilityDate, availabilityTime, roomAccessPermission, compact = false }: ReporterInformationProps) {
-  if (compact) return <RecordFacts title="Reporter Information" facts={[
+export function ReporterInformation({ name, phone, email, availabilityDate, availabilityTime, roomAccessPermission, compact = false, className }: ReporterInformationProps) {
+  if (compact) return <RecordFacts className={className} title="Reporter Information" facts={[
     { label: "Reporter Name", value: name || "—" },
     { label: "Phone", value: phone || "—" },
     ...(email ? [{ label: "Email", value: email }] : []),
