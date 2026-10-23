@@ -1,3 +1,4 @@
+import { companyHolidayItems } from "@/lib/company-holidays";
 import { sendMeetingReminders } from "@/lib/send-meeting-reminders";
 import { groupCalendarEvents, calendarRecipients, type GroupableCalendarEvent } from "@/lib/calendar-event-groups";
 import { revalidatePath } from "next/cache";
@@ -108,6 +109,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const recurringTasks = (recurrenceResult.data || []) as unknown as RecurringTask[];
   const dailyTasks = (dailyTaskResult.data || []) as unknown as DailyTask[];
   const items: CalendarItem[] = [
+    ...companyHolidayItems(month),
     ...appointments.map((a) => ({ id: `appointment-${a.id}`, date: a.appointment_date, time: a.appointment_time, label: `Block ${a.complaint?.block?.code || "–"} · ${a.complaint?.room_no || "–"}`, detail: `${a.staff?.full_name || "Unassigned"} · ${a.job?.job_no || a.complaint?.category || "Appointment"}`, href: a.job_id ? `/admin/jobs/${a.job_id}` : null, kind: "maintenance" as const, tone: `calendar-${a.status}` })),
     ...jobs.map((job) => ({ id: `job-${job.id}`, date: job.scheduled_for, time: "09:00", label: `Block ${job.block?.code || "–"} · ${job.room_no}`, detail: `${job.assignee?.full_name || "Unassigned"} · ${job.job_no}`, href: `/admin/jobs/${job.id}`, kind: "maintenance" as const, tone: "calendar-work" })),
     ...eventGroups.flatMap(group => {
@@ -128,6 +130,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const loadError = appointmentResult.error || jobResult.error || eventResult.error || recurrenceResult.error || dailyTaskResult.error;
 
   return <AppShell profile={profile} title="Calendar">
+    <p className="subtle">KLG company holidays: 12 days per year. Sunday holidays are replaced on the next available working day. {Number(month.slice(0,4)) > 2027 ? "Future dates are provisional; some festival dates await publication." : "Festival dates are subject to official changes."}</p>
     {profile.role === "admin" && <details className="calendar-tools"><summary>Add calendar item</summary><section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><CalendarEventForm staff={(staffResult.data || []).map((staff) => ({ id: staff.id, full_name: staff.full_name }))} action={createCalendarEvent}/></section></details>}
     {profile.role === "admin" && malaysiaDate(new Date().toISOString()) === "2026-10-16" && <form action={sendTodayMeetingReminder} className="calendar-event-card"><div><strong>Today&apos;s meeting reminder</strong><p className="subtle">Send once to participants of today&apos;s upcoming meetings. Already notified participants are skipped.</p></div><button type="submit" className="button">Send today&apos;s meeting reminders</button></form>}
     {query.reminders !== undefined && <p role="status">Meeting reminders processed: {query.reminders}. Previously notified participants and meetings already started were skipped.</p>}
