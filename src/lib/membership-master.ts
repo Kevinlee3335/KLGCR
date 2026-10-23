@@ -44,7 +44,8 @@ export function buildMembershipMaster(source:MasterLayout,members:MasterMember[]
  const deltas=new Map<number,number>();
  for(const [key,amount] of amounts){const match=key.match(/^([A-Z]+)(\d+)$/)!;const row=Number(match[2]);const col=[...monthColumns.values()].find(c=>columnName(c)===match[1])!;const cell=sheet.rows[row-1].cells[col-1],base=typeof cell.v==='number'?cell.v:0;
   // A historical payment already recorded for the same member/month is not charged twice.
-  const next=Math.max(base,amount);if(next!==base){cell.v=next;changes.set(key,next);deltas.set(col,(deltas.get(col)||0)+next-base);}
+  if(base>0&&base!==amount)warnings.push(`${key}: historical amount ${base} differs from system amount ${amount}; original value retained.`);
+  const next=base>0?base:amount;if(next!==base){cell.v=next;changes.set(key,next);deltas.set(col,(deltas.get(col)||0)+next-base);}
  }
  for(const [month,col] of monthColumns){const cell=sheet.rows[totalRow-1].cells[col-1];if(col>originalCols){const sum=sheet.rows.slice(4,totalRow-1).reduce((n,r)=>n+(typeof r.cells[col-1].v==='number'?Number(r.cells[col-1].v):0),0);cell.v=sum;changes.set(masterKey(col,totalRow),sum);}else if(deltas.has(col)&&typeof cell.v==='number'){cell.v+=deltas.get(col)!;changes.set(masterKey(col,totalRow),cell.v);}if(String(cell.v).startsWith('#'))warnings.push(`${month}: source total contains ${cell.v}; original formula retained.`);}
  return {layout,changes,inserted,totalRow,warnings};
