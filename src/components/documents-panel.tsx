@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { FolderOpen, UploadCloud, Search, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -7,7 +8,7 @@ import { prepareDocument, saveDocument, documentUrl, deleteDocument, updateDocum
 import { classifyDocument, documentCategories } from "@/lib/document-classification";
 const documentDateFormatter = new Intl.DateTimeFormat("en-MY",{timeZone:"Asia/Kuala_Lumpur",dateStyle:"medium"});
 type Document = { id: string; file_name: string; size_bytes: number; created_at: string; category?: string | null };
-export function DocumentsPanel({ documents, canManage }: { documents: Document[]; canManage: boolean }) {
+export function DocumentsPanel({ documents, canManage, companyFolders=[] }: { documents: Document[]; canManage: boolean; companyFolders?: {name:string;href:string;count:number|null}[] }) {
   const [uploadCategory,setUploadCategory] = useState("");
   const [marked,setMarked] = useState<string[]>([]);
   const [bulkCategory,setBulkCategory] = useState("");
@@ -74,6 +75,7 @@ export function DocumentsPanel({ documents, canManage }: { documents: Document[]
     {canManage && <section className="documents-upload-card"><div className="documents-upload-icon"><UploadCloud size={30}/></div><div className="documents-upload-copy"><h3>Upload Documents</h3><p>Keep the original filename. Multiple files · Up to 50 MB each</p><small>PDF, images, Word, Excel and CAD drawings</small></div><div className="document-upload"><label className="documents-category-label">Upload category<select value={uploadCategory} disabled={busy} onChange={event => setUploadCategory(event.target.value)}><option value="">Auto-detect from filename</option>{documentCategories.map(item => <option key={item}>{item}</option>)}</select></label><input className="documents-file-input" id="documents-files" ref={input} type="file" multiple aria-label="Choose documents" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,.dwg,.dxf" disabled={busy} onChange={event => setSelected(Array.from(event.target.files || []).map(file => file.name))}/><label className={`documents-choose${busy ? " is-disabled" : ""}`} htmlFor="documents-files">Choose files</label><button className="button primary" onClick={upload} disabled={busy || !selected.length}>{busy ? "Please wait…" : "Upload"}</button></div>{selected.length > 0 && <div className="documents-selected">{selected.length} selected · {selected.join(" · ")}</div>}</section>}
     {message && <p className="documents-message" role="status">{message}</p>}
     <nav className="documents-categories" aria-label="Document categories">
+      {companyFolders.map(company=><Link className="documents-company-folder" href={company.href} key={company.name}><FolderOpen size={20}/><span>{company.name}</span><strong>{company.count ?? "—"}</strong></Link>)}
       {["All Documents", ...documentCategories].map(item => { const count = item === "All Documents" ? documents.length : searchable.filter(doc => doc.category === item).length; return <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(item)}><FolderOpen size={20}/><span>{item}</span><strong>{count}</strong></button>; })}
     </nav>
     <div className="documents-filters">

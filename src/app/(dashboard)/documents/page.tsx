@@ -1,5 +1,4 @@
 import "./documents.css";
-import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { DocumentsPanel } from "@/components/documents-panel";
 import { requireRole } from "@/lib/auth";
@@ -15,5 +14,10 @@ export default async function DocumentsPage() {
     data.push(...(result.data || []));
     if (!result.data || result.data.length < 1000) break;
   }
-  return <AppShell profile={profile} title="Documents">{["admin","management_viewer"].includes(profile.role) && <section className="panel"><h2>Company Documents</h2><p>Sigma and MFE · Emails, quotations, invoices and service reports</p><Link className="button" href="/documents/suppliers">Open company folders →</Link></section>}{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={data || []} canManage={["admin","management_viewer"].includes(profile.role)}/>}</AppShell>;
+  const canManage=["admin","management_viewer"].includes(profile.role);
+  const companyFolders=canManage ? await Promise.all(["sigma","mfe"].map(async company=>{
+    const result=await supabase.from("supplier_mail_documents").select("id",{count:"exact",head:true}).eq("company",company);
+    return {name:company==="sigma"?"Sigma":"MFE",href:`/documents/suppliers/${company}`,count:result.error?null:result.count || 0};
+  })) : [];
+  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={data || []} canManage={canManage} companyFolders={companyFolders}/>}</AppShell>;
 }
