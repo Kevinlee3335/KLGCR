@@ -77,7 +77,7 @@ function archiveMessage_(id) {
   var text=[],files=[];
   function walk(part) {
     var body=part.body || {};
-    if(part.mimeType==='text/plain' && !part.filename && body.data) text.push(Utilities.newBlob(Utilities.base64DecodeWebSafe(body.data)).getDataAsString());
+    if(part.mimeType==='text/plain' && !part.filename && body.data) text.push(Utilities.newBlob(decodeGmailData_(body.data)).getDataAsString());
     if(part.filename && /\.pdf$/i.test(part.filename)) files.push(part);
     (part.parts || []).forEach(walk);
   }
@@ -89,7 +89,7 @@ function archiveMessage_(id) {
     var data=body.data;
     if(!data && body.attachmentId) data=Gmail.Users.Messages.Attachments.get('me',id,body.attachmentId).data;
     if(!data) throw new Error('PDF attachment content is missing; cursor retained.');
-    var bytes=Utilities.base64DecodeWebSafe(data);
+    var bytes=decodeGmailData_(data);
     if(!bytes.length || Utilities.newBlob(bytes.slice(0,1024)).getDataAsString().indexOf('%PDF-')<0) {archivePost_({op:'issue',id:id,partId:partId,filename:filename,issue:'Attachment is not a valid PDF. Open the original email to check.'});return;}
     var hash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes).map(function(b){return ('0'+((b+256)%256).toString(16)).slice(-2);}).join('');
     var file={partId:partId,filename:filename,hash:hash,size:bytes.length};
@@ -101,4 +101,11 @@ function archiveMessage_(id) {
     }
     archivePost_({op:'complete',id:id,file:file});
   });
+}
+
+function decodeGmailData_(data) {
+  if (Array.isArray(data)) return data;
+  var encoded = String(data).replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  while (encoded.length % 4) encoded += '=';
+  return Utilities.base64Decode(encoded);
 }

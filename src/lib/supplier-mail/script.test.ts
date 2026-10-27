@@ -24,3 +24,13 @@ describe('Gmail sync cursor and read-only contract',()=>{
   expect(props.get('LIVE_THROUGH')).toBeUndefined();expect(props.get('BACKFILL_DONE')).toBeUndefined();expect(triggers).toEqual([]);
  });
 });
+
+describe('Gmail attachment decoding',()=>{
+ it('normalizes missing padding and both base64 alphabets without altering PDF bytes',()=>{
+  const {ctx}=script();
+  ctx.Utilities={base64Decode:(value:string)=>{if(value.length%4 || /[-_]/.test(value))throw new Error('Could not decode string');return Array.from(Buffer.from(value,'base64'));}};
+  for(const bytes of [Buffer.from('%PDF-1.7'),Buffer.from([255,254,253,0,1]),Buffer.from('hello')]){
+   for(const value of [bytes.toString('base64'),bytes.toString('base64url')]){ctx.encoded=value;expect(vm.runInContext('decodeGmailData_(encoded)',ctx)).toEqual(Array.from(bytes));}
+  }
+ });
+});
