@@ -19,6 +19,7 @@ export function normaliseInventorySheetRow(value: unknown): InventorySheetRow | 
   const reorderLevel = row.reorderLevel == null || row.reorderLevel === "" ? 0 : Number(row.reorderLevel);
   const movementCategory = row.movementCategory === "fast" || row.movementCategory === "once_in_a_while" ? row.movementCategory : "slow";
   const unit = String(row.unit ?? "").trim() || null;
+  if (/^(?:KLGCR-)?(?:OFF|CLN)-/i.test(itemCode)) return null;
   if (!itemCode || !description || !category || !Number.isFinite(balanceQty) || balanceQty < 0 || !Number.isFinite(reorderLevel) || reorderLevel < 0) return null;
   return { itemCode, description, category, balanceQty, reorderLevel, movementCategory, unit };
 }
@@ -27,6 +28,7 @@ export async function pushInventoryItemToGoogle(item: {
   item_code: string; description: string; category: string; movement_category: string;
   balance_qty: number | string; reorder_level: number | string; unit: string | null;
 }) {
+  if (/^(OFF|CLN)-/i.test(item.item_code)) return { skipped: true };
   const url = process.env.GOOGLE_INVENTORY_APPS_SCRIPT_URL;
   const secret = process.env.GOOGLE_INVENTORY_SYNC_SECRET;
   if (!url || !secret) return { skipped: true };

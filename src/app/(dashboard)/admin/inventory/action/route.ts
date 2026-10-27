@@ -12,6 +12,8 @@ function numberField(value: FormDataEntryValue | null, allowNull = false) {
 export async function POST(request: Request) {
   const form = await request.formData();
   const url = new URL("/admin/inventory", request.url);
+  const store = form.get("store") === "office" ? "office" : form.get("store") === "cleaner" ? "cleaner" : "building";
+  url.searchParams.set("store",store);
   const action = String(form.get("action") || "");
   const supabase = await createClient();
   let error: { message: string } | null = null;
@@ -25,6 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.redirect(url, 303);
     }
     ({ error } = await supabase.from("inventory_items").insert({
+      inventory_group: store,
       item_code: String(form.get("itemCode") || "").trim(),
       description: String(form.get("description") || "").trim(),
       category: String(form.get("category") || ""),
