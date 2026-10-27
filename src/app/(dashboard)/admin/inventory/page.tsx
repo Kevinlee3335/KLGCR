@@ -4,6 +4,7 @@ import { ItemsToOrder } from "@/components/items-to-order";
 import { InventoryItemFinder } from "@/components/inventory-item-finder";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { OfficeUsageSection } from "@/components/office-usage-section";
 import { Fragment } from "react";
 
 function stockState(balance: number, reorder: number) {
@@ -16,7 +17,7 @@ function qtyToOrder(balance: number, reorder: number) {
   return Math.max(0, reorder - balance);
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; q?: string; category?: string; view?: string; store?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string }> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
@@ -55,6 +56,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
     {query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">Inventory saved successfully.</p>}{error && <p className="error">{error.message}</p>}
 
+    {store === "office" && <OfficeUsageSection profile={profile} page={query.usagePage} search={query.usageQ} base={base}/>}
     <section className="panel"><div className="section-head"><div><h3>Purchase Orders</h3><p className="subtle">Create a PO from Inventory items and save a PDF for HQ.</p></div><a className="button" href="/admin/inventory/purchase-orders">Purchase Orders</a></div></section>
     <section className="inventory-kpis">
       <article><span>Total Items</span><strong>{rows.length}</strong><small>Active inventory records</small></article>
