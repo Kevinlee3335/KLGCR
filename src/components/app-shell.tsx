@@ -37,7 +37,12 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
     ] as const },
-    { label: "Materials", Icon: Boxes, links: adminNav.filter(([label]) => ["Material Requests", "Inventory"].includes(label)) },
+    { label: "Inventory", Icon: Boxes, links: [
+      ["Building Material", "/admin/inventory?store=building", Boxes],
+      ["Office Inventory", "/admin/inventory?store=office", Boxes],
+      ["Cleaner Supplies", "/admin/inventory?store=cleaner", Boxes],
+      ["Material Requests", "/admin/material-requests", PackageOpen],
+    ] as const },
     { label: "Quotation & PO", Icon: FileBarChart, links: [
       ["Quotations", "/admin/quotations", FileBarChart],
       ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],

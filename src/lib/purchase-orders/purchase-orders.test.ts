@@ -67,6 +67,6 @@ describe('PO save',()=>{
 it('rejects invalid dates and zero quantity',()=>{expect(purchaseOrderSchema.safeParse({...input,date:'2026-02-31'}).success).toBe(false);expect(purchaseOrderSchema.safeParse({...input,items:[{...input.items[0],quantity:0}]}).success).toBe(false);});
 it('generates a real PDF and paginates a long order',async()=>{
  const order={id:crypto.randomUUID(),po_no:'KH/KLG/PO/2026-0030',order_date:'2026-10-21',requested_by:'Kevin Lee',approved_by:'',requested_date:'2026-10-21',approved_date:'',created_at:new Date().toISOString(),items:[{itemId:iid,code:'B00022',description:'WINDOW HANDLE',unit:'pcs',quantity:10,specification:'Left hand',location:'Block A'}]};
- const bytes=await purchaseOrderPdf(order);writeFileSync('/workspace/scratch/e6859fe82f91/po-sample.pdf',bytes);expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
- const long=await purchaseOrderPdf({...order,items:Array.from({length:30},()=>order.items[0])});writeFileSync('/workspace/scratch/e6859fe82f91/po-long.pdf',long);expect((await PDFDocument.load(long)).getPageCount()).toBeGreaterThan(1);
+ const bytes=await purchaseOrderPdf(order);writeFileSync('/tmp/klgcr-po-sample.pdf',bytes);expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+ const long=await purchaseOrderPdf({...order,items:Array.from({length:30},()=>order.items[0])});writeFileSync('/tmp/klgcr-po-long.pdf',long);expect((await PDFDocument.load(long)).getPageCount()).toBeGreaterThan(1);
 });

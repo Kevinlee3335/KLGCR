@@ -62,5 +62,5 @@ it('binds approval to James, timestamps it, rejects spoofing and invalidates edi
 
 it('renders the automatic approver, date and Malaysian time',async()=>{
  const pdf=await purchaseOrderPdf({id:'sample',po_no:'KH/KLG/PO/2026-0030',order_date:'2026-10-22',requested_by:'Kevin Lee',requested_date:'2026-10-22',approved_by:'James Ooi',approved_date:'2026-10-22',requested_signature:{strokes:[[[0.1,0.7],[0.3,0.2],[0.4,0.8],[0.7,0.4]]]},approved_signature:{strokes:[[[0.1,0.7],[0.3,0.2],[0.4,0.8],[0.7,0.4]]]},approved_at:'2026-10-22T04:35:02Z',created_at:'2026-10-22T04:00:00Z',items:[{itemId:'sample',code:'KLGCR-B00001',description:'Window Handle',unit:'pcs',specification:'Left hand',quantity:10,location:'Block A'}]});
- writeFileSync('/workspace/scratch/e6859fe82f91/po-approved-sample.pdf',pdf);expect(pdf.length).toBeGreaterThan(1000);
+ writeFileSync('/tmp/klgcr-po-approved-sample.pdf',pdf);expect(pdf.length).toBeGreaterThan(1000);
 });
