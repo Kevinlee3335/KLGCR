@@ -52,15 +52,15 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
     line(edges[5],top,edges[5],top+height);line(edges[0],top+height,edges[5],top+height);top+=height;
   });
   for(const [x,label,name,date] of [[50.5,'Requested by:',order.requested_by,new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date(order.requested_at||order.created_at))],[375,'Approved By:',order.approved_at?order.approved_by:'Pending approval',order.approved_at?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date(order.approved_at)):'']] as const){
-    text(label,x,631.7,14);text(`Name: ${name}`,x,653.7,12);text(`Date: ${date}`,x,675.7,12);
+    text(label,x,631.7,14);text(`Name: ${name}`,x,724,12);text(`Date: ${date}`,x,746,12);
   }
   const time=(value:string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(value));
-  text(`Time: ${time(order.requested_at||order.created_at)} MYT`,50.5,697.7,11);
-  if(order.approved_at)text(`Time: ${time(order.approved_at)} MYT`,375,697.7,11);
+  text(`Time: ${time(order.requested_at||order.created_at)} MYT`,50.5,768,11);
+  text(`Time: ${order.approved_at?time(order.approved_at)+' MYT':''}`,375,768,11);
   for(const [x,signature] of [[50.5,order.requested_signature],[375,order.approved_signature]] as const){
-    line(x,774,x+165,774);
-    if(signature?.imageDataUrl){const picture=await pdf.embedPng(signature.imageDataUrl);page.drawImage(picture,{x,y:841.9-769,width:165,height:49.5});}
-    if(signature)for(const stroke of signature.strokes){const points=smoothSignatureStroke(stroke);for(let i=1;i<points.length;i++)line(x+points[i-1][0]*165,721+points[i-1][1]*48,x+points[i][0]*165,721+points[i][1]*48);}
+    line(x,714,x+165,714);
+    if(signature?.imageDataUrl){const picture=await pdf.embedPng(signature.imageDataUrl);page.drawImage(picture,{x,y:841.9-709,width:165,height:49.5});}
+    if(signature)for(const stroke of signature.strokes){const points=smoothSignatureStroke(stroke);for(let i=1;i<points.length;i++)line(x+points[i-1][0]*165,661+points[i-1][1]*48,x+points[i][0]*165,661+points[i][1]*48);}
   }
   pdf.setTitle(order.po_no); pdf.setCreationDate(new Date(order.created_at));
   return pdf.save();
