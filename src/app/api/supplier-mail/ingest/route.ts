@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { classifyAttachment, inImportRange, mailbox, supplierForSender } from '@/lib/supplier-mail/rules';
+import { extractSupplierPdfText } from '@/lib/supplier-mail/pdf-text';
 export const runtime = 'nodejs';
 const messageId = z.string().regex(/^[0-9a-f]{10,40}$/);
 const fileSchema = z.object({ partId: z.string().regex(/^[0-9.]{1,80}$/), filename: z.string().min(1).max(255), hash: z.string().regex(/^[0-9a-f]{64}$/), size: z.number().int().min(1).max(50 * 1024 * 1024) });
@@ -60,7 +61,8 @@ export async function POST(request: Request) {
       if (downloaded.error) throw downloaded.error;
       const bytes = Buffer.from(await downloaded.data.arrayBuffer());
       if (bytes.length !== file.size || bytes.subarray(0,1024).indexOf('%PDF-') < 0 || createHash('sha256').update(bytes).digest('hex') !== file.hash) return NextResponse.json({error:'PDF verification failed'},{status:400});
-      const saved = await db.from('supplier_mail_documents').upsert({company:email.company,content_hash:file.hash,file_name:file.filename,folder:classifyAttachment(file.filename,email.subject),storage_path:storagePath,size_bytes:file.size},{onConflict:'company,content_hash',ignoreDuplicates:true});
+      const extracted = await extractSupplierPdfText(bytes);
+      const saved = await db.from('supplier_mail_documents').upsert({company:email.company,content_hash:file.hash,file_name:file.filename,folder:classifyAttachment(file.filename,email.subject),storage_path:storagePath,size_bytes:file.size,...extracted},{onConflict:'company,content_hash',ignoreDuplicates:true});
       if (saved.error) throw saved.error;
       const doc = await db.from('supplier_mail_documents').select('id').eq('company',email.company).eq('content_hash',file.hash).single();
       if (doc.error) throw doc.error;
