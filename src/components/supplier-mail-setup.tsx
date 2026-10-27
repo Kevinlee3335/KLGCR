@@ -7,7 +7,7 @@ export function SupplierMailSetup({connections}:{connections:{id:string;created_
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [revoked,setRevoked]=useState<string[]>([]);
-  return <details className="panel"><summary>Gmail connection setup (Admin)</summary>
+  return <details id="supplier-gmail-setup" className="panel supplier-setup"><summary>Gmail connection setup (Admin)</summary>
     <p>Connect klgresidenceenquiry@gmail.com to import incoming Sigma and MFE emails and PDF attachments from 1 January 2023. Google authorization is required once. Synchronization checks every 15 minutes after installation.</p>
     <ol>
       <li>Open <a href="https://script.google.com/home/start" target="_blank" rel="noreferrer">Google Apps Script</a> using the company Gmail account and create a new project.</li>
