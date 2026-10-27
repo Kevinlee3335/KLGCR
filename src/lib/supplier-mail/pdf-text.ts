@@ -10,7 +10,7 @@ export async function extractSupplierPdfText(bytes: Uint8Array) {
     for (let number = 1; number <= pdf.numPages; number++) {
       const page = await pdf.getPage(number);
       const content = await page.getTextContent();
-      chunks.push(content.items.map(item => 'str' in item ? item.str : '').join(' '));
+      chunks.push(content.items.map(item => 'str' in item ? item.str + ('hasEOL' in item && item.hasEOL ? '\n' : ' ') : '').join(''));
       page.cleanup();
     }
     const text = chunks.join('\n').replace(/\0/g, '').slice(0, 500000);
