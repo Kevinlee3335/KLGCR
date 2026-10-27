@@ -16,7 +16,7 @@ it('accepts bounded PNGs and existing drawings, and rejects empty or executable 
 it('persists PNG signatures and continues validating legacy drawings in Postgres',async()=>{
  const db=new PGlite();try{
  await db.exec('create table user_e_signatures(user_id uuid primary key,signature jsonb,updated_at timestamptz);');
- await db.exec(readFileSync('supabase/migrations/20261027150100_signature_photos.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261027065748_signature_photos.sql','utf8'));
  await db.exec('create trigger validate_e_signature before insert or update on user_e_signatures for each row execute function validate_e_signature();');
  const id=crypto.randomUUID(),drawing={strokes:[[[0,0],[1,1]]]};
  await db.query('insert into user_e_signatures(user_id,signature) values($1,$2)',[id,JSON.stringify(drawing)]);

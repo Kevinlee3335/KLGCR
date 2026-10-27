@@ -16,7 +16,7 @@ it('isolates categories, signatures, approvers and confirmed destinations',async
  insert into inventory_items values('${item}','WIN01','Window handle','pcs',true);
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  set app.uid='${kevin}';`);
- for(const file of ['20261021083933_inventory_purchase_orders.sql','20261021091937_inventory_purchase_order_edits.sql','20261022043502_inventory_po_approval.sql','20261022044454_inventory_po_notifications.sql','20261022045002_po_e_signatures.sql','20261022051353_po_name_only_approval.sql','20261027090000_inventory_groups_signatures.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
+ for(const file of ['20261021083933_inventory_purchase_orders.sql','20261021091937_inventory_purchase_order_edits.sql','20261022043502_inventory_po_approval.sql','20261022044454_inventory_po_notifications.sql','20261022045002_po_e_signatures.sql','20261022051353_po_name_only_approval.sql','20261027044704_inventory_groups_signatures.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
 
  const mary='1767d3e4-c907-45fe-8ed0-e433c0d0dca7',office=crypto.randomUUID(),cleaner=crypto.randomUUID();
  await db.query("insert into profiles(id,full_name) values($1,'Mary Tan')",[mary]);
