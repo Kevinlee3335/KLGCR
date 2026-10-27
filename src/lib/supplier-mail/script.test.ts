@@ -34,3 +34,21 @@ describe('Gmail attachment decoding',()=>{
   }
  });
 });
+describe('raw Gmail attachment download',()=>{
+ it('reads attachment bytes from the REST JSON response before decoding',()=>{
+  const {ctx,posts}=script();
+  const bytes=Buffer.from('%PDF-1.7 actual attachment');
+  const downloads:string[]=[];
+  const gmail=ctx.Gmail as {Users:{Messages:{get:()=>unknown}}};
+  gmail.Users.Messages.get=()=>({internalDate:String(Date.parse('2026-01-01T00:00:00Z')),payload:{headers:[{name:'from',value:'customercare.my@sigmamy.com'}],parts:[{partId:'0.1',filename:'report.pdf',body:{attachmentId:'attachment-id',size:bytes.length}}]}});
+  ctx.ScriptApp={getOAuthToken:()=> 'test-only-token'};
+  ctx.Utilities={base64Decode:(s:string)=>Array.from(Buffer.from(s,'base64')),newBlob:(v:number[])=>({getDataAsString:()=>Buffer.from(v).toString()}),DigestAlgorithm:{SHA_256:'sha256'},computeDigest:()=>Array(32).fill(0)};
+  ctx.UrlFetchApp={fetch:(url:string,args:{payload?:string;headers?:{Authorization:string}})=>{
+   if(url.startsWith('https://gmail.googleapis.com/')){downloads.push(url);expect(args.headers?.Authorization).toBe('Bearer test-only-token');return {getResponseCode:()=>200,getContentText:()=>JSON.stringify({data:bytes.toString('base64url')})};}
+   posts.push(JSON.parse(args.payload || '{}'));return {getResponseCode:()=>200,getContentText:()=>'{"ok":true,"done":true}'};
+  }};
+  vm.runInContext("archiveMessage_('1234567890abcdef')",ctx);
+  expect(downloads).toHaveLength(1);
+  expect(posts.find(p=>p.op==='prepare')?.file).toMatchObject({size:bytes.length,filename:'report.pdf'});
+ });
+});

@@ -87,7 +87,11 @@ function archiveMessage_(id) {
     var filename=part.filename.slice(0,255),partId=part.partId || '0',body=part.body || {};
     if(body.size>52428800) {archivePost_({op:'issue',id:id,partId:partId,filename:filename,issue:'PDF exceeds 50 MB. Open the original email to download.'});return;}
     var data=body.data;
-    if(!data && body.attachmentId) data=Gmail.Users.Messages.Attachments.get('me',id,body.attachmentId).data;
+    if(body.attachmentId) {
+      var attachmentResponse = UrlFetchApp.fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + encodeURIComponent(id) + '/attachments/' + encodeURIComponent(body.attachmentId), {headers:{Authorization:'Bearer ' + ScriptApp.getOAuthToken()},muteHttpExceptions:true});
+      if(attachmentResponse.getResponseCode() !== 200) throw new Error('Gmail attachment HTTP ' + attachmentResponse.getResponseCode() + '; cursor retained.');
+      data = JSON.parse(attachmentResponse.getContentText()).data;
+    }
     if(!data) throw new Error('PDF attachment content is missing; cursor retained.');
     var bytes=decodeGmailData_(data);
     if(!bytes.length || Utilities.newBlob(bytes.slice(0,1024)).getDataAsString().indexOf('%PDF-')<0) {archivePost_({op:'issue',id:id,partId:partId,filename:filename,issue:'Attachment is not a valid PDF. Open the original email to check.'});return;}
