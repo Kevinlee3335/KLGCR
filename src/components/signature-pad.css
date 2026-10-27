@@ -18,3 +18,5 @@
 .esign-save{margin-left:auto}
 .esign-cancel{display:block;margin:12px auto 0;padding:3px 10px;border:0;background:none;color:#718095;font-size:12px;cursor:pointer}
 @media(pointer:coarse){.esign-close{min-width:34px;min-height:34px;align-items:center;justify-content:center}.esign-tools .button{min-height:40px;height:40px}}
+
+.esign-upload-preview{margin-top:12px;padding:12px;border:1px solid #cdd6e0;border-radius:8px;background:#fff}.esign-upload-preview img{display:block;width:100%;height:auto;aspect-ratio:10/3;object-fit:contain}.esign-upload-preview p{font-size:12px;color:#718095}.esign-preview{object-fit:contain}

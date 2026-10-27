@@ -1,0 +1,20 @@
+import {createClient} from '@/lib/supabase/server';
+import {OfficeUsageForm} from './office-usage-form';
+import type {Profile} from '@/lib/types';
+import type {OfficeItem,OfficeUsage} from '@/lib/office-inventory/model';
+export async function OfficeUsageSection({profile,page='1',search='',base='/office-inventory'}:{profile:Profile;page?:string;search?:string;base?:string}){
+ const db=await createClient(),pageSize=25,pageNumber=/^[1-9]\d{0,5}$/.test(page)?Number(page):1,term=search.trim().slice(0,100);
+ let history=db.from('office_inventory_usage').select('id,item_code,description,unit,taken_by_name,recorded_by_name,qty,balance_before,balance_after,note,taken_at',{count:'exact'}).order('taken_at',{ascending:false}).order('id',{ascending:false});
+ if(term){const pattern=`"%${term.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}%"`;history=history.or(`item_code.ilike.${pattern},description.ilike.${pattern},taken_by_name.ilike.${pattern}`);}
+ const [catalog,records]=await Promise.all([db.from('inventory_items').select('id,item_code,description,unit,balance_qty,quantity_unverified').eq('inventory_group','office').eq('is_active',true).order('item_code'),history.range((pageNumber-1)*pageSize,pageNumber*pageSize-1)]);
+ const rows=(records.data||[]) as OfficeUsage[],total=records.count??0;
+ const href=(n:number)=>`${base}${base.includes('?')?'&':'?'}${new URLSearchParams({usagePage:String(n),usageQ:term})}#office-usage-history`;
+ const date=(v:string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'short'}).format(new Date(v));
+ return <>
+ {profile.role!=='management_viewer'&&<section className="panel"><div className="section-head compact-head"><div><h3>Take Office Supplies</h3><p className="subtle">Enter who took the supplies and the quantity. Stock updates when your entry is recorded.</p></div></div>{catalog.error?<p className="error">Unable to load office stock. Please refresh.</p>:<OfficeUsageForm items={(catalog.data||[]) as OfficeItem[]} name={profile.full_name}/>}</section>}
+ <section className="panel inventory-history-card" id="office-usage-history"><div className="section-head compact-head"><div><h3>Office Supplies Usage History</h3><p className="subtle">{['admin','management_viewer'].includes(profile.role)?'All recorded withdrawals.':'Your recorded withdrawals.'} Date and time are shown in Malaysia Time.</p></div></div>
+ <form action={base.split('?')[0]} method="get" className="inventory-form">{base.includes('store=office')&&<input type="hidden" name="store" value="office"/>}<label className="span-2"><span>Search usage history</span><input name="usageQ" defaultValue={term} maxLength={100} placeholder="Name, item code or supplies"/></label><div><button type="submit" className="button secondary-button">Search History</button>{term&&<a className="button secondary-button" href={`${base}#office-usage-history`}>Clear</a>}</div></form>
+ {records.error?<p className="error">Unable to load usage history. Please refresh.</p>:rows.length?<div className="table-wrap"><table className="table inventory-table"><thead><tr><th>Date / Time</th><th>Taken by</th><th>Item</th><th>Quantity</th><th>Stock Before / After</th><th>Remarks</th><th>Recorded by</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{date(r.taken_at)}</td><td><strong>{r.taken_by_name}</strong></td><td><strong>{r.item_code}</strong><small>{r.description}</small></td><td>{r.qty} {r.unit}</td><td>{r.balance_before} → {r.balance_after} {r.unit}</td><td>{r.note||'—'}</td><td>{r.recorded_by_name}</td></tr>)}</tbody></table></div>:<p className="dashboard-empty">{term?'No records match this search.':'No office supplies have been recorded yet.'}</p>}
+ {!records.error&&<div className="section-head" style={{marginTop:12}}><small>{total} record{total===1?'':'s'} · Page {pageNumber} of {Math.max(1,Math.ceil(total/pageSize))}</small><div>{pageNumber>1&&<a className="button secondary-button" href={href(pageNumber-1)}>Previous</a>}{pageNumber*pageSize<total&&<a className="button secondary-button" href={href(pageNumber+1)}>Next</a>}</div></div>}
+ </section></>;
+}

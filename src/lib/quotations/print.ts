@@ -35,12 +35,14 @@ function originalSheet(q:Quotation){
  }
  for(const [x,label,name,date,signature] of [[3,'Prepared By',q.createdBy,q.createdAt,q.preparedSignature],[550,'Approved By',q.approvedBy||'Pending approval',q.approvedAt,q.approvedSignature]] as const){
   svg+=`<g font-family="Calibri,sans-serif" font-size="16"><text x="${x}" y="1140" font-weight="bold">${label}</text>`;
+  if(signature?.imageDataUrl)svg+=`<image href="${esc(signature.imageDataUrl)}" x="${x}" y="1160" width="350" height="75" preserveAspectRatio="xMidYMid meet"/>`;
   if(signature)for(const stroke of signature.strokes)svg+=`<polyline points="${stroke.map(([px,py])=>`${x+px*350},${1160+py*75}`).join(' ')}" fill="none" stroke="black" stroke-width="2.4"/>`;
   svg+=`<line x1="${x}" y1="1248" x2="${x+350}" y2="1248" stroke="black"/><text x="${x}" y="1275">${esc(name)}</text><text x="${x}" y="1305" font-size="13">${esc(date?new Date(date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'')}</text></g>`;
  }
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${template.width} ${template.height}" style="display:block;width:100%;height:auto">${svg}</svg>`;
 }
 function signatureSvg(signature:Quotation['preparedSignature']){
+ if(signature?.imageDataUrl)return `<img src="${esc(signature.imageDataUrl)}" alt="Signature" style="width:165px;height:50px;object-fit:contain"/>`;
  return signature?`<svg viewBox="0 0 600 180" style="width:165px;height:50px">${signature.strokes.map(stroke=>`<polyline points="${stroke.map(([x,y])=>`${x*600},${y*180}`).join(' ')}" fill="none" stroke="black" stroke-width="2.4"/>`).join('')}</svg>`:'';
 }
 export function quotationPrintHtml(q:Quotation){

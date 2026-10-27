@@ -59,6 +59,7 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
   if(order.approved_at)text(`Time: ${time(order.approved_at)} MYT`,375,697.7,11);
   for(const [x,signature] of [[50.5,order.requested_signature],[375,order.approved_signature]] as const){
     line(x,774,x+165,774);
+    if(signature?.imageDataUrl){const picture=await pdf.embedPng(signature.imageDataUrl);page.drawImage(picture,{x,y:841.9-769,width:165,height:49.5});}
     if(signature)for(const stroke of signature.strokes){const points=smoothSignatureStroke(stroke);for(let i=1;i<points.length;i++)line(x+points[i-1][0]*165,721+points[i-1][1]*48,x+points[i][0]*165,721+points[i][1]*48);}
   }
   pdf.setTitle(order.po_no); pdf.setCreationDate(new Date(order.created_at));
