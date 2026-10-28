@@ -1,3 +1,4 @@
+import {dispatchPendingPurchases} from '@/lib/purchase-orders/dispatch';
 import {dispatchPoNotifications} from '@/lib/purchase-orders/notifications';
 import { GET as sendMeetingReminders } from "../meeting-reminders/route";
 import { NextRequest, NextResponse } from "next/server";
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await dispatchPoNotifications().catch(error=>console.error('PO notification retry deferred',error));
+  await dispatchPendingPurchases(request.nextUrl.origin).catch(error=>console.error('PO mail retry deferred',error));
   const db = createAdminClient();
   const date = today();
   const { error: materializeError } = await db.rpc("materialize_recurring_tasks", { p_date: date });

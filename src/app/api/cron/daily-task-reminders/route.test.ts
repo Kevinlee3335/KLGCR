@@ -1,3 +1,5 @@
+import {NextRequest} from 'next/server';
+vi.mock('@/lib/purchase-orders/dispatch',()=>({dispatchPendingPurchases:vi.fn().mockResolvedValue(undefined)}));
 vi.mock('@/lib/purchase-orders/notifications',()=>({dispatchPoNotifications:vi.fn().mockResolvedValue(undefined)}));
 import { describe, expect, it, vi } from "vitest";
 
@@ -26,7 +28,7 @@ describe("daily task reminders", () => {
   it("creates the due task and sends one phone reminder without a numeric UUID field", async () => {
     const previousSecret = process.env.CRON_SECRET;
     process.env.CRON_SECRET = "test-secret";
-    const response = await GET(new Request("https://klgcr.example/api/cron/daily-task-reminders", { headers: { authorization: "Bearer test-secret" } }) as never);
+    const response = await GET(new NextRequest("https://klgcr.example/api/cron/daily-task-reminders", { headers: { authorization: "Bearer test-secret" } }) as never);
     process.env.CRON_SECRET = previousSecret;
 
     expect(response.status).toBe(200);

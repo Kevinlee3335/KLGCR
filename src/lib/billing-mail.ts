@@ -7,7 +7,7 @@ import {BILLING_MAIL_FROM,BILLING_MAIL_TO,BILLING_MAIL_CC,type BillingMailStatus
 class BillingGatewayError extends Error {
  constructor(public code:string,message:string){super(message);}
 }
-async function gateway(payload:Record<string,unknown>,timeoutMs=15000){
+export async function gmailGateway(payload:Record<string,unknown>,timeoutMs=15000){
  const url=process.env.KLGCR_GMAIL_WEB_APP_URL,secret=process.env.KLGCR_GMAIL_WEB_APP_SECRET;
  if(!url||!secret)throw new BillingGatewayError('missing_configuration','The website Gmail gateway URL or shared secret is not configured.');
  let response:Response;
@@ -20,7 +20,7 @@ async function gateway(payload:Record<string,unknown>,timeoutMs=15000){
 export async function billingMailConnection(){
  const checkedAt=new Date().toISOString();
  try{
-  const result=await gateway({action:'billing-capabilities'},12000);
+  const result=await gmailGateway({action:'billing-capabilities'},12000);
   if(typeof result.sender==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.sender)&&result.sender!==BILLING_MAIL_FROM)return {ready:false,code:'wrong_sender',error:`The gateway is running as ${result.sender}. Redeploy as klgcr.noreply@gmail.com.`,checkedAt};
   if(result.error==='Unauthorized'||result.status==='rejected')return {ready:false,code:'gateway_rejected',error:'Gmail rejected the connection check. Confirm the existing shared secret matches the website and the updated version is deployed.',checkedAt};
   if(result.version!==2)return {ready:false,code:'outdated_gateway',error:'The website is still reaching an older Gmail gateway. Deploy a New version on the existing Web App URL, then check again.',checkedAt};
@@ -54,7 +54,7 @@ export async function dispatchBillingMail(runId:string){
   const title=`James-approved ${pack.data.kind==='rental'?'Rental':'Utilities'} invoices - ${pack.data.period}`;
   const text=`${title}\n\nApproved by: ${snapshot.approval.approved_by}\nApproved on: ${new Date(snapshot.approval.approved_at).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})} MYT\n\n${snapshot.lines.map(l=>`${l.billNo} | ${l.name} | RM ${l.amount.toFixed(2)}`).join('\n')}\n\nTotal: RM ${snapshot.total.toFixed(2)}\n\nThe attached HTML contains the original approved invoices with James's E-signature. Open it in a browser to view or Print / Save as PDF.\n\nKLG Campus Residence Management`;
   started=true;
-  const result=await gateway({action:'billing-send',key:event.delivery_key,from:BILLING_MAIL_FROM,to:BILLING_MAIL_TO,cc:[...BILLING_MAIL_CC],subject:title,text,invoiceHtml,fileName:`KLGCR-${pack.data.kind}-${pack.data.period}-approved.html`},20000);
+  const result=await gmailGateway({action:'billing-send',key:event.delivery_key,from:BILLING_MAIL_FROM,to:BILLING_MAIL_TO,cc:[...BILLING_MAIL_CC],subject:title,text,invoiceHtml,fileName:`KLGCR-${pack.data.kind}-${pack.data.period}-approved.html`},20000);
   if(result.ok===true&&result.status==='sent'&&result.key===event.delivery_key&&result.sender===BILLING_MAIL_FROM&&result.to===BILLING_MAIL_TO&&JSON.stringify(result.cc)===JSON.stringify([...BILLING_MAIL_CC])&&Number.isFinite(Date.parse(result.sentAt))){status='sent';sentAt=result.sentAt;}
   else{status=result.status==='rejected'?'failed':'uncertain';error=result.status==='rejected'?'Gateway rejected the message; check the mail connection.':'Delivery needs review. Retry checks the same delivery key and does not send another copy.';}
  }catch{status=started?'uncertain':'failed';error=started?'Gateway response was interrupted. Retry checks the same delivery key.':'Unable to prepare the signed invoice email.';}
