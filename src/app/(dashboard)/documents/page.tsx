@@ -14,5 +14,14 @@ export default async function DocumentsPage() {
     data.push(...(result.data || []));
     if (!result.data || result.data.length < 1000) break;
   }
-  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={data || []} canManage={["admin","management_viewer"].includes(profile.role)}/>}</AppShell>;
+  const canManage=["admin","management_viewer"].includes(profile.role);
+  const companyFolders=canManage ? await Promise.all(["sigma","mfe"].map(async company=>{
+    const result=await supabase.from("supplier_mail_documents").select("id",{count:"exact",head:true}).eq("company",company);
+    return {name:company==="sigma"?"Sigma":"MFE",href:`/documents/suppliers/${company}`,count:result.error?null:result.count || 0};
+  })) : [];
+  const businessFolders=canManage ? await Promise.all([
+    (async()=>{const r=await supabase.from('inventory_purchase_orders').select('id',{count:'exact',head:true});return {name:'Purchase Orders',href:'/documents/purchase-orders',count:r.error?null:r.count||0};})(),
+    (async()=>{const r=await supabase.from('quotation_registry').select('value').eq('id',1).maybeSingle();return {name:'Quotations',href:'/documents/quotations',count:r.error?null:((r.data?.value as {quotes?:unknown[]}|undefined)?.quotes?.length||0)};})(),
+  ]) : [];
+  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={data || []} canManage={canManage} companyFolders={[...businessFolders,...companyFolders]}/>}</AppShell>;
 }

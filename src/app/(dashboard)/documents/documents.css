@@ -60,3 +60,5 @@
 .document-actions select {flex-basis:100%;max-width:100%;}
 .documents-category-label {display:grid;gap:6px;font-size:12px;color:#746b59;}
 @media(max-width:700px) {.documents-bulk{padding:16px 20px;}.documents-bulk select{max-width:100%;}.document-actions{max-width:none;justify-content:flex-start;}.documents-category-label{width:100%;}.documents-category-label select{max-width:100%;}.document-upload{align-items:flex-end;}}
+
+.documents-categories .documents-company-folder{display:flex;align-items:center;gap:12px;text-align:left;min-height:72px;box-sizing:border-box;padding:16px;border:1px solid #e6dfcf;border-radius:14px;background:#fff;color:#625a49;font:inherit;font-size:13px;text-decoration:none}.documents-company-folder span{flex:1}.documents-company-folder strong{border-radius:8px;padding:5px 9px;background:#f5f1e7}.documents-company-folder:hover{border-color:#c7ac6b;background:#fffaf0}.documents-company-folder:focus-visible{outline:3px solid #b48b2e;outline-offset:3px}@media(max-width:700px){.documents-categories .documents-company-folder{padding:12px;font-size:12px;gap:8px}}
