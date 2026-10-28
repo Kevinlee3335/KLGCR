@@ -21,7 +21,7 @@ it("restricts admin follow-up, records outcomes atomically, and closes only the 
       ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000010','under_monitoring');
     `);
     await db.exec(readFileSync("supabase/migrations/20261003124500_sync_complaint_completion_status.sql","utf8"));
-    await db.exec(readFileSync("supabase/migrations/20261028090326_admin_monitoring_follow_up.sql","utf8"));
+    await db.exec(readFileSync("supabase/migrations/20261028090533_admin_monitoring_follow_up.sql","utf8"));
     const job = "00000000-0000-0000-0000-000000000011";
     const follow = (outcome: string, note = "Student contacted", date: string | null = null) => db.query("select admin_follow_up_monitoring_job($1,$2,$3,$4)",[job,outcome,note,date]);
     await db.exec("set test.role='management_viewer'");
