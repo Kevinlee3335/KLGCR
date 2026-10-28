@@ -12,5 +12,5 @@ export async function GET(_req:Request,{params}:{params:Promise<{id:string}>}) {
   if(error)return new NextResponse('Unable to load PO',{status:503});
   if(!data)return new NextResponse('Not found',{status:404});
   const bytes=await archivedPurchaseOrderPdf(data as PurchaseOrder);
-  return new NextResponse(Buffer.from(bytes),{headers:{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="${data.po_no.replaceAll('/','-')}.pdf"`,'Cache-Control':'private, no-store'}});
+  return new NextResponse(Buffer.from(bytes),{headers:{'Content-Type':'application/pdf','Content-Disposition':`${new URL(_req.url).searchParams.get('view')==='1'?'inline':'attachment'}; filename="${data.po_no.replaceAll('/','-')}.pdf"`,'Cache-Control':'private, no-store'}});
 }

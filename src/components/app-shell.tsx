@@ -15,11 +15,11 @@ const adminNav = [
   ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
 ] as const;
-const cleanerNav = [["Dashboard", "/staff"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["New Complaint", "/staff/complaints/new"], ["My Reports", "/staff/complaints"], ["Calendar", "/staff/calendar"]] as const;
+const cleanerNav = [["Dashboard", "/staff"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["New Complaint", "/staff/complaints/new"], ["My Reports", "/staff/complaints"], ["Calendar", "/staff/calendar"], ["Office Inventory", "/office-inventory"]] as const;
 const staffNav = [
   ["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"],
   ["Daily Tasks", "/staff/daily-tasks"],
-  ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
+  ["Office Inventory", "/office-inventory"], ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
   ["Calendar", "/staff/calendar"], ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
 ] as const;
 
@@ -37,7 +37,12 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
     ] as const },
-    { label: "Materials", Icon: Boxes, links: adminNav.filter(([label]) => ["Material Requests", "Inventory"].includes(label)) },
+    { label: "Inventory", Icon: Boxes, links: [
+      ["Building Material", "/admin/inventory?store=building", Boxes],
+      ["Office Inventory", "/admin/inventory?store=office", Boxes],
+      ["Cleaner Supplies", "/admin/inventory?store=cleaner", Boxes],
+      ["Material Requests", "/admin/material-requests", PackageOpen],
+    ] as const },
     { label: "Quotation & PO", Icon: FileBarChart, links: [
       ["Quotations", "/admin/quotations", FileBarChart],
       ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],

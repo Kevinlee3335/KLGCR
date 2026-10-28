@@ -1,3 +1,4 @@
+import type {Signature} from '@/lib/purchase-orders/signature';
 import { z } from 'zod';
 
 const text = z.string().max(2000);
@@ -9,7 +10,7 @@ export const quotationInput = z.object({
   items: z.array(z.object({ description: text.trim().min(1), quantity: z.number().positive().max(1000000), unit: z.string().max(30), price: z.number().nonnegative().max(1000000) })).min(1).max(100),
 });
 export type QuotationInput = z.infer<typeof quotationInput>;
-export type Quotation = QuotationInput & { id: string; number: string; createdBy: string; createdAt: string };
+export type Quotation = QuotationInput & { id: string; number: string; createdBy: string; createdAt: string; preparedSignature?:Signature; approvedSignature?:Signature; approvedBy?:string; approvedAt?:string };
 export const customerInput = quotationInput.pick({customer:true,address:true,attention:true,phone:true,email:true});
 export type Customer = z.infer<typeof customerInput> & {id:string};
 export type Registry = { revision: number; counters: Record<string, number>; quotes: Quotation[]; customers?:Customer[] };
