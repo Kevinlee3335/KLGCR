@@ -1,3 +1,4 @@
+import type {BillingApproval} from "./billing-approval";
 import {orderedUtilityAccounts} from "./billing-account-order";
 import { z } from "zod";
 
@@ -9,7 +10,7 @@ export const configSchema=z.object({enabled:z.boolean(),time:z.string().regex(/^
 export type BillingConfig=z.infer<typeof configSchema>;
 export type UtilityAccount=BillingConfig["utilityAccounts"][number];
 export type BillingLine={accountId?:string;reg?:string;businessType?:string;documentKind?:"invoice"|"statement";subtotal?:number;subsidy?:number;rounding?:number;cap?:number|null;name:string;billNo:string;amount:number;description:string;addr:string[];details?:{meterId?:string;previousDate?:string;currentDate?:string;serial?:string;role?:"charge"|"deduct"|"capped";label:string;prev:number;curr:number;usage:number;rate:number;amount:number;unit:string;previousPhoto?:string;photo?:string}[]};
-export type BillingSnapshot={kind:"rental"|"utility";period:string;issueDate:string;total:number;lines:BillingLine[];testMode:true;createdBy:string};
+export type BillingSnapshot={kind:"rental"|"utility";period:string;issueDate:string;total:number;lines:BillingLine[];testMode:true;createdBy:string;approval?:BillingApproval};
 export function billingPreviewEnabled(){return process.env.BILLING_DISABLED!=="true"}
 export const defaultBillingConfig:BillingConfig=configSchema.parse({tenants:[],utilityAccounts:[],enabled:false,time:"09:00",startPeriod:"2026-11",holidays:["2026-11-08","2026-11-09","2026-12-25"],reviewedUntil:"",calendarSource:"Johor 2026 published list — review special holidays before enabling",utilityPeriod:"2026-10"});
 export function malaysiaClock(now=new Date()){const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kuala_Lumpur",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(now);const v=(k:string)=>parts.find(p=>p.type===k)!.value;return {date:`${v("year")}-${v("month")}-${v("day")}`,time:`${v("hour")}:${v("minute")}`}}

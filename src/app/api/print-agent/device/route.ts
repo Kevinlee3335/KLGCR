@@ -1,3 +1,4 @@
+import {withBillingApproval,type BillingApproval} from "@/lib/billing-approval";
 import {NextRequest,NextResponse} from 'next/server';
 import {z} from 'zod';
 import {createAdminClient} from '@/lib/supabase/admin';
@@ -22,11 +23,12 @@ export async function POST(req:NextRequest){try{
    let snapshot=existing?.snapshot as BillingSnapshot|undefined;
    if(!snapshot){snapshot=makeSnapshot('rental',period,clock.date,config,'KLG Print Agent');if(!snapshot.lines.length)continue;const {error:saveError}=await db.from('billing_preview_runs').insert({kind:'rental',period,issue_date:snapshot.issueDate,total:snapshot.total,snapshot,created_by:device.created_by});if(saveError){if(saveError.code!=='23505')throw Error();const {data:winner,error:winnerError}=await db.from('billing_preview_runs').select('snapshot').eq('kind','rental').eq('period',period).single();if(winnerError)throw Error();snapshot=winner.snapshot as BillingSnapshot}}
    if(snapshot.kind!=='rental')throw Error();
+   const pack=await db.from('billing_preview_runs').select('id').eq('kind','rental').eq('period',period).single();if(pack.error)throw Error();const approval=await db.from('billing_run_approvals').select('*').eq('run_id',pack.data.id).maybeSingle();if(approval.error)throw Error();snapshot=withBillingApproval(snapshot,approval.data as BillingApproval|null);if(!snapshot.approval)continue;
    // A period has one immutable automatic print job across reconnection and restarts.
    const {error}=await db.from('klg_print_jobs').insert({dedupe_key:'rental:'+period,kind:'rental',period,snapshot});if(error&&error.code!=='23505')throw Error();
  }}
- let query=db.from('klg_print_jobs').select('*').eq('status','queued').order('created_at').limit(1);if(!eligible)query=query.eq('kind','test');
- const {data:jobs,error:jobsError}=await query;if(jobsError)throw Error();const job=jobs?.[0];if(!job)return reply({job:null,autoEnabled:device.auto_enabled,calendarReady:!!config.reviewedUntil&&clock.date<=config.reviewedUntil});
+ let query=db.from('klg_print_jobs').select('*').eq('status','queued').order('created_at').limit(50);if(!eligible)query=query.eq('kind','test');
+ const {data:jobs,error:jobsError}=await query;if(jobsError)throw Error();let job=jobs?.find(j=>j.kind==='test');for(const candidate of jobs||[]){if(candidate.kind==='test'){job=candidate;break;}const pack=await db.from('billing_preview_runs').select('id,snapshot').eq('kind','rental').eq('period',candidate.period).maybeSingle();if(pack.error)throw Error();if(!pack.data)continue;const approval=await db.from('billing_run_approvals').select('*').eq('run_id',pack.data.id).maybeSingle();if(approval.error)throw Error();const signed=withBillingApproval(pack.data.snapshot,approval.data as BillingApproval|null);if(signed.approval){job={...candidate,snapshot:signed};break;}}if(!job)return reply({job:null,autoEnabled:device.auto_enabled,calendarReady:!!config.reviewedUntil&&clock.date<=config.reviewedUntil});
  let html=testHtml;if(job.kind==='rental'){const snapshot=job.snapshot as BillingSnapshot;if(snapshot?.kind!=='rental'||!snapshot.lines?.length)throw Error();html=buildBillingPrintHtml(snapshot,new URL('/billing/logo.jpg',req.url).href).replace(/<div class="toolbar">[\s\S]*?<\/div>/,'')}
  const {data:claimed,error:claimError}=await db.from('klg_print_jobs').update({status:'claimed',claimed_at:now,device_hash:hash,printer}).eq('id',job.id).eq('status','queued').eq('attempt',job.attempt).select('id').maybeSingle();if(claimError)throw Error();if(!claimed)return reply({job:null});
  return reply({job:{id:job.id,attempt:job.attempt,kind:job.kind,period:job.period,html}});
