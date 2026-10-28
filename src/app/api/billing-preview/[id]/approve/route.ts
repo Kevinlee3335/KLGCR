@@ -1,8 +1,11 @@
+import {dispatchBillingMail} from "@/lib/billing-mail";
 import {NextRequest,NextResponse} from 'next/server';
 import {getSessionProfile} from '@/lib/auth';
 import {createClient} from '@/lib/supabase/server';
 import {billingPreviewEnabled} from '@/lib/billing-preview';
 import {BILLING_APPROVER_ID} from '@/lib/billing-approval';
+export const runtime="nodejs";
+export const maxDuration=60;
 export async function POST(req:NextRequest,{params}:{params:Promise<{id:string}>}){
  const profile=await getSessionProfile();
  if(!billingPreviewEnabled()||!profile||profile.role!=='admin'||profile.id!==BILLING_APPROVER_ID)return NextResponse.json({error:'Only James can approve billing invoices.'},{status:403});
@@ -11,6 +14,7 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{id:string}>
  try{
   const db=await createClient();const {data,error}=await db.rpc('approve_billing_run',{billing_run_id:id});
   if(error)return NextResponse.json({error:error.message.includes('signature')?'Save your E-signature above before approving.':'Unable to approve. Reload and review the saved invoice pack.'},{status:409});
-  return NextResponse.json({approval:data},{headers:{'Cache-Control':'no-store'}});
+  const mail=await dispatchBillingMail(id).catch(()=>({status:"pending",error:"Approval saved. Email delivery needs checking."}));
+  return NextResponse.json({approval:data,mail},{headers:{'Cache-Control':'no-store'}});
  }catch{return NextResponse.json({error:'Unable to approve. Please reload to check the current status.'},{status:503});}
 }

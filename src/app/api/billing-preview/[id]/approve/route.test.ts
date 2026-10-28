@@ -2,6 +2,7 @@ import {beforeEach,it,expect,vi} from 'vitest';
 import {NextRequest} from 'next/server';
 import {BILLING_APPROVER_ID} from '@/lib/billing-approval';
 const mocks=vi.hoisted(()=>({profile:vi.fn(),rpc:vi.fn(),db:vi.fn()}));
+vi.mock('@/lib/billing-mail',()=>({dispatchBillingMail:vi.fn(async()=>({status:'sent'}))}));
 vi.mock('@/lib/auth',()=>({getSessionProfile:mocks.profile}));
 vi.mock('@/lib/supabase/server',()=>({createClient:mocks.db}));
 import {POST} from './route';
