@@ -31,3 +31,5 @@
 .billing-module input[type=file]::file-selector-button:hover{background:#eddfb8;border-color:#a47d24}
 .billing-module input[type=file]:disabled::file-selector-button{opacity:.5;cursor:wait}
 .billing-photo-controls>button{min-height:42px}
+
+.billing-mail-result{margin:12px 0;padding:12px 14px;border:1px solid #b9c4cd;border-radius:8px;background:#f5f7f9;color:#263746}.billing-mail-result p{margin:6px 0}.billing-mail-result-checking{border-color:#ba8d36;background:#fff8e8}.billing-mail-result-success{border-color:#329363;background:#effaf3;color:#165b39}.billing-mail-result-error{border-color:#c46745;background:#fff3ed;color:#813a23}

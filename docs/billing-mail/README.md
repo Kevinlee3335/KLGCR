@@ -11,7 +11,7 @@ The attachment is the original signed invoice pack as a self-contained HTML file
 
 Use the existing standalone Gmail gateway Apps Script project signed in as klgcr.noreply@gmail.com. Update only its `doPost` handler and add the constants and helper functions from `public/billing-mail/gateway.gs`. Preserve any form-submit handlers, other functions, project files and installed triggers. Do not overwrite a combined form-intake project wholesale.
 
-The Script Property `KLGCR_GMAIL_WEB_APP_SECRET` must equal the existing Vercel value of the same name. Retain the current shared secret; do not paste it into chat, commit it or expose it in the browser. The update file deliberately contains no secret.
+If the project already defines `WEBSITE_EMAIL_SECRET`, retain that existing line; the updated handler supports it directly. Otherwise the Script Property `KLGCR_GMAIL_WEB_APP_SECRET` must equal the existing Vercel value of the same name. Retain the current shared secret; do not paste it into chat, commit it or expose it in the browser. The update file deliberately contains no secret.
 
 Authorize MailApp sending and account-email access under klgcr.noreply@gmail.com. In Manage deployments, edit the current Web App deployment, choose a new version, Execute as Me (klgcr.noreply@gmail.com), access Anyone. Keep the existing /exec URL so current resident/member mail workflows continue to use it.
 
@@ -31,3 +31,9 @@ Do not substitute a `from` label, Reply-To value, or arbitrary Resend sender for
 The gateway records `started` before sending and `sent` after success. A stored `started` record is never automatically resent. If it remains uncertain, the operator must inspect the noreply account's Sent mail and Apps Script execution history before any manual repair. Do not delete delivery records blindly.
 
 No old approvals are emailed by the migration. An administrator may explicitly send an already-approved pack from its history row. No real recipient email is sent by the test suite.
+
+## Connection diagnostics
+
+The check acknowledges the click immediately, shows a visible result and a Malaysia-time timestamp, and aborts a stalled browser request after 25 seconds. Server checks distinguish missing website configuration, wrong sender, rejected shared secret, older deployment, incomplete capabilities, upstream HTTP errors, non-JSON authorization/error pages and timeouts. The capability request contains no recipient and sends no email.
+
+The shared transactional helper used by Defect Form and Gym Member emails now requires the existing JSON `{ok:true}` acknowledgement; HTTP 200 with `{ok:false}` or an HTML error page is no longer counted as sent. Successful legacy `to/subject/text/html` requests remain unchanged.

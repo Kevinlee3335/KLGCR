@@ -4,19 +4,29 @@ import {createAdminClient} from './supabase/admin';
 import {withBillingApproval,type BillingApproval} from './billing-approval';
 import {buildBillingPrintHtml} from './billing-print-template';
 import {BILLING_MAIL_FROM,BILLING_MAIL_TO,BILLING_MAIL_CC,type BillingMailStatus} from './billing-mail-settings';
-const capabilityError='Email gateway needs upgrading or authorization under klgcr.noreply@gmail.com.';
+class BillingGatewayError extends Error {
+ constructor(public code:string,message:string){super(message);}
+}
 async function gateway(payload:Record<string,unknown>,timeoutMs=15000){
  const url=process.env.KLGCR_GMAIL_WEB_APP_URL,secret=process.env.KLGCR_GMAIL_WEB_APP_SECRET;
- if(!url||!secret)throw Error('Gmail gateway is not configured.');
- const response=await fetch(url,{method:'POST',signal:AbortSignal.timeout(timeoutMs),headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,secret})});
- if(!response.ok)throw Error('Gmail gateway request failed.');
- return response.json();
+ if(!url||!secret)throw new BillingGatewayError('missing_configuration','The website Gmail gateway URL or shared secret is not configured.');
+ let response:Response;
+ try{response=await fetch(url,{method:'POST',signal:AbortSignal.timeout(timeoutMs),headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,secret})});}
+ catch(error){if(error instanceof Error&&['TimeoutError','AbortError'].includes(error.name))throw new BillingGatewayError('gateway_timeout','Gmail did not respond in time. Wait a moment and check again.');throw new BillingGatewayError('gateway_unreachable','The website could not reach the Gmail gateway. Please check again.');}
+ if(!response.ok)throw new BillingGatewayError('gateway_http_error',`Gmail gateway returned HTTP ${response.status}. Check the existing Web App deployment and access settings.`);
+ try{const result=await response.json();if(!result||typeof result!=='object'||Array.isArray(result))throw Error();return result;}
+ catch{throw new BillingGatewayError('invalid_gateway_response','Gmail returned a page instead of a valid gateway response. Check Apps Script execution logs, authorization, Execute as Me and access Anyone.');}
 }
 export async function billingMailConnection(){
- try{const result=await gateway({action:'billing-capabilities'},7000);
-  if(result.ok!==true||result.sender!==BILLING_MAIL_FROM||result.version!==2||!Array.isArray(result.capabilities)||!['cc','htmlAttachment','idempotency'].every(v=>result.capabilities?.includes(v)))return {ready:false,error:capabilityError};
-  return {ready:true,sender:BILLING_MAIL_FROM};
- }catch{return {ready:false,error:capabilityError};}
+ const checkedAt=new Date().toISOString();
+ try{
+  const result=await gateway({action:'billing-capabilities'},12000);
+  if(typeof result.sender==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.sender)&&result.sender!==BILLING_MAIL_FROM)return {ready:false,code:'wrong_sender',error:`The gateway is running as ${result.sender}. Redeploy as klgcr.noreply@gmail.com.`,checkedAt};
+  if(result.error==='Unauthorized'||result.status==='rejected')return {ready:false,code:'gateway_rejected',error:'Gmail rejected the connection check. Confirm the existing shared secret matches the website and the updated version is deployed.',checkedAt};
+  if(result.version!==2)return {ready:false,code:'outdated_gateway',error:'The website is still reaching an older Gmail gateway. Deploy a New version on the existing Web App URL, then check again.',checkedAt};
+  if(result.ok!==true||result.sender!==BILLING_MAIL_FROM||!Array.isArray(result.capabilities)||!['cc','htmlAttachment','idempotency'].every(v=>result.capabilities.includes(v)))return {ready:false,code:'incomplete_gateway',error:'The Gmail gateway has not confirmed the required sender, CC and signed invoice attachment support.',checkedAt};
+  return {ready:true,sender:BILLING_MAIL_FROM,code:'connected',checkedAt};
+ }catch(error){return {ready:false,code:error instanceof BillingGatewayError?error.code:'connection_failed',error:error instanceof BillingGatewayError?error.message:'Unable to verify Gmail. Please check again.',checkedAt};}
 }
 export async function dispatchBillingMail(runId:string){
  const db=createAdminClient();

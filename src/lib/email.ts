@@ -137,7 +137,9 @@ export async function sendTransactionalEmail(to: string | null | undefined, mess
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ secret: gmailSecret, to: to.trim(), subject: message.subject, text: message.text, html: message.html || null }),
       });
-      if (!response.ok) throw new Error(`Gmail gateway returned ${response.status}: ${await response.text()}`);
+      if (!response.ok) throw new Error(`Gmail gateway returned HTTP ${response.status}`);
+      const receipt = await response.json();
+      if (receipt?.ok !== true) throw new Error("Gmail gateway did not confirm successful delivery");
       return { sent: true as const };
     } catch (error) {
       console.error("Gmail gateway delivery failed", error);
