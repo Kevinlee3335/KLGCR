@@ -47,3 +47,13 @@ export async function createCheckoutBatch(input:BatchCheckoutInput[]){
 }
 
 export async function updateOccupancyPax(id:string,data:FormData){const actor=await requireRole(["admin"]);const pax=Number(data.get("pax"));if(!Number.isInteger(pax)||pax<1||pax>20)go(id,"Enter a room capacity between 1 and 20 pax.");const db=await createClient();const {data:row,error}=await db.from("checkout_rooms").update({occupancy_pax:pax}).is("deleted_at",null).eq("id",id).eq("status","ready_for_occupancy").select("id").maybeSingle();if(error||!row)go(id,error?.message||"Ready room not found.");await history(db,id,actor.id,"room_capacity_updated",`${pax} pax`);revalidatePath("/admin/checkouts/occupancy-report");revalidatePath(`/admin/checkouts/${id}`);go(id);}
+
+export async function transferCheckoutTask(id:string,data:FormData){
+ await requireRole(["admin"]);const db=await createClient();
+ const assignee=String(data.get("assignee")||"");const expected=String(data.get("previousAssignee")||"");const reason=String(data.get("reason")||"").trim();
+ if(!assignee||!expected||reason.length<3||reason.length>2000)go(id,"Choose a new assignee and enter a transfer reason (3–2000 characters).");
+ const {data:room,error}=await db.rpc("transfer_checkout_task",{p_room_id:id,p_assignee:assignee,p_expected_assignee:expected,p_reason:reason});
+ if(error||!room)go(id,error?.message||"Unable to transfer this task.");
+ try{await createAppNotifications({recipientIds:[assignee],type:"checkout_assigned",title:"Check-out repair task transferred to you",body:`${room.reference_no} — Room ${room.room_no}. ${reason}`,href:`/staff/checkouts/${id}`,entityId:id});}catch(error){console.error("Unable to notify new check-out assignee",error);}
+ revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/admin/checkouts");revalidatePath("/staff/checkouts");revalidatePath(`/staff/checkouts/${id}`);go(id);
+}

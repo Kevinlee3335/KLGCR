@@ -20,7 +20,7 @@ describe("check-out server action flow (isolated database)",()=>{
  it("persists partial repairs, completes repairs, cleans and verifies readiness",async()=>{
  state.actor={id:"tech",role:"maintenance_staff"};
  await expect(completeRectification("room",form({rectifiedDefects:["a"],notes:"Fan fixed"},true))).rejects.toThrow("/staff/checkouts/room");
- expect(room().status).toBe("rectification");expect(checkoutProgress(state.tables.checkout_defects).percent).toBe(50);
+ expect(room().status).toBe("rectification");expect(state.tables.checkout_photos[0].defect_id).toBe("a");expect(checkoutProgress(state.tables.checkout_defects).percent).toBe(50);
  await expect(completeRectification("room",form({rectifiedDefects:["b"]},true))).rejects.toThrow("/staff/checkouts/room");expect(room().status).toBe("verification");
  state.actor={id:"admin",role:"admin"};await expect(handToCleaning("room",form({cleaner:"cleaner"}))).rejects.toThrow("/admin/checkouts/room");expect(room().status).toBe("cleaning");
  state.actor={id:"cleaner",role:"cleaner"};await expect(completeCleaning("room",form({},true))).rejects.toThrow("/staff/checkouts/room");expect(room().status).toBe("verification");

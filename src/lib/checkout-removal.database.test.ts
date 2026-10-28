@@ -12,7 +12,7 @@ it('removes rooms reversibly, preserves evidence and rejects staff removal or st
  create table checkout_photos(id int,checkout_room_id int references checkout_rooms(id));
  insert into checkout_rooms(id,status) values(1,'rectification'),(2,'rectification');
  insert into checkout_defects values(1,1);insert into checkout_photos values(1,1);`);
- await db.exec(readFileSync('supabase/migrations/20261028081906_checkout_soft_delete.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261028082303_checkout_soft_delete.sql','utf8'));
  await db.exec(`set app.uid='00000000-0000-4000-8000-000000000001';set app.role='maintenance_staff'`);
  await expect(db.exec('update checkout_rooms set deleted_at=now() where id=1')).rejects.toThrow('Only administrators');
  await db.exec(`set app.role='admin';update checkout_rooms set deleted_at=now(),deletion_reason='Date range cleanup' where id=1`);

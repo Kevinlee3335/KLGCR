@@ -17,3 +17,13 @@ Validation:
 Existing data finding: KLGCR-COR-17F112F4 / Room 222 is already marked ready_for_occupancy, but Bathroom · Window Handle — Broken is still open (3 of 4 repairs rectified). Preserve the original record for management review; do not automatically assert the repair was completed.
 
 The Supabase project-wide advisor also reports existing SECURITY DEFINER execution warnings and disabled leaked-password protection; this release does not change those unrelated settings.
+
+
+## Follow-up: controls, old records and workload transfer
+
+- Fixed the later `admin-polish.css` important rules that had overridden the original black/gold controls. Replaced the gold gradient and oversized create action, improved defect field spacing and file pickers, and clarified that No Defect still requires choosing a Cleaner on the next page.
+- Removed 11 Check-out Rooms created from 20 September through 5 October 2026 inclusive, using Malaysia calendar boundaries. Removal is reversible (`deleted_at` and reason); 9 active rooms remain. All 68 defect rows, 28 photo rows and 46 historical events are preserved. Removed rooms are excluded from admin/staff pages, actions and occupancy reports.
+- Admin can transfer an assigned room in rectification between active Abdullah/Faiz accounts, with the target's active room count and a required reason. The database locks the room and saves the transfer plus history atomically. A stale transfer is rejected. Existing progress, photos and rectifier attribution are retained. The new assignee gets an application notification.
+- Maintenance can expand an individual open defect, provide its notes/photo and choose Update this defect. Updating several defects together remains available in a separate disclosure.
+- Browser-rendered local layout check passed at 1200px and 390px: primary control computed dark background, width about 182px on desktop, and no mobile horizontal overflow. This is a local layout fixture, not a signed-in production session.
+- New database tests cover reversible removal, staff/stale-write rejection, admin-only transfer, inactive targets, lost-access after transfer, stale assignees, preservation of completed items and transaction rollback when auditing fails. A rendered staff-page test checks one defect per form and required evidence.

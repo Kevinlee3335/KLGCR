@@ -185,3 +185,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 .checkout-grid input[type=checkbox] {width:17px;min-height:17px;height:17px;padding:0;accent-color:#6c5b35}
 @media(max-width:700px){.checkout-defect-picker .defect-picker-row{grid-template-columns:1fr}.checkout-create .form-grid>.button{width:100%}}
 @media(prefers-reduced-motion:reduce){.button,.button-link,.secondary-button{transition:none}}
+
+.checkout-transfer h4{margin:0 0 10px}.checkout-transfer .button{width:auto}.checkout-repair-items{display:grid;gap:12px}.checkout-repair-item,.checkout-batch-update{border:1px solid #ded6c5;border-radius:10px;padding:14px 16px;background:#fffdf8}.checkout-repair-item>summary,.checkout-batch-update>summary{cursor:pointer;font:600 13px/1.5 Arial,Helvetica,sans-serif;color:#51452d}.checkout-repair-item .button{width:auto}.checkout-batch-update{margin-top:12px;background:transparent}
+
+.checkout-create input[type=file],.checkout-grid input[type=file]{padding:8px!important;font:13px Arial,Helvetica,sans-serif}.checkout-create input[type=file]::file-selector-button,.checkout-grid input[type=file]::file-selector-button{padding:8px 12px;margin-right:12px;border:1px solid #d5c9ae;border-radius:6px;background:#f2ecde;color:#5d4e30;font:600 12px Arial,Helvetica,sans-serif;cursor:pointer}
