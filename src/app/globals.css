@@ -3896,3 +3896,18 @@ button.calendar-item {
 .calendar-item.calendar-holiday,.calendar-day-detail.calendar-holiday{background:#fff1f2;color:#9f1239;border-left:3px solid #e11d48}
 .calendar-controls form{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .calendar-controls input[type="month"]{width:auto;max-width:180px;min-width:0}
+
+/* Black and gold hotel operations controls, shared by desktop and mobile. */
+.button, button.button, a.button, .button.secondary, .button.danger, .admin-shell .sidebar-footer .button {
+ background: linear-gradient(135deg,#29251c,#101111);
+ color:#f6df9d; border:1px solid #b79950; border-radius:9px;
+ box-shadow:0 3px 9px #16130d24,inset 0 1px 0 #fff2;
+ font-weight:600; letter-spacing:.025em;
+ transition:background .18s,box-shadow .18s,transform .18s;
+}
+.button:hover:not(:disabled) {background:linear-gradient(135deg,#403521,#191919);color:#fff0bc;box-shadow:0 5px 14px #16130d35;transform:translateY(-1px)}
+.button-secondary {background:linear-gradient(135deg,#fffaf0,#efe4c9);color:#4c3b16;border-color:#b79950}
+.button:focus-visible,button:focus-visible {outline:3px solid #b79950;outline-offset:3px}
+.button:disabled {opacity:.5;cursor:not-allowed;transform:none}
+.checkout-list progress {width:100px;accent-color:#a58135;vertical-align:middle}
+@media (prefers-reduced-motion:reduce){.button{transition:none}.button:hover:not(:disabled){transform:none}}

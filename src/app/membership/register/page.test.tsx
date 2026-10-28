@@ -1,7 +1,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/components/membership-form",()=>({MembershipForm:()=> <div data-testid="registration-form"/>}));
-vi.mock("@/lib/membership",()=>({membershipEnabled:()=>false,receiptOptionalForTesting:()=>true}));
+vi.mock("@/lib/membership",()=>({membershipEnabled:()=>false,receiptOptionalForTesting:()=>true, registrationPeriod:()=>"2026-11-01",malaysiaDay:()=>"2026-10-28"}));
 import Page from "./page";
 afterEach(cleanup);
 describe("membership entrance",()=>{
@@ -17,10 +17,10 @@ describe("membership entrance",()=>{
     expect(screen.getByTestId("registration-form")).toBeInTheDocument();
     expect(screen.getByRole("link",{name:/Membership options/})).toBeInTheDocument();
   });
-  it.each(["renew","cancel"])("opens the secure existing-member flow for %s",async action=>{
+  it.each(["renew","cancel"])("opens the identity-verified existing-member request for %s",async action=>{
     render(await Page({searchParams:Promise.resolve({action})}));
-    expect(screen.getByRole("textbox",{name:"Your private membership link"})).toBeInTheDocument();
-    expect(screen.getByRole("button",{name:action==="renew"?"Continue to Renewal":"Continue to Cancellation"})).toBeInTheDocument();
+    for(const name of ["Full name","IC / Passport number","Email address"])expect(screen.getByRole("textbox",{name})).toBeInTheDocument();
+    expect(screen.getByRole("button",{name:action==="renew"?"Submit renewal":"Submit cancellation request"})).toBeInTheDocument();
     expect(screen.queryByTestId("registration-form")).toBeNull();
   });
 });

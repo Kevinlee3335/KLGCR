@@ -16,14 +16,16 @@ type Entry = { area: string; item: string; issue: string; other: string };
 const blank = (): Entry => ({ area: "Room", item: "", issue: "", other: "" });
 
 export function CheckoutDefectPicker({ name, required = false }: { name: string; required?: boolean }) {
+  const [noDefect, setNoDefect] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([blank()]);
   const update = (index: number, values: Partial<Entry>) => setEntries((current) => current.map((entry, i) => i === index ? { ...entry, ...values } : entry));
   const areaOptions = defectOptions.map((area) => area.area);
   const validEntries = entries.filter((entry) => entry.item && entry.issue && ((entry.item !== "Other" && entry.issue !== "Other") || entry.other.trim()))
     .map((entry) => ({ description: entry.item === "Other" || entry.issue === "Other" ? entry.other.trim() : entry.area + " · " + entry.item + " · " + entry.issue }));
   return <div className="checkout-defect-picker">
-    <input type="hidden" name={name} value={JSON.stringify(validEntries)} required={required} />
-    {entries.map((entry, index) => {
+    <input type="hidden" name={name} value={JSON.stringify(noDefect ? [{description:"No Defect"}] : validEntries)} required={required} />
+    {required && <label><input type="checkbox" checked={noDefect} onChange={e=>setNoDefect(e.target.checked)}/> No Defect — assign directly to housekeeping</label>}
+    {!noDefect && entries.map((entry, index) => {
       const area = defectOptions.find((option) => option.area === entry.area) || defectOptions[0];
       const item = area.items.find(([label]) => label === entry.item);
       const needsOther = entry.item === "Other" || entry.issue === "Other";
@@ -44,6 +46,6 @@ export function CheckoutDefectPicker({ name, required = false }: { name: string;
         {entries.length > 1 && <button type="button" className="button button-secondary" onClick={() => setEntries((current) => current.filter((_, i) => i !== index))}>Remove</button>}
       </fieldset>;
     })}
-    <button type="button" className="button button-secondary" onClick={() => setEntries((current) => [...current, blank()])}>Add another defect</button>
+    {!noDefect && <button type="button" className="button button-secondary" onClick={() => setEntries((current) => [...current, blank()])}>Add another defect</button>}
   </div>;
 }
