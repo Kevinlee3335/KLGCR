@@ -1,5 +1,5 @@
 /* KLGCR Gmail gateway v2. Deploy the existing Web App as klgcr.noreply@gmail.com.
- * Script Properties: KLGCR_GMAIL_WEB_APP_SECRET must match the existing Vercel secret.
+ * Keep an existing WEBSITE_EMAIL_SECRET constant, or use Script Property KLGCR_GMAIL_WEB_APP_SECRET. It must match the existing website secret.
  * Manage deployments > Edit > New version > Execute as Me > Anyone. Keep its /exec URL.
  * This file contains no secret. Existing to/subject/text/html messages remain supported.
  */
@@ -10,7 +10,7 @@ function klgReply(value){return ContentService.createTextOutput(JSON.stringify(v
 function doPost(e){
  var request;
  try{request=JSON.parse(e.postData.contents);}catch(ignore){return klgReply({ok:false,status:'rejected'});}
- var props=PropertiesService.getScriptProperties(),secret=props.getProperty('KLGCR_GMAIL_WEB_APP_SECRET');
+ var props=PropertiesService.getScriptProperties(),secret=typeof WEBSITE_EMAIL_SECRET!=='undefined'?WEBSITE_EMAIL_SECRET:props.getProperty('KLGCR_GMAIL_WEB_APP_SECRET');
  if(!secret||request.secret!==secret)return klgReply({ok:false,status:'rejected'});
  var sender=Session.getEffectiveUser().getEmail().toLowerCase();
  if(request.action==='billing-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['cc','htmlAttachment','idempotency']});
