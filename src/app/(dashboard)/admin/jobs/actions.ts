@@ -55,3 +55,23 @@ export async function saveJobAppointment(jobId: string, appointmentId: string | 
   revalidatePath(`/admin/jobs/${jobId}`); revalidatePath("/admin/daily-tasks"); revalidatePath("/staff"); revalidatePath("/staff/appointments");
   redirect(destination(jobId));
 }
+
+export async function followUpMonitoringJob(jobId: string, data: FormData) {
+  await requireRole(["admin"]);
+  const parsed = z.object({
+    outcome: z.enum(["completed", "in_progress", "under_monitoring"]),
+    note: z.string().trim().min(1, "Follow-up remarks are required.").max(2000),
+    reviewDate: z.union([z.string().date(), z.literal("")]),
+  }).safeParse({ outcome: data.get("outcome"), note: data.get("note"), reviewDate: data.get("reviewDate") || "" });
+  if (!parsed.success) redirect(destination(jobId, parsed.error.issues[0]?.message || "Invalid follow-up"));
+  const { outcome, note, reviewDate } = parsed.data;
+  if (outcome === "under_monitoring" && !reviewDate) redirect(destination(jobId, "Choose the next follow-up date."));
+  const db = await createClient();
+  const { error } = await db.rpc("admin_follow_up_monitoring_job", {
+    p_job_id: jobId, p_outcome: outcome, p_note: note,
+    p_review_at: outcome === "under_monitoring" ? `${reviewDate}T00:00:00+08:00` : null,
+  });
+  if (error) redirect(destination(jobId, error.message));
+  for (const path of ["/admin", "/admin/jobs", `/admin/jobs/${jobId}`, "/admin/complaints", "/staff", "/staff/tasks", "/staff/monitoring", `/staff/jobs/${jobId}`]) revalidatePath(path);
+  redirect(`/admin/jobs/${jobId}?followUp=1`);
+}

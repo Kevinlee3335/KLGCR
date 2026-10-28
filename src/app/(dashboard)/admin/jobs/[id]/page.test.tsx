@@ -82,6 +82,14 @@ describe("Admin Job Detail", () => {
     queries.set("maintenance_job_photos", query({data:[],error:null}));
   });
 
+  it("shows monitoring outcomes for admins", async () => {
+    queries.set("maintenance_jobs", query({data:{...job,status:"under_monitoring",monitoring_note:"Observe the leak"},error:null}));
+    const html=renderToStaticMarkup(await AdminJobDetail({params:Promise.resolve({id:job.id})}));
+    expect(html).toContain("Confirm Completed");
+    expect(html).toContain("Return to In Progress");
+    expect(html).toContain("Next follow-up date");
+  });
+
   it("renders the job and timeline when optional activity queries return no data", async () => {
     const html = renderToStaticMarkup(await AdminJobDetail({ params: Promise.resolve({ id: job.id }) }));
 
