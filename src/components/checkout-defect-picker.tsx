@@ -24,7 +24,7 @@ export function CheckoutDefectPicker({ name, required = false }: { name: string;
     .map((entry) => ({ description: entry.item === "Other" || entry.issue === "Other" ? entry.other.trim() : entry.area + " · " + entry.item + " · " + entry.issue }));
   return <div className="checkout-defect-picker">
     <input type="hidden" name={name} value={JSON.stringify(noDefect ? [{description:"No Defect"}] : validEntries)} required={required} />
-    {required && <label><input type="checkbox" checked={noDefect} onChange={e=>setNoDefect(e.target.checked)}/> No Defect — assign directly to housekeeping</label>}
+    {required && <label><input type="checkbox" checked={noDefect} onChange={e=>setNoDefect(e.target.checked)}/> No Defect — skip maintenance; select a cleaner next</label>}
     {!noDefect && entries.map((entry, index) => {
       const area = defectOptions.find((option) => option.area === entry.area) || defectOptions[0];
       const item = area.items.find(([label]) => label === entry.item);

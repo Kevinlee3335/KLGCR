@@ -160,3 +160,28 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 .admin-nav-group:hover > .admin-nav-group-trigger, .admin-nav-group.is-active > .admin-nav-group-trigger { background: #302d25; color: #e7bd62; }
 .admin-nav-group-trigger:focus-visible { outline: 2px solid #e7bd62; outline-offset: 2px; }
 @media (min-width: 851px) { .sidebar .admin-nav-group:hover > .admin-nav-group-links, .sidebar .admin-nav-group:focus-within > .admin-nav-group-links { display: grid; gap: 2px; } }
+
+/* Restrained hotel controls: this file is loaded after globals.css. */
+.button,.button-link,.secondary-button {
+ background:#20231f!important;color:#f5e7bb!important;border:1px solid #ac9155!important;
+ min-height:42px;border-radius:8px;padding:0 18px;font:600 13px/1.25 Arial,Helvetica,sans-serif;
+ letter-spacing:.01em;box-shadow:0 2px 4px #15171112;transition:background .16s,border-color .16s;
+}
+.button:hover,.button-link:hover,.secondary-button:hover {background:#31362f!important;border-color:#c4a86b!important;transform:none;filter:none;box-shadow:0 2px 5px #15171118}
+.button.secondary,.button-secondary,.secondary-button,.button-link.secondary {background:#fffdf8!important;color:#605238!important;border:1px solid #d7ccb5!important;box-shadow:none}
+.button.secondary:hover,.button-secondary:hover,.secondary-button:hover {background:#f5f0e6!important;border-color:#b7a47c!important}
+.button:disabled {opacity:.5;cursor:not-allowed;filter:none}
+.checkout-create .form-grid>.button {justify-self:start;align-self:end;width:auto;min-width:170px}
+.checkout-defect-picker {display:grid;gap:14px}
+.checkout-defect-picker>label {display:flex!important;align-items:center;gap:10px;padding:12px 14px;background:#f4f1e9;border:1px solid #e2d9c7;border-radius:8px}
+.checkout-defect-picker input[type=checkbox] {width:17px;min-height:17px;height:17px;margin:0;padding:0;accent-color:#6c5b35;flex:0 0 17px}
+.checkout-defect-picker .defect-picker-row {display:grid;grid-template-columns:150px minmax(180px,1fr) minmax(150px,1fr) auto;gap:12px;padding:16px;border:1px solid #e5dece;border-radius:10px;background:#fffdf9;margin:0}
+.checkout-defect-picker legend {font:600 12px Arial,Helvetica,sans-serif;color:#82724e;padding:0 6px}
+.checkout-defect-picker>.button {justify-self:start}
+.checkout-list>h3,.checkout-list>p {margin-left:20px;margin-right:20px}
+.checkout-list>h3 {margin-top:20px;margin-bottom:6px;font:600 17px Arial,Helvetica,sans-serif}
+.checkout-list progress {width:100px;height:7px;accent-color:#9a7d3c;vertical-align:middle}
+.checkout-list td small {display:block;margin-top:5px}
+.checkout-grid input[type=checkbox] {width:17px;min-height:17px;height:17px;padding:0;accent-color:#6c5b35}
+@media(max-width:700px){.checkout-defect-picker .defect-picker-row{grid-template-columns:1fr}.checkout-create .form-grid>.button{width:100%}}
+@media(prefers-reduced-motion:reduce){.button,.button-link,.secondary-button{transition:none}}
