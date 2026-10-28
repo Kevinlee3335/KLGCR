@@ -15,7 +15,7 @@ import {completeRectification,completeCleaning} from "@/app/(dashboard)/staff/ch
 import {checkoutProgress} from "./checkouts";
 function form(values:Record<string,string|string[]>={},photo=false){const f=new FormData();for(const [k,v]of Object.entries(values))for(const x of Array.isArray(v)?v:[v])f.append(k,x);if(photo)f.append("photo",new File(["photo"],"evidence.jpg",{type:"image/jpeg"}));return f}
 const room=()=>state.tables.checkout_rooms[0];
-beforeEach(()=>{state.actor={id:"admin",role:"admin"};state.notifications.mockClear();state.tables={checkout_rooms:[{id:"room",reference_no:"TEST",room_no:"TEST",status:"rectification",assigned_to:"tech",cleaner_id:null}],checkout_defects:[{id:"a",checkout_room_id:"room",description:"Fan",status:"open"},{id:"b",checkout_room_id:"room",description:"Tap",status:"open"}],profiles:[{id:"cleaner",role:"cleaner",is_active:true}],checkout_history:[],checkout_photos:[]}});
+beforeEach(()=>{state.actor={id:"admin",role:"admin"};state.notifications.mockClear();state.tables={checkout_rooms:[{id:"room",reference_no:"TEST",room_no:"TEST",deleted_at:null,status:"rectification",assigned_to:"tech",cleaner_id:null}],checkout_defects:[{id:"a",checkout_room_id:"room",description:"Fan",status:"open"},{id:"b",checkout_room_id:"room",description:"Tap",status:"open"}],profiles:[{id:"cleaner",role:"cleaner",is_active:true}],checkout_history:[],checkout_photos:[]}});
 describe("check-out server action flow (isolated database)",()=>{
  it("persists partial repairs, completes repairs, cleans and verifies readiness",async()=>{
  state.actor={id:"tech",role:"maintenance_staff"};
