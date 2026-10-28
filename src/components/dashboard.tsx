@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowRight, Boxes, CheckCircle2, ClipboardCheck,
@@ -22,12 +23,12 @@ export type AdminDashboardData = {
 };
 
 type StaffDashboardProps = { kind: "staff"; name: string; blocks?: string; values: number[]; hrefs?: string[] };
-type AdminDashboardProps = { kind: "admin"; name: string; data: AdminDashboardData };
+type AdminDashboardProps = { kind: "admin"; name: string; data: AdminDashboardData; monitoringFollowUp?: ReactNode };
 
 const statusLabel = (status: string) => status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const malaysiaDate = (date: string, options?: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", ...options }).format(new Date(date));
 
-function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
+function AdminDashboard({ name, data, monitoringFollowUp }: Omit<AdminDashboardProps, "kind">) {
   const now = new Date();
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", hour12: false }).format(now));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -78,6 +79,7 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
         </Link>)}
       </div>
     </section>}
+    {monitoringFollowUp}
     <section className="quick-section"><div className="dashboard-section-title"><div><span>Quick Actions</span><small>Common operational workflows</small></div></div><div className="quick-actions">{quickActions.map(([label, href, Icon]) => <Link href={href} key={label}><Icon size={18}/><span>{label}</span><ArrowRight size={15}/></Link>)}</div></section>
     <div className="operations-grid">
       <section className="dashboard-card jobs-overview"><div className="dashboard-section-title"><div><span>Jobs Overview</span><small>Current maintenance workflow</small></div><Wrench size={19}/></div><div className="jobs-chart-wrap"><div className="donut" style={{ background: `conic-gradient(${gradient})` }}><div><strong>{totalJobs}</strong><span>Total Jobs</span></div></div><div className="chart-legend">{jobSegments.map(([label, count, color]) => <div key={label}><i style={{background: color}}/><span>{label}</span><strong>{count}</strong></div>)}</div></div></section>
@@ -89,7 +91,7 @@ function AdminDashboard({ name, data }: Omit<AdminDashboardProps, "kind">) {
 }
 
 export function Dashboard(props: AdminDashboardProps | StaffDashboardProps) {
-  if (props.kind === "admin") return <AdminDashboard name={props.name} data={props.data}/>;
+  if (props.kind === "admin") return <AdminDashboard name={props.name} data={props.data} monitoringFollowUp={props.monitoringFollowUp}/>;
   const labels = [["To do", "Team maintenance reports"], ["In progress", "Team maintenance reports"], ["Pending material", "Team maintenance reports"], ["Completed", "All completed reports"]];
   return <><section className="welcome"><div><p className="eyebrow">Maintenance Reports — {props.blocks || "All sites"}</p><h2>Good day, {props.name.split(" ")[0]}</h2><p className="subtle">All maintenance staff can view every report. Only the assigned staff member can update a job.</p></div><span className="date-badge">Live workflow</span></section><section className="metrics">{labels.map(([label, hint], index) => { const content = <><span className="subtle">{label}</span><div className="value">{props.values[index] || 0}</div><small>{hint}</small></>; return props.hrefs?.[index] ? <Link className="panel metric metric-link" href={props.hrefs[index]} key={label}>{content}</Link> : <article className="panel metric" key={label}>{content}</article>; })}</section></>;
 }
