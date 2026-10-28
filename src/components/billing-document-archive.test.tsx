@@ -1,0 +1,15 @@
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {render,screen,cleanup} from '@testing-library/react';
+import type {BillingDocumentRecord} from '@/lib/billing-documents';
+const mocks=vi.hoisted(()=>({role:vi.fn(),records:vi.fn(),directory:vi.fn()}));
+vi.mock('@/lib/auth',()=>({requireRole:mocks.role}));
+vi.mock('@/lib/billing-document-queries',()=>({loadBillingDocumentRecords:mocks.records,loadBillingAccountDirectory:mocks.directory}));
+vi.mock('./app-shell',()=>({AppShell:({children}:{children:React.ReactNode})=><main>{children}</main>}));
+vi.mock('next/navigation',()=>({notFound:()=>{throw Error('not-found')}}));
+import {BillingDocumentArchive} from './billing-document-archive';
+const base:BillingDocumentRecord={run_id:'11111111-1111-4111-8111-111111111111',line_index:0,kind:'rental',period:'2026-10',issue_date:'2026-10-01',created_at:'2026-10-01T00:00:00Z',account_key:'1',account_name:'Tenant One',bill_no:'INV-10',amount:100,description:'Rent',approved_at:null,approved_by:null};
+beforeEach(()=>{vi.clearAllMocks();mocks.role.mockResolvedValue({role:'admin'});mocks.directory.mockResolvedValue([{kind:'rental',account_key:'1',account_name:'Tenant One',detail:'Lot A'},{kind:'rental',account_key:'2',account_name:'Tenant Two',detail:'Lot B'}]);mocks.records.mockResolvedValue([base,{...base,run_id:'22222222-2222-4222-8222-222222222222',period:'2026-09',bill_no:'INV-09',approved_at:'2026-10-01T00:00:00Z'}])});afterEach(cleanup);
+it('shows tenant subfolders, including accounts without saved bills',async()=>{render(await BillingDocumentArchive({params:Promise.resolve({kind:'rental'}),searchParams:Promise.resolve({})}));expect(screen.getByRole('link',{name:/Tenant One/})).toHaveAttribute('href','/documents/billing/rental/account-1');expect(screen.getByRole('link',{name:/Tenant Two/})).toHaveTextContent('0 bills');expect(mocks.role).toHaveBeenCalledWith(['admin','management_viewer'])});
+it('lists each month with original invoice view and download actions',async()=>{render(await BillingDocumentArchive({params:Promise.resolve({kind:'rental',account:'account-1'}),searchParams:Promise.resolve({})}));expect(screen.getByText('INV-10')).toBeInTheDocument();expect(screen.getByText('INV-09')).toBeInTheDocument();expect(screen.getAllByRole('link',{name:'View invoice'})).toHaveLength(2);expect(screen.getAllByRole('link',{name:'Download'})[0]).toHaveAttribute('href','/api/billing-documents/11111111-1111-4111-8111-111111111111/0?download=1');expect(mocks.records).toHaveBeenCalledWith('rental','1')});
+it('filters bills by month and approval without dropping saved history',async()=>{render(await BillingDocumentArchive({params:Promise.resolve({kind:'rental',account:'account-1'}),searchParams:Promise.resolve({month:'2026-09',status:'approved'})}));expect(screen.getByText('INV-09')).toBeInTheDocument();expect(screen.queryByText('INV-10')).toBeNull()});
+it('rejects unsupported archive paths',async()=>{await expect(BillingDocumentArchive({params:Promise.resolve({kind:'other'}),searchParams:Promise.resolve({})})).rejects.toThrow('not-found');expect(mocks.records).not.toHaveBeenCalled()});
