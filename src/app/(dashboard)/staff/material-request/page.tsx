@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Link from "next/link";
+import {materialLineStatus,materialRequestLabel} from "@/lib/material-request-state";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { MaterialRequestRows } from "@/components/material-request-rows";
 
-const statusLabel = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export default async function StaffMaterialRequestPage({ searchParams }: { searchParams: Promise<{ job?: string; checkout?: string; error?: string; success?: string }> }) {
   const profile = await requireRole(["maintenance_staff"]);
@@ -41,8 +41,8 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
       <div className="material-section-heading"><h2 id="recent-material-requests-heading">My Recent Requests</h2><p>Track requested and issued quantities for your latest submissions.</p></div>
       <div className="material-request-list staff-material-request-list">
         {(requests || []).length === 0 ? <div className="panel material-empty"><strong>No recent material requests yet.</strong><p>Submitted requests will appear here.</p></div> : (requests || []).map((request: any) => <article className={`panel staff-request-card request-${request.status}`} key={request.id}>
-          <header className="staff-request-head"><div><div className="request-title-row"><strong>{request.request_no}</strong><span className={`status-badge status-${request.status}`}>{statusLabel(request.status)}</span></div><p><strong>{request.checkout?.reference_no || request.job?.job_no || "No job"}</strong><span>Room {request.checkout?.room_no || request.job?.room_no || "–"}</span></p></div></header>
-          <div className="staff-request-items">{(request.items || []).map((row: any, index: number) => <div className="staff-request-item" key={`${request.id}-${index}`}><div><strong>{row.item?.item_code || "—"}</strong><span>{row.item?.description || row.other_item_name || "Material description unavailable"}</span></div><dl><div><dt>Requested</dt><dd>{row.requested_qty} {row.item?.unit || ""}</dd></div>{row.issued_qty != null && <div><dt>Issued</dt><dd>{row.issued_qty} {row.item?.unit || ""}</dd></div>}</dl></div>)}</div>
+          <header className="staff-request-head"><div><div className="request-title-row"><strong>{request.request_no}</strong><span className={`status-badge status-${request.status}`}>{materialRequestLabel(request.status,request.items||[])}</span></div><p><strong>{request.checkout?.reference_no || request.job?.job_no || "No job"}</strong><span>Room {request.checkout?.room_no || request.job?.room_no || "–"}</span></p></div></header>
+          <div className="staff-request-items">{(request.items || []).map((row: any, index: number) => <div className="staff-request-item" key={`${request.id}-${index}`}><div><strong>{row.item?.item_code || "—"}</strong><span>{row.item?.description || row.other_item_name || "Material description unavailable"}</span><small>{request.status==='rejected'?'Rejected':materialLineStatus(row)}</small></div><dl>{Number(row.approved_qty)>0&&<div><dt>Approved</dt><dd>{row.approved_qty}</dd></div>}<div><dt>Requested</dt><dd>{row.requested_qty} {row.item?.unit || ""}</dd></div>{row.issued_qty != null && <div><dt>Issued</dt><dd>{row.issued_qty} {row.item?.unit || ""}</dd></div>}</dl></div>)}</div>
           {request.note && <div className="staff-request-note"><span>Reason / Note</span><p>{request.note}</p></div>}
           {request.rejection_reason && <p className="error staff-request-error">Rejected: {request.rejection_reason}</p>}
           {request.status === "issued" && request.job?.status === "pending_material" && <div className="staff-resume-action"><div><strong>Materials issued</strong><span>The job is ready to continue.</span></div><Link className="button button-link" href={`/staff/jobs/${request.job.id}`}>Open Job to Resume</Link></div>}

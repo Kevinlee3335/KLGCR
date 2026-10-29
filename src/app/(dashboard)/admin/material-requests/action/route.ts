@@ -16,20 +16,23 @@ export async function POST(request: Request) {
   if (!requestId) { url.searchParams.set("error", "Request is required."); return NextResponse.redirect(url, 303); }
   const supabase = await createClient();
   const { data: materialRequest } = await supabase.from("material_requests")
-    .select("id,request_no,status,requested_by,checkout:checkout_rooms!checkout_room_id(reference_no,room_no,block:blocks!block_id(code)),job:maintenance_jobs!job_id(job_no,room_no)")
+    .select("id,request_no,status,requested_by,items:material_request_items(issued_qty),checkout:checkout_rooms!checkout_room_id(reference_no,room_no,block:blocks!block_id(code)),job:maintenance_jobs!job_id(job_no,room_no)")
     .eq("id", requestId)
     .maybeSingle();
   let error: { message: string } | null = null;
-  if (action === "approve") ({ error } = await supabase.rpc("review_material_request", { p_request_id: requestId, p_approve: true, p_reason: null }));
+  const requestItemId=String(form.get("requestItemId")||"");
+  if (action === "approve_item") ({error}=await supabase.rpc("approve_material_request_item",{p_request_id:requestId,p_item_id:requestItemId}));
+  else if (action === "issue_item") ({error}=await supabase.rpc("issue_material_request_items",{p_request_id:requestId,p_item_id:requestItemId}));
+  else if (action === "approve") ({ error } = await supabase.rpc("review_material_request", { p_request_id: requestId, p_approve: true, p_reason: null }));
   else if (action === "reject") ({ error } = await supabase.rpc("review_material_request", { p_request_id: requestId, p_approve: false, p_reason: reason }));
   else if (action === "issue") ({ error } = await supabase.rpc("issue_material_request", { p_request_id: requestId }));
-  else if (action === "sync" && materialRequest?.status === "issued") { /* Retry only the sheet write; never deduct stock twice. */ }
+  else if (action === "sync" && (materialRequest?.items||[]).some(item=>Number(item.issued_qty)>0)) { /* Retry only the sheet write; never deduct stock twice. */ }
   else if (action === "match_other") ({error} = await supabase.rpc("match_other_material",{p_request_id:requestId,p_request_item_id:String(form.get("requestItemId")||""),p_inventory_item_id:String(form.get("inventoryItemId")||"")}));
   else error = { message: "Unknown action." };
   if (error) url.searchParams.set("error", error.message);
   else {
-    if (action === "issue" || action === "sync") {
-      const { data: requestItems, error: itemError } = await supabase.from("material_request_items").select("item:inventory_items(item_code,description,category,movement_category,balance_qty,reorder_level,unit)").eq("request_id", requestId);
+    if (action === "issue" || action === "issue_item" || action === "sync") {
+      const { data: requestItems, error: itemError } = await supabase.from("material_request_items").select("item:inventory_items(item_code,description,category,movement_category,balance_qty,reorder_level,unit)").eq("request_id", requestId).gt("issued_qty",0);
       const results = await Promise.all((requestItems || []).map((row) => {
         const item = row.item as unknown as InventoryRow | null;
         return item ? pushInventoryItemToGoogle(item) : Promise.resolve();
@@ -38,16 +41,16 @@ export async function POST(request: Request) {
         url.searchParams.set("error", "Material issued and app stock updated, but Google Sheet sync failed. Do not issue again; retry the sheet sync after its connection is corrected.");
       }
     }
-    if ((action === "approve" || action === "reject") && materialRequest?.requested_by) {
+    if ((action === "approve" || action === "approve_item" || action === "reject") && materialRequest?.requested_by) {
       try {
         const checkout = materialRequest.checkout as unknown as {reference_no:string;room_no:string}|null;
         const job = materialRequest.job as unknown as { job_no: string; room_no: string } | null;
-        const approved = action === "approve";
+        const approved = action === "approve" || action === "approve_item";
         await notifyMaterialRequestRecipients({
           recipientIds: [materialRequest.requested_by],
           type: "material_request",
-          title: approved ? "Material request approved" : "Material request rejected",
-          body: materialRequest.request_no + " for " + (checkout?.reference_no || job?.job_no || "your maintenance job") + " · Room " + (checkout?.room_no || job?.room_no || "—") + " was " + (approved ? "approved." : "rejected." + (reason ? " Reason: " + reason : "")),
+          title: approved ? (action==="approve_item"?"Material item approved":"Material request approved") : "Material request rejected",
+          body: materialRequest.request_no + " for " + (checkout?.reference_no || job?.job_no || "your maintenance job") + " · Room " + (checkout?.room_no || job?.room_no || "—") + " was " + (approved ? (action==="approve_item"?"approved for one material item. Other pending items remain open.":"approved.") : "rejected." + (reason ? " Reason: " + reason : "")),
           href: "/staff/material-request",
           entityId: materialRequest.id,
         });
