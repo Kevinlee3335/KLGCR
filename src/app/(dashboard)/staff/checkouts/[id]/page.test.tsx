@@ -1,11 +1,12 @@
 import {render,screen,cleanup} from '@testing-library/react';
 import {afterEach,it,expect,vi} from 'vitest';
 import type {ReactNode} from 'react';
+vi.mock('@/lib/evidence-urls',()=>({signEvidencePhotos:vi.fn(async(_db:unknown,_bucket:string,photos:unknown[])=>photos.map(p=>({...p as object,url:'https://example.test/inspection.jpg'})))}));
 vi.mock('@/lib/auth',()=>({requireRole:async()=>({id:'tech',role:'maintenance_staff'})}));
 vi.mock('@/components/app-shell',()=>({AppShell:({children}:{children:ReactNode})=><main>{children}</main>}));
 vi.mock('../actions',()=>({completeRectification:vi.fn(),completeCleaning:vi.fn()}));
 vi.mock('@/lib/supabase/server',()=>({createClient:async()=>({from:(table:string)=>{
- const data=table==='checkout_rooms'?{id:'room',reference_no:'TEST',room_no:'805',status:'rectification',assigned_to:'tech'}:table==='checkout_defects'?[{id:'a',description:'Fan broken',status:'open',source:'utmspace'},{id:'b',description:'Tap leaking',status:'open',source:'utmspace'},{id:'c',description:'Chair',status:'rectified',source:'utmspace'}]:[];
+ const data=table==='checkout_rooms'?{id:'room',reference_no:'TEST',room_no:'805',status:'rectification',assigned_to:'tech'}:table==='checkout_defects'?[{id:'a',description:'Fan broken',status:'open',source:'utmspace'},{id:'b',description:'Tap leaking',status:'open',source:'utmspace'},{id:'c',description:'Chair',status:'rectified',source:'utmspace'}]:table==='checkout_photos'?[{id:'photo',kind:'inspection',storage_path:'room/inspection/admin.jpg'}]:[];
  const q={select:()=>q,is:()=>q,eq:()=>q,order:()=>q,single:async()=>({data}),then:(resolve:(r:unknown)=>unknown)=>Promise.resolve({data}).then(resolve)};return q;
 }})}));
 import Page from './page';
@@ -17,3 +18,5 @@ it('offers a separate photo and update submission for each open defect',async()=
  for(const button of buttons){const form=button.closest('form')!;expect(form.querySelectorAll('[name=rectifiedDefects]')).toHaveLength(1);expect(form.querySelector('input[type=file]')).toBeRequired();expect(form.querySelector('textarea')).toBeRequired()}
  expect(container.querySelector('form form')).toBeNull();
 });
+
+it('shows admin inspection evidence to the assigned maintenance staff',async()=>{render(await Page({params:Promise.resolve({id:'room'}),searchParams:Promise.resolve({})}));expect(screen.getByRole('img',{name:'inspection evidence'}).closest('a')).toHaveAttribute('href','https://example.test/inspection.jpg');});

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!requestId) { url.searchParams.set("error", "Request is required."); return NextResponse.redirect(url, 303); }
   const supabase = await createClient();
   const { data: materialRequest } = await supabase.from("material_requests")
-    .select("id,request_no,status,requested_by,job:maintenance_jobs!job_id(job_no,room_no)")
+    .select("id,request_no,status,requested_by,checkout:checkout_rooms!checkout_room_id(reference_no,room_no),job:maintenance_jobs!job_id(job_no,room_no)")
     .eq("id", requestId)
     .maybeSingle();
   let error: { message: string } | null = null;
@@ -40,13 +40,14 @@ export async function POST(request: Request) {
     }
     if ((action === "approve" || action === "reject") && materialRequest?.requested_by) {
       try {
+        const checkout=materialRequest.checkout as unknown as {reference_no:string;room_no:string}|null;
         const job = materialRequest.job as unknown as { job_no: string; room_no: string } | null;
         const approved = action === "approve";
         await notifyMaterialRequestRecipients({
           recipientIds: [materialRequest.requested_by],
           type: "material_request",
           title: approved ? "Material request approved" : "Material request rejected",
-          body: materialRequest.request_no + " for " + (job?.job_no || "your maintenance job") + " · Room " + (job?.room_no || "—") + " was " + (approved ? "approved." : "rejected." + (reason ? " Reason: " + reason : "")),
+          body: materialRequest.request_no + " for " + (checkout?.reference_no || job?.job_no || "your maintenance job") + " · Room " + (checkout?.room_no || job?.room_no || "—") + " was " + (approved ? "approved." : "rejected." + (reason ? " Reason: " + reason : "")),
           href: "/staff/material-request",
           entityId: materialRequest.id,
         });
