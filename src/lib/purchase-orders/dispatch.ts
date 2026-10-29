@@ -21,10 +21,13 @@ export async function dispatchApprovedPurchase(orderId:string,revision:number,or
  // A destination must be explicitly confirmed; personal emails are never inferred.
  if(destination.channel==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destination.recipient))return;
  const building=event.inventory_group==='building';
- if(building){
-  if(destination.channel!=='email'||destination.recipient!=='purchasing@keanlenggroup.com'||current.data.approved_by_user!=='eeab5f04-30c3-42bd-a095-58e56c814358'||!signatureSchema.safeParse(current.data.approved_signature).success)return;
+ const office=event.inventory_group==='office';
+ if(office&&(destination.channel!=='email'||destination.recipient!=='khet_loong@yahoo.com'||current.data.approved_by_user!=='1767d3e4-c907-45fe-8ed0-e433c0d0dca7'||!signatureSchema.safeParse(current.data.approved_signature).success))return;
+ if(building||office){
+  if(building&&(destination.channel!=='email'||destination.recipient!=='purchasing@keanlenggroup.com'||current.data.approved_by_user!=='eeab5f04-30c3-42bd-a095-58e56c814358'||!signatureSchema.safeParse(current.data.approved_signature).success))return;
   try{
    const check=await gmailGateway({action:'po-capabilities'});
+   if(office&&!check.capabilities?.includes('officePoPdf'))throw Error();
    if(check.ok!==true||check.sender!=='klgcr.noreply@gmail.com'||!['poPdf','cc','idempotency'].every(c=>check.capabilities?.includes(c)))throw Error();
   }catch{
    await db.from('inventory_po_dispatch').update({error:'Gmail PO gateway not connected. Update the existing Apps Script deployment.'}).eq('order_id',orderId).eq('revision',revision).eq('status','pending');
@@ -46,11 +49,12 @@ export async function dispatchApprovedPurchase(orderId:string,revision:number,or
    if(notification.error)throw Error('Unable to create notification');
    sent=true;
    await sendPushNotifications({recipientIds,title,body,href}).catch(()=>{});
-  }else if(building){
+  }else if(building||office){
    const bytes=await archivedPurchaseOrderPdf(order as PurchaseOrder);
-   const key=`po_${orderId}_r${revision}`,cc=['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'];
-   const result=await gmailGateway({action:'po-send',key,from:'klgcr.noreply@gmail.com',to:'purchasing@keanlenggroup.com',cc,subject:`Approved Purchase Order ${order.po_no} — KLGCR`,text:`Building Material Purchase Order: ${order.po_no}\nApproved by: ${order.approved_by}\n\nThe attached PDF includes James's E-signature.\n\nKLG Campus Residence Management`,pdfBase64:Buffer.from(bytes).toString('base64'),fileName:`${order.po_no}-approved.pdf`},20000);
-   sent=result.ok===true&&result.status==='sent'&&result.key===key&&result.sender==='klgcr.noreply@gmail.com'&&result.to==='purchasing@keanlenggroup.com'&&JSON.stringify(result.cc)===JSON.stringify(cc)&&Number.isFinite(Date.parse(result.sentAt));
+   const key=`po_${orderId}_r${revision}`,cc=office?[]:['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'];
+   const recipient=office?'khet_loong@yahoo.com':'purchasing@keanlenggroup.com';
+   const result=await gmailGateway({action:'po-send',key,from:'klgcr.noreply@gmail.com',to:recipient,cc,subject:office?`Purchase Order ${order.po_no} – Office Supplies | K HOTEL SDN BHD`:`Approved Purchase Order ${order.po_no} — KLGCR`,text:office?`Dear Supplier,\n\nPlease find attached our approved Purchase Order ${order.po_no} for office supplies for K HOTEL SDN BHD (KLG Campus Residence).\n\nKindly confirm receipt of this order and advise on item availability and the expected delivery date. If any items are unavailable, please inform us before making any substitutions.\n\nDelivery location: KLG Campus Residence.\n\nThank you.\n\nBest regards,\nManagement Office\nK HOTEL SDN BHD\nKLG Campus Residence`:`Building Material Purchase Order: ${order.po_no}\nApproved by: ${order.approved_by}\n\nThe attached PDF includes James's E-signature.\n\nKLG Campus Residence Management`,pdfBase64:Buffer.from(bytes).toString('base64'),fileName:`${order.po_no}-approved.pdf`},20000);
+   sent=result.ok===true&&result.status==='sent'&&result.key===key&&result.sender==='klgcr.noreply@gmail.com'&&result.to===recipient&&JSON.stringify(result.cc)===JSON.stringify(cc)&&Number.isFinite(Date.parse(result.sentAt));
    error=sent?null:'PO delivery requires review before retrying.';
   }else{
    const result=await sendTransactionalEmail(destination.recipient,{
@@ -67,7 +71,7 @@ export async function dispatchApprovedPurchase(orderId:string,revision:number,or
 // Retry only pending, never failed/uncertain sends. The gateway also deduplicates by PO revision.
 export async function dispatchPendingPurchases(origin:string){
  const db=createAdminClient();
- const {data,error}=await db.from('inventory_po_dispatch').select('order_id,revision').eq('inventory_group','building').eq('status','pending').order('created_at').limit(5);
+ const {data,error}=await db.from('inventory_po_dispatch').select('order_id,revision').in('inventory_group',['building','office']).eq('status','pending').order('created_at').limit(5);
  if(error)throw Error('Unable to read pending purchase mail');
  for(const event of data||[])await dispatchApprovedPurchase(event.order_id,event.revision,origin);
 }
