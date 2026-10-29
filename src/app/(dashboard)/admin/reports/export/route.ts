@@ -35,12 +35,12 @@ export async function GET(request: Request) {
   }
 
   if(dataset==="material_usage"||dataset==="consumption"){
-    let query=db.from("inventory_issue_history").select("id,qty,issued_at,staff_id,inventory_items(item_code,description,unit),maintenance_jobs(job_no,room_no,blocks(code)),profiles!inventory_issue_history_staff_id_fkey(full_name)").order("issued_at",{ascending:false}).limit(1000);
+    let query=db.from("inventory_issue_history").select("id,qty,issued_at,staff_id,inventory_items(item_code,description,unit),maintenance_jobs(job_no,room_no,blocks(code)),checkout:checkout_rooms!checkout_room_id(reference_no,room_no,blocks(code)),profiles!inventory_issue_history_staff_id_fkey(full_name)").order("issued_at",{ascending:false}).limit(1000);
     if(staff)query=query.eq("staff_id",staff);
     if(date){const [from,to]=malaysiaDayRange(date);query=query.gte("issued_at",from).lte("issued_at",to);}
     const {data,error}=await query;
     if(error)return new Response(error.message,{status:500});
-    const filtered=(data??[]).filter((r:any)=>!block||block==="ALL"||block.includes(r.maintenance_jobs?.blocks?.code??""));
+    const filtered=(data??[]).filter((r:any)=>!block||block==="ALL"||block.includes((r.checkout?.blocks?.code || r.maintenance_jobs?.blocks?.code)??""));
     if(dataset==="consumption"){
       const totals=new Map<string,{description:string;qty:number;unit:string}>();
       for(const r of filtered){
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       const rows:unknown[][]=[...totals.entries()].sort((a,b)=>b[1].qty-a[1].qty).map(([code,v])=>[code,v.description,v.qty,v.unit]);
       return download(rows,["Item Code","Description","Total Used","Unit"],format,"KLGCR-Consumption-Analysis");
     }
-    const rows:unknown[][]=filtered.map((r:any)=>[r.issued_at,r.inventory_items?.item_code,r.inventory_items?.description,r.qty,r.inventory_items?.unit,r.maintenance_jobs?.job_no,r.maintenance_jobs?.blocks?.code,r.maintenance_jobs?.room_no,r.profiles?.full_name]);
+    const rows:unknown[][]=filtered.map((r:any)=>[r.issued_at,r.inventory_items?.item_code,r.inventory_items?.description,r.qty,r.inventory_items?.unit,(r.checkout?.reference_no || r.maintenance_jobs?.job_no),(r.checkout?.blocks?.code || r.maintenance_jobs?.blocks?.code),(r.checkout?.room_no || r.maintenance_jobs?.room_no),r.profiles?.full_name]);
     return download(rows,["Issued At","Item Code","Description","Qty","Unit","Job No","Block","Room","Staff"],format,"KLGCR-Material-Usage");
   }
 
