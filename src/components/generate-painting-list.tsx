@@ -1,0 +1,8 @@
+'use client';
+import {useRef,useState} from 'react';
+import {generatePaintingList,type PaintingListRoom} from '@/lib/painting-list';
+export function GeneratePaintingList({rooms,defaultPic}:{rooms:PaintingListRoom[];defaultPic:string}){
+ const [pic,setPic]=useState(defaultPic);const [text,setText]=useState('');const [message,setMessage]=useState('');const preview=useRef<HTMLTextAreaElement>(null);
+ async function copy(){try{await navigator.clipboard.writeText(text);setMessage('Copied. Ready to paste into WhatsApp.');}catch{preview.current?.focus();preview.current?.select();setMessage('Text selected. Copy it and paste into WhatsApp.');}}
+ return <section className="panel no-print painting-generate"><div className="section-head"><div><h3>Painting List</h3><p className="subtle">Generate from the rooms shown below, grouped by block and work date.</p></div><div className="painting-generate-controls"><label className="field"><span>PIC</span><input value={pic} maxLength={100} onChange={e=>setPic(e.target.value)} placeholder="e.g. Kevin"/></label><button type="button" className="button" disabled={!rooms.length||!pic.trim()} onClick={()=>{setText(generatePaintingList(rooms,pic));setMessage('');}}>Generate Painting List</button></div></div>{text&&<><label className="field"><span>WhatsApp painting list</span><textarea ref={preview} value={text} rows={Math.min(24,text.split('\n').length+2)} onChange={e=>{setText(e.target.value);setMessage('');}}/></label><button type="button" className="button secondary" onClick={()=>void copy()}>Copy List</button>{message&&<p role="status" className="subtle">{message}</p>}</>}{!rooms.length&&<p className="subtle">No rooms match the current list.</p>}</section>;
+}
