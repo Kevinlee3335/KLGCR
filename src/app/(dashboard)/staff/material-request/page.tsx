@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { MaterialItemPicker } from "@/components/material-item-picker";
+import { MaterialRequestRows } from "@/components/material-request-rows";
 
 const statusLabel = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -20,7 +20,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
 
   return <AppShell profile={profile} title="Material Request">
     <div className="section-head material-page-heading">
-      <div><p className="eyebrow">Materials</p><h2>Material Request</h2><p className="subtle">Select an active job and request up to three materials.</p></div>
+      <div><p className="eyebrow">Materials</p><h2>Material Request</h2><p className="subtle">Select an active job and add the materials you need.</p></div>
     </div>
 
     <section className="panel material-request-form-card" aria-labelledby="new-material-request-heading">
@@ -30,13 +30,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
       <form action="/staff/material-request/submit" method="post" className="material-request-form">
         <label className="material-field material-job-field"><span>Job</span><select name="jobId" defaultValue={query.checkout ? `checkout:${query.checkout}` : query.job || ""} required><option value="">Select an active job</option>{(jobs || []).map((job: any) => <option key={job.id} value={job.id}>{job.job_no} · Block {job.block?.code} · Room {job.room_no}</option>)}{(checkouts||[]).map((room:any)=><option key={room.id} value={`checkout:${room.id}`}>{room.reference_no} · Check-out · Block {room.block?.code} · Room {room.room_no}</option>)}</select></label>
 
-        <div className="material-rows">
-          {[1, 2, 3].map((slot) => <fieldset className="material-row" key={slot}>
-            <legend>Material {slot}{slot > 1 && <span>Optional</span>}</legend>
-            <div className="material-field material-select-field"><span>Material</span><MaterialItemPicker name="itemId" required={slot === 1} items={(items || []).map((item: any) => ({ id: item.id, item_code: item.item_code, description: item.description, balance_qty: item.balance_qty, unit: item.unit }))}/></div>
-            <label className="material-field material-quantity-field"><span>Quantity</span><input name="qty" type="number" inputMode="decimal" min="0.01" step="0.01" required={slot === 1}/></label>
-          </fieldset>)}
-        </div>
+        <MaterialRequestRows items={(items || []).map((item: any) => ({ id: item.id, item_code: item.item_code, description: item.description, balance_qty: item.balance_qty, unit: item.unit }))}/>
 
         <label className="material-field material-note-field"><span>Reason / Note</span><small>Briefly explain why these materials are needed.</small><textarea name="note" rows={4} placeholder="Enter a short reason or note"/></label>
         <div className="material-submit"><button className="button" type="submit">Submit Request</button></div>

@@ -12,6 +12,9 @@ create function is_admin() returns boolean language sql as $$select public.curre
 create function is_management() returns boolean language sql as $$select public.current_role() in ('admin','management_viewer')$$;
 create function set_updated_at() returns trigger language plpgsql as $$begin new.updated_at=now();return new;end$$;
 create table blocks(id uuid primary key,code text);
+create table maintenance_jobs(id uuid primary key,assigned_to uuid,status text,block_id uuid);
+create table profile_blocks(profile_id uuid,block_id uuid);
+create function set_job_pending_material(uuid,text) returns void language sql as $$select$$;
 create table checkout_rooms(id uuid primary key,reference_no text,block_id uuid,room_no text,assigned_to uuid,cleaner_id uuid,status text,deleted_at timestamptz,created_at timestamptz default now(),ready_at timestamptz);
 create table checkout_defects(checkout_room_id uuid,description text,status text,rectified_at timestamptz);
 create table checkout_history(checkout_room_id uuid,actor_id uuid,action text,notes text,created_at timestamptz default now());
@@ -22,12 +25,18 @@ create table inventory_issue_history(request_id uuid,job_id uuid not null,invent
 create table report_snapshots(report_type text,report_date date,block_group text,payload jsonb,whatsapp_text text);`);
 await db.exec(readFileSync('supabase/migrations/20261029022810_checkout_materials_and_reporting.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261029025553_checkout_cleaning_handoff_counts.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261029030124_material_request_additional_items.sql','utf8'));
 const admin='00000000-0000-4000-8000-000000000001',staff='00000000-0000-4000-8000-000000000002',room='00000000-0000-4000-8000-000000000010',block='00000000-0000-4000-8000-000000000020',item='00000000-0000-4000-8000-000000000030';
 await db.exec(`insert into profiles values('${admin}','Admin','admin'),('${staff}','Worker','maintenance_staff');insert into blocks values('${block}','A');insert into checkout_rooms(id,reference_no,block_id,room_no,assigned_to,status) values('${room}','TEST','${block}','101','${staff}','rectification');insert into checkout_defects values('${room}','Moldy','open',null);insert into inventory_items values('${item}',10,true);set app.uid='${staff}';`);
 const req=(await db.query<{id:string}>(`select create_checkout_material_request($1,'test',$2::jsonb) id`,[room,JSON.stringify([{inventory_item_id:item,qty:2}])])).rows[0].id;
+await db.exec(`insert into maintenance_jobs values('${room}','${staff}','pending_material',null)`);
+const jobRequest=(await db.query<{id:string}>(`select create_material_request($1,'extra',$2::jsonb) id`,[room,JSON.stringify(Array.from({length:5},(_,i)=>({other_item_name:`Job extra ${i}`,qty:1})))])).rows[0].id;
+if((await db.query<{n:number}>('select count(*)::int n from material_request_items where request_id=$1',[jobRequest])).rows[0].n!==5)throw Error('Defect job additional materials missing');
 const beforeCleaning=(await db.query<{report:{cleaner_total:number;cleaner_completed:number}}>("select checkout_status_report((now() at time zone 'Asia/Kuala_Lumpur')::date) report")).rows[0].report;
 if(beforeCleaning.cleaner_total!==0||beforeCleaning.cleaner_completed!==0)throw Error('Maintenance room counted in cleaning');
-await db.exec(`set app.uid='${admin}';update material_requests set status='approved';update material_request_items set approved_qty=2;`);
+const extra=(await db.query<{id:string}>(`select create_checkout_material_request($1,'extra',$2::jsonb) id`,[room,JSON.stringify(Array.from({length:5},(_,i)=>({other_item_name:`Extra ${i}`,qty:1})))])).rows[0].id;
+if((await db.query<{n:number}>('select count(*)::int n from material_request_items where request_id=$1',[extra])).rows[0].n!==5)throw Error('Additional materials missing');
+await db.exec(`set app.uid='${admin}';update material_requests set status='approved' where id='${req}';update material_request_items set approved_qty=2 where request_id='${req}';`);
 await db.query('select issue_material_request($1)',[req]);
 if((await db.query<{balance_qty:string}>('select balance_qty from inventory_items')).rows[0].balance_qty!=='8')throw Error('Wrong balance');
 try{await db.query('select issue_material_request($1)',[req]);throw Error('Repeated issue allowed')}catch(e){if(!(e instanceof Error && e.message.includes('Approved request not found')))throw e;}
