@@ -1,0 +1,14 @@
+// @vitest-environment node
+import { beforeEach, expect, it, vi } from 'vitest';
+const mocks = vi.hoisted(() => ({ role: vi.fn(), rpc: vi.fn(), sync: vi.fn(), available: { id: 'item', quantity_unverified: false } as {id:string;quantity_unverified:boolean}|null }));
+vi.mock('@/lib/auth', () => ({ requireRole: mocks.role }));
+vi.mock('@/lib/inventory-google-sync', () => ({ pushInventoryItemToGoogle: mocks.sync }));
+vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc: mocks.rpc, from: () => { const q = {select: () => q, eq: () => q, maybeSingle: async () => ({data:mocks.available})}; return q; } }) }));
+import { POST } from './route';
+beforeEach(() => { vi.clearAllMocks(); mocks.available={id:'item',quantity_unverified:false}; mocks.rpc.mockResolvedValue({error:null}); mocks.sync.mockResolvedValue({skipped:false,ok:true}); });
+async function submit(fields:Record<string,string>={}) { const form=new FormData(); for(const [key,value] of Object.entries({action:'stock_out',store:'building',itemId:'item',qty:'2',takenBy:'General Staff',note:'Paint room A103',...fields})) form.set(key,value); return new URL((await POST(new Request('https://example.com/admin/inventory/action',{method:'POST',body:form}))).headers.get('location')!); }
+it('deducts with recipient and purpose in the atomic audit RPC, then syncs',async()=>{const url=await submit();expect(mocks.role).toHaveBeenCalledWith(['admin']);expect(mocks.rpc).toHaveBeenCalledWith('adjust_inventory_item',{p_item_id:'item',p_type:'correction_remove',p_qty:2,p_note:'Stock Out | Taken by: General Staff | Purpose: Paint room A103'});expect(mocks.sync).toHaveBeenCalledTimes(1);expect(url.searchParams.get('success')).toBe('stock_out');});
+it('rejects invalid quantities and missing recipients/purposes before deduction',async()=>{for(const fields of ([{qty:'0'},{qty:'-1'},{qty:'NaN'},{qty:'1.001'},{takenBy:' '},{note:''}] as Record<string,string>[]))expect((await submit(fields)).searchParams.has('error')).toBe(true);expect(mocks.rpc).not.toHaveBeenCalled();});
+it('does not deduct unverified or unavailable inventory',async()=>{mocks.available=null;expect((await submit()).searchParams.has('error')).toBe(true);mocks.available={id:'item',quantity_unverified:true};expect((await submit()).searchParams.has('error')).toBe(true);expect(mocks.rpc).not.toHaveBeenCalled();});
+it('does not sync when the database refuses an excessive withdrawal',async()=>{mocks.rpc.mockResolvedValue({error:{message:'Adjustment would make stock negative'}});expect((await submit()).searchParams.get('error')).toContain('negative');expect(mocks.sync).not.toHaveBeenCalled();});
+it('reports a sync failure without implying the saved stock must be deducted again',async()=>{mocks.sync.mockResolvedValue({skipped:false,ok:false});const url=await submit();expect(url.searchParams.get('success')).toBe('stock_out');expect(url.searchParams.get('warning')).toContain('Stock saved');});

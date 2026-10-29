@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { pushInventoryItemToGoogle } from "@/lib/inventory-google-sync";
@@ -10,6 +11,7 @@ function numberField(value: FormDataEntryValue | null, allowNull = false) {
 }
 
 export async function POST(request: Request) {
+  await requireRole(["admin"]);
   const form = await request.formData();
   const url = new URL("/admin/inventory", request.url);
   const store = form.get("store") === "office" ? "office" : form.get("store") === "cleaner" ? "cleaner" : "building";
@@ -54,6 +56,25 @@ export async function POST(request: Request) {
       cost,
       is_active: form.get("isActive") === "on",
     }).eq("id", itemId));
+  } else if (action === "stock_out") {
+    const itemId = String(form.get("itemId") || "");
+    const qty = numberField(form.get("qty"));
+    const takenBy = String(form.get("takenBy") || "").trim();
+    const purpose = String(form.get("note") || "").trim();
+    if (!itemId || !Number.isFinite(qty) || qty! <= 0 || Math.abs(qty! * 100 - Math.round(qty! * 100)) > 0.000001 || !takenBy || takenBy.length > 100 || !purpose || purpose.length > 500) {
+      url.searchParams.set("error", "Enter a valid quantity, recipient and purpose.");
+      return NextResponse.redirect(url, 303);
+    }
+    const { data: available } = await supabase.from("inventory_items").select("id,quantity_unverified").eq("id", itemId).eq("inventory_group", store).eq("is_active", true).maybeSingle();
+    if (!available || available.quantity_unverified) {
+      url.searchParams.set("error", "Select an active item with a confirmed stock quantity.");
+      return NextResponse.redirect(url, 303);
+    }
+    // The existing RPC locks the item and commits the deduction and audit row together.
+    ({ error } = await supabase.rpc("adjust_inventory_item", {
+      p_item_id: itemId, p_type: "correction_remove", p_qty: qty,
+      p_note: `Stock Out | Taken by: ${takenBy} | Purpose: ${purpose}`,
+    }));
   } else if (action === "adjust") {
     const itemId = String(form.get("itemId") || "");
     const qty = numberField(form.get("qty"));
@@ -75,8 +96,12 @@ export async function POST(request: Request) {
     const itemCode = action === "create" ? String(form.get("itemCode") || "").trim() : null;
     const query = itemId ? supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("id", itemId).maybeSingle() : supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("item_code", itemCode!).maybeSingle();
     const { data: item } = await query;
-    if (item) await pushInventoryItemToGoogle(item);
+    if (item) {
+      const sync = await pushInventoryItemToGoogle(item);
+      if (!sync.skipped && !sync.ok) url.searchParams.set("warning", "Stock saved. Google Sheet sync failed; please retry syncing.");
+    }
     url.searchParams.set("success", action);
+    url.searchParams.set("view", "all");
   }
   return NextResponse.redirect(url, 303);
 }

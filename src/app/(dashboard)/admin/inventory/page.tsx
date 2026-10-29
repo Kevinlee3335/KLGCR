@@ -17,7 +17,7 @@ function qtyToOrder(balance: number, reorder: number) {
   return Math.max(0, reorder - balance);
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; warning?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string }> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
@@ -37,7 +37,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     inventoryQuery,
     supabase.from("inventory_issue_history").select("id,qty,balance_before,balance_after,issued_at,item:inventory_items!inner(item_code,description,inventory_group),job:maintenance_jobs(job_no,room_no),staff:profiles!staff_id(full_name)").eq("item.inventory_group",store).order("issued_at", { ascending: false }).limit(30),
     supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,item:inventory_items!inner(item_code,description,inventory_group),user:profiles!adjusted_by(full_name)").eq("item.inventory_group",store).order("adjusted_at", { ascending: false }).limit(30),
-    supabase.from("inventory_items").select("item_code,description,category").eq("inventory_group",store).eq("is_active", true).order("item_code"),
+    supabase.from("inventory_items").select("id,item_code,description,category,balance_qty,unit,quantity_unverified").eq("inventory_group",store).eq("is_active", true).order("item_code"),
   ]);
   const rows = items || [];
   const itemOptions = catalog || [];
@@ -54,10 +54,21 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
   return <AppShell profile={profile} title={storeTitle}>
     <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
-    {query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">Inventory saved successfully.</p>}{error && <p className="error">{error.message}</p>}
+    {query.warning && <p className="error">{query.warning}</p>}{query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">{query.success === "stock_out" ? "Stock Out saved successfully. Stock balance and history updated." : "Inventory saved successfully."}</p>}{error && <p className="error">{error.message}</p>}
 
     {store === "office" && <OfficeUsageSection profile={profile} page={query.usagePage} search={query.usageQ} base={base}/>}
     <section className="panel"><div className="section-head"><div><h3>Purchase Orders</h3><p className="subtle">Create a PO from Inventory items and save a PDF for HQ.</p></div><a className="button" href="/admin/inventory/purchase-orders">Purchase Orders</a></div></section>
+    {profile.role === "admin" && <section className="panel inventory-form-card" id="stock-out">
+      <div className="section-head compact-head"><div><p className="eyebrow">Stock Movement</p><h3>Stock Out</h3><p className="subtle">Record materials collected by General Staff or other recipients.</p></div><a className="button secondary-button" href={`${base}&view=all#inventory-stock-list`}>Stock In / Adjust</a></div>
+      <form action="/admin/inventory/action" method="post" className="inventory-form">
+        <input type="hidden" name="action" value="stock_out"/><input type="hidden" name="store" value={store}/>
+        <label className="span-2"><span>Item</span><select name="itemId" defaultValue="" required><option value="" disabled>Select item</option>{itemOptions.filter((item) => !item.quantity_unverified).map((item) => <option key={item.id} value={item.id}>{item.item_code} · {item.description} · Available: {item.balance_qty} {item.unit || ""}</option>)}</select></label>
+        <label><span>Quantity</span><input name="qty" type="number" min="0.01" step="0.01" required/></label>
+        <label><span>Taken By</span><input name="takenBy" placeholder="Name of person collecting" maxLength={100} required/></label>
+        <label className="span-2"><span>Purpose / Room / Location</span><input name="note" placeholder="e.g. General Staff — painting Block A room 103" maxLength={500} required/></label>
+        <div className="span-2"><button className="button" type="submit">Record Stock Out</button></div>
+      </form>
+    </section>}
     <section className="inventory-kpis">
       <article><span>Total Items</span><strong>{rows.length}</strong><small>Active inventory records</small></article>
       <article className="warning"><span>Near Reorder</span><strong>{near}</strong><small>Stock at or below reorder level</small></article>
@@ -76,6 +87,6 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
     <section className="panel inventory-history-card"><div className="section-head compact-head"><div><h3>Material Issue / Usage History</h3><p className="subtle">Latest materials issued to maintenance jobs.</p></div></div>{(issues || []).length === 0 ? <p className="dashboard-empty">No material issues yet.</p> : <div className="table-wrap"><table className="table inventory-table"><thead><tr><th>Item</th><th>Job / Room</th><th>Staff</th><th>Qty Issued</th><th>Balance</th><th>Date</th></tr></thead><tbody>{(issues || []).map((row:any)=><tr key={row.id}><td><strong>{row.item?.item_code}</strong><small>{row.item?.description}</small></td><td>{row.job?.job_no}<small>{row.job?.room_no}</small></td><td>{row.staff?.full_name || "—"}</td><td>{row.qty}</td><td>{row.balance_before} → {row.balance_after}</td><td>{new Intl.DateTimeFormat("en-MY",{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric"}).format(new Date(row.issued_at))}</td></tr>)}</tbody></table></div>}</section>
 
-    <section className="panel inventory-history-card"><div className="section-head compact-head"><div><h3>Stock Adjustment History</h3><p className="subtle">Latest stock-in and correction records.</p></div></div>{(adjustments || []).length === 0 ? <p className="dashboard-empty">No stock adjustments yet.</p> : <div className="table-wrap"><table className="table inventory-table"><thead><tr><th>Item</th><th>Adjustment</th><th>Qty</th><th>Balance</th><th>Note</th><th>By</th></tr></thead><tbody>{(adjustments || []).map((row:any)=><tr key={row.id}><td><strong>{row.item?.item_code}</strong><small>{row.item?.description}</small></td><td>{String(row.adjustment_type).replaceAll("_"," ")}</td><td>{row.qty}</td><td>{row.balance_before} → {row.balance_after}</td><td>{row.note}</td><td>{row.user?.full_name || "—"}</td></tr>)}</tbody></table></div>}</section>
+    <section className="panel inventory-history-card"><div className="section-head compact-head"><div><h3>Stock Adjustment History</h3><p className="subtle">Latest stock-in, stock-out and correction records.</p></div></div>{(adjustments || []).length === 0 ? <p className="dashboard-empty">No stock adjustments yet.</p> : <div className="table-wrap"><table className="table inventory-table"><thead><tr><th>Item</th><th>Adjustment</th><th>Qty</th><th>Balance</th><th>Recipient / Purpose</th><th>Recorded By</th><th>Date / Time</th></tr></thead><tbody>{(adjustments || []).map((row:any)=><tr key={row.id}><td><strong>{row.item?.item_code}</strong><small>{row.item?.description}</small></td><td>{row.adjustment_type === "correction_remove" && row.note?.startsWith("Stock Out | Taken by: ") ? "Stock Out" : String(row.adjustment_type).replaceAll("_"," ")}</td><td>{row.qty}</td><td>{row.balance_before} → {row.balance_after}</td><td>{row.note}</td><td>{row.user?.full_name || "—"}</td><td>{new Intl.DateTimeFormat("en-MY",{timeZone:"Asia/Kuala_Lumpur",dateStyle:"medium",timeStyle:"short"}).format(new Date(row.adjusted_at))}</td></tr>)}</tbody></table></div>}</section>
   </AppShell>;
 }
