@@ -27,3 +27,14 @@ export async function updatePainting(form:FormData){
  if(error||!data)fail(error?.message||'This task changed. Refresh and try again.');
  revalidatePath(route);revalidatePath('/admin/checkouts');redirect(`${route}?success=updated`);
 }
+
+export async function completePainting(form:FormData){
+ await requireRole(['admin']);const db=await createClient();
+ let tasks:unknown;
+ try{tasks=JSON.parse(String(form.get('tasks')||'[]'));}catch{fail('Select valid painting tasks.');}
+ if(!Array.isArray(tasks)||!tasks.length||tasks.some(t=>!t||typeof t.id!=='string'||typeof t.updated_at!=='string'))fail('Select at least one painting task.');
+ const {error}=await db.rpc('complete_checkout_painting',{p_tasks:tasks});
+ if(error)fail(error.message);
+ revalidatePath(route);revalidatePath('/admin/checkouts');revalidatePath('/admin/checkouts/[id]','page');
+ redirect(`${route}?success=completed`);
+}

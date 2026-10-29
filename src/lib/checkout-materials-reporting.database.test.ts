@@ -26,6 +26,7 @@ create table report_snapshots(report_type text,report_date date,block_group text
 await db.exec(readFileSync('supabase/migrations/20261029022810_checkout_materials_and_reporting.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261029025553_checkout_cleaning_handoff_counts.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261029030124_material_request_additional_items.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261029032545_checkout_painting_bulk_complete.sql','utf8'));
 const admin='00000000-0000-4000-8000-000000000001',staff='00000000-0000-4000-8000-000000000002',room='00000000-0000-4000-8000-000000000010',block='00000000-0000-4000-8000-000000000020',item='00000000-0000-4000-8000-000000000030';
 await db.exec(`insert into profiles values('${admin}','Admin','admin'),('${staff}','Worker','maintenance_staff');insert into blocks values('${block}','A');insert into checkout_rooms(id,reference_no,block_id,room_no,assigned_to,status) values('${room}','TEST','${block}','101','${staff}','rectification');insert into checkout_defects values('${room}','Moldy','open',null);insert into inventory_items values('${item}',10,true);set app.uid='${staff}';`);
 const req=(await db.query<{id:string}>(`select create_checkout_material_request($1,'test',$2::jsonb) id`,[room,JSON.stringify([{inventory_item_id:item,qty:2}])])).rows[0].id;
@@ -43,9 +44,18 @@ try{await db.query('select issue_material_request($1)',[req]);throw Error('Repea
 await db.query(`insert into checkout_paint_tasks(checkout_room_id,area,reasons,worker_name,work_date,created_by) values($1,'room',array['Moldy'],'General Worker',current_date,$2)`,[room,admin]);
 try{await db.query(`insert into checkout_paint_tasks(checkout_room_id,area,reasons,worker_name,work_date,created_by) values($1,'room',array['Dirty'],'Other Worker',current_date,$2)`,[room,admin]);throw Error('Duplicate room allowed')}catch(e){if(!(e instanceof Error && e.message.includes('checkout_paint_active_room_idx')))throw e;}
 try{await db.exec("update checkout_rooms set status='ready_for_occupancy'");throw Error('Unfinished painting accepted')}catch(e){if(!(e instanceof Error && e.message.includes('Complete General Worker')))throw e;}
-await db.exec("update checkout_paint_tasks set status='completed';update checkout_rooms set status='ready_for_occupancy',ready_at=now();");
+await db.exec(`insert into checkout_rooms(id,reference_no,block_id,room_no,assigned_to,status) values('00000000-0000-4000-8000-000000000011','TEST2','${block}','102','${staff}','rectification');insert into checkout_paint_tasks(checkout_room_id,area,reasons,worker_name,work_date,created_by) values('00000000-0000-4000-8000-000000000011','room',array['Moldy'],'General Worker',current_date,'${admin}')`);
+const tasks=(await db.query<{id:string;updated_at:Date}>('select id,updated_at from checkout_paint_tasks order by id')).rows;
+const stale=tasks.map((t,i)=>({id:t.id,updated_at:i===0?'2000-01-01T00:00:00Z':t.updated_at}));
+try{await db.query('select complete_checkout_painting($1::jsonb)',[JSON.stringify(stale)]);throw Error('Stale task accepted')}catch(e){if(!(e instanceof Error&&e.message.includes('selected task changed')))throw e;}
+if((await db.query<{n:number}>("select count(*)::int n from checkout_paint_tasks where status='completed'")).rows[0].n!==0)throw Error('Partial completion after stale selection');
+await db.query('select complete_checkout_painting($1::jsonb)',[JSON.stringify(tasks)]);
+if((await db.query<{n:number}>("select count(*)::int n from checkout_paint_tasks where status='completed'")).rows[0].n!==2)throw Error('Bulk completion incomplete');
+if((await db.query<{n:number}>("select count(*)::int n from checkout_history where action='painting_completed'")).rows[0].n!==2)throw Error('Completion history missing');
+if((await db.query<{status:string}>('select status from checkout_defects')).rows[0].status!=='open')throw Error('Unrelated repair changed');
+await db.exec("update checkout_rooms set status='ready_for_occupancy',ready_at=now();");
 const report=(await db.query<{report:{total:number;ready:number;cleaner_total:number}}>("select checkout_status_report((now() at time zone 'Asia/Kuala_Lumpur')::date) report")).rows[0].report;
-if(report.total!==1||report.ready!==1||report.cleaner_total!==1)throw Error('Wrong dashboard');
+if(report.total!==2||report.ready!==2||report.cleaner_total!==2)throw Error('Wrong dashboard');
 await db.exec("insert into report_snapshots values('daily_summary',current_date,'ALL','{}','test')");
 if(!(await db.query<{payload:{checkout:unknown}}>('select payload from report_snapshots')).rows[0].payload.checkout)throw Error('Missing automatic summary');
 }finally{await db.close()}
