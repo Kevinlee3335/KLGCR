@@ -1,3 +1,5 @@
+import {sendFinancePdf} from "./finance-mail";
+import {financialPdf} from "./official-receipt";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { COMMON_EMAIL_FOOTER, sendTransactionalEmail } from "@/lib/email";
 import { appOrigin, escapeHtml, memberLink } from "@/lib/membership";
@@ -37,8 +39,17 @@ export async function deliverMembershipEmails(memberId?: string) {
       const linksText = cancelled ? "" : `Renew or cancel membership: ${link}\nRegister: ${appOrigin()}/membership/register\n${approved ? `Membership card: ${appOrigin()}/membership/card/${member.id}\n` : ""}`;
       const text = `Dear ${member.full_name},\n\n${body}\n\n${linksText}\n${COMMON_EMAIL_FOOTER}`;
       const html = `<p>Dear ${escapeHtml(member.full_name)},</p><p>${escapeHtml(body)}</p>${cancelled ? "" : `<p><a href="${link}">Renew / manage membership</a></p><p><a href="${appOrigin()}/membership/register">Registration link</a></p>`}${approved ? `<p>Your membership QR code:</p><img width="240" height="240" src="${appOrigin()}/api/membership/qr?card=${member.id}" alt="Membership QR code"/><p><a href="${appOrigin()}/membership/card/${member.id}">View membership card</a></p>` : ""}<p>${escapeHtml(COMMON_EMAIL_FOOTER).replace(/\n/g, "<br/>")}</p>`;
-      const result = await sendTransactionalEmail(member.email,{subject,text,html},{timeoutMs:20_000});
-      if (!result.sent) throw new Error(result.reason);
+      const receiptResult = approved ? await db.from("official_receipts").select("*").eq("source_key","gym:"+item.payment_id).maybeSingle() : {data:null,error:null};
+      if(receiptResult.error) throw new Error("Unable to load official receipt");
+      if(receiptResult.data){
+        const receipt=receiptResult.data;
+        await sendFinancePdf({key:"membership_"+item.id,to:member.email,subject,text:text+"\nOfficial Receipt: "+receipt.receipt_no,html,pdf:await financialPdf({receipt}),fileName:receipt.receipt_no.replace("/","-")+".pdf"});
+        const saved=await db.from("official_receipts").update({emailed_at:new Date().toISOString(),email_error:null}).eq("id",receipt.id);
+        if(saved.error)throw Error("Unable to save receipt email status");
+      }else{
+        const result = await sendTransactionalEmail(member.email,{subject,text,html},{timeoutMs:20_000});
+        if (!result.sent) throw new Error(result.reason);
+      }
       const {error:sentError} = await db.from("membership_emails").update({status:"sent",sent_at:new Date().toISOString(),last_error:null}).eq("id",item.id);
       if (sentError) throw new Error("Email delivered but delivery status could not be saved.");
       sent++;
