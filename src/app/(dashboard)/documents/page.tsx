@@ -20,6 +20,7 @@ export default async function DocumentsPage() {
     return {name:company==="sigma"?"Sigma":"MFE",href:`/documents/suppliers/${company}`,count:result.error?null:result.count || 0};
   })) : [];
   const businessFolders=canManage ? await Promise.all([
+    Promise.resolve({name:'Receipts',href:'/documents/receipts',count:null}),
     ...(['rental','utility'] as const).map(async kind=>{const r=await supabase.from('billing_document_index').select('run_id',{count:'exact',head:true}).eq('kind',kind);return {name:kind==='rental'?'Rental':'Utilities',href:`/documents/billing/${kind}`,count:r.error?null:r.count||0};}),
     (async()=>{const r=await supabase.from('inventory_purchase_orders').select('id',{count:'exact',head:true});return {name:'Purchase Orders',href:'/documents/purchase-orders',count:r.error?null:r.count||0};})(),
     (async()=>{const r=await supabase.from('quotation_registry').select('value').eq('id',1).maybeSingle();return {name:'Quotations',href:'/documents/quotations',count:r.error?null:((r.data?.value as {quotes?:unknown[]}|undefined)?.quotes?.length||0)};})(),

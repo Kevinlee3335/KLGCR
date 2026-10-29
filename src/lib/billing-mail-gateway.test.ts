@@ -22,7 +22,7 @@ it('accepts the existing constant without requiring a Script Property',()=>{prop
 
 const poPayload={action:'po-send',key:'po_11111111-1111-4111-8111-111111111111_r1',from:payload.from,to:'purchasing@keanlenggroup.com',cc:payload.cc,subject:'Approved PO',text:'James approved',pdfBase64:Buffer.from('%PDF-1.7 signed document').toString('base64'),fileName:'PO-approved.pdf'};
 it('sends signed Building Material PDF with exact purchasing To and both CC, once per revision',()=>{
- expect(post({action:'po-capabilities'})).toMatchObject({ok:true,capabilities:['poPdf','cc','idempotency']});expect(send).not.toHaveBeenCalled();
+ expect(post({action:'po-capabilities'})).toMatchObject({ok:true,capabilities:['poPdf','officePoPdf','cc','idempotency']});expect(send).not.toHaveBeenCalled();
  const first=post(poPayload);expect(first).toMatchObject({status:'sent',to:poPayload.to,cc:payload.cc,sender:payload.from});expect(post(poPayload)).toEqual(first);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][0]).toMatchObject({to:poPayload.to,cc:payload.cc.join(','),attachments:[{type:'application/pdf',name:'PO-approved.pdf'}]});
 });
 it('blocks PO sends with wrong sender, destinations, missing CC or invalid attachment',()=>{
@@ -32,3 +32,8 @@ it('does not resend PO when Gmail result is uncertain',()=>{send.mockImplementat
 const financePayload={action:'finance-send',key:'receipt_11111111-1111-4111-8111-111111111111',from:payload.from,to:'company@example.com',subject:'Official receipt',text:'Payment received',pdfBase64:Buffer.from('%PDF-1.7 receipt').toString('base64'),fileName:'KLGCR-260001.pdf'};
 it('sends a company receipt PDF from noreply once and preserves bank-transfer HTML',()=>{expect(post({...financePayload,html:'<p>Approved</p>'})).toMatchObject({ok:true,status:'sent',to:financePayload.to,sender:payload.from});post(financePayload);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][0]).toMatchObject({to:financePayload.to,htmlBody:'<p>Approved</p>',attachments:[{type:'application/pdf'}]});});
 it('blocks finance recipient header injection and wrong sender',()=>{expect(post({...financePayload,to:'one@example.com,two@example.com'}).status).toBe('rejected');owner='wrong@gmail.com';expect(post(financePayload).status).toBe('rejected');expect(send).not.toHaveBeenCalled();});
+
+it('sends Office supplier PDF once and does not copy Building recipients',()=>{
+ const office={...poPayload,to:'khet_loong@yahoo.com',cc:[],subject:'Purchase Order PO-1 – Office Supplies | K HOTEL SDN BHD',text:'Dear Supplier, K HOTEL SDN BHD'};
+ const receipt=post(office);expect(receipt).toMatchObject({status:'sent',to:office.to,cc:[]});expect(post(office)).toEqual(receipt);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][0]).toMatchObject({to:office.to,cc:'',attachments:[{type:'application/pdf'}]});
+});

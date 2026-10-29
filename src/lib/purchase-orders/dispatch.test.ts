@@ -46,3 +46,16 @@ it('does not report sent if the gateway drops CC',async()=>{
  await dispatchApprovedPurchase(id,1,'https://example.test');expect(updates.at(-1)).toMatchObject({status:'failed'});
 });
 it('does not resend an already claimed or sent PO',async()=>{event.status='sent';await dispatchApprovedPurchase(id,1,'https://example.test');expect(mocks.gateway).not.toHaveBeenCalled();});
+it('sends Office PDF with approved company wording after Mary approval',async()=>{
+ event.inventory_group='office';event.recipient='khet_loong@yahoo.com';
+ order.approved_by='Mary';order.approved_by_user='1767d3e4-c907-45fe-8ed0-e433c0d0dca7';
+ mocks.gateway.mockImplementation(async(p:Record<string,unknown>)=>p.action==='po-capabilities'?{ok:true,sender:'klgcr.noreply@gmail.com',capabilities:['poPdf','officePoPdf','cc','idempotency']}:{ok:true,status:'sent',key:p.key,sender:p.from,to:p.to,cc:p.cc,sentAt:'2026-10-29T01:01:00Z'});
+ await dispatchApprovedPurchase(id,1,'https://example.test');
+ expect(mocks.gateway).toHaveBeenLastCalledWith(expect.objectContaining({to:'khet_loong@yahoo.com',cc:[],subject:'Purchase Order PO-1 – Office Supplies | K HOTEL SDN BHD',text:expect.stringContaining('K HOTEL SDN BHD (KLG Campus Residence)'),pdfBase64:expect.any(String)}),20000);
+ expect(updates.at(-1)).toMatchObject({status:'sent'});
+});
+it('keeps Office mail pending until the gateway supports Office PDF delivery',async()=>{
+ event.inventory_group='office';event.recipient='khet_loong@yahoo.com';order.approved_by_user='1767d3e4-c907-45fe-8ed0-e433c0d0dca7';
+ await dispatchApprovedPurchase(id,1,'https://example.test');
+ expect(mocks.gateway).toHaveBeenCalledOnce();expect(updates).toEqual([expect.objectContaining({error:expect.stringContaining('not connected')})]);
+});

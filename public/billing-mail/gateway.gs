@@ -14,7 +14,7 @@ function doPost(e){
  if(!secret||request.secret!==secret)return klgReply({ok:false,status:'rejected'});
  var sender=Session.getEffectiveUser().getEmail().toLowerCase();
  if(request.action==='billing-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['cc','htmlAttachment','idempotency']});
- if(request.action==='po-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['poPdf','cc','idempotency']});
+ if(request.action==='po-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['poPdf','officePoPdf','cc','idempotency']});
  if(request.action==='finance-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:3,sender:sender,capabilities:['financePdf','idempotency']});
  if(request.action==='finance-send')return klgFinanceSend(request,props,sender);
  if(request.action==='po-send')return klgPoSend(request,props,sender);
@@ -44,7 +44,8 @@ function klgBillingSend(request,props,sender){
 
 // Building Material destinations are fixed independently of Rental/Utilities.
 function klgPoSend(request,props,sender){
- var to='purchasing@keanlenggroup.com',cc=KLG_BILLING_CC;
+ var office=request.to==='khet_loong@yahoo.com';
+ var to=office?'khet_loong@yahoo.com':'purchasing@keanlenggroup.com',cc=office?[]:KLG_BILLING_CC;
  if(sender!==KLG_BILLING_FROM||request.from!==KLG_BILLING_FROM||request.to!==to||JSON.stringify(request.cc)!==JSON.stringify(cc)||!/^po_[0-9a-f-]{36}_r[1-9][0-9]*$/i.test(request.key||'')||typeof request.pdfBase64!=='string'||request.pdfBase64.length>16000000||!/^JVBERi0[A-Za-z0-9+/]*={0,2}$/.test(request.pdfBase64)||!request.subject||!request.text)return klgReply({ok:false,status:'rejected'});
  var property=request.key,lock=LockService.getScriptLock();
  if(!lock.tryLock(10000))return klgReply({ok:false,status:'busy'});
