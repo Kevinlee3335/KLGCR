@@ -37,3 +37,31 @@ No old approvals are emailed by the migration. An administrator may explicitly s
 The check acknowledges the click immediately, shows a visible result and a Malaysia-time timestamp, and aborts a stalled browser request after 25 seconds. Server checks distinguish missing website configuration, wrong sender, rejected shared secret, older deployment, incomplete capabilities, upstream HTTP errors, non-JSON authorization/error pages and timeouts. The capability request contains no recipient and sends no email.
 
 The shared transactional helper used by Defect Form and Gym Member emails now requires the existing JSON `{ok:true}` acknowledgement; HTTP 200 with `{ok:false}` or an HTML error page is no longer counted as sent. Successful legacy `to/subject/text/html` requests remain unchanged.
+
+## Unified official receipts and statements
+
+Rental, utilities and newly approved Gym registration / renewal payments share
+`KLGCR/YY0001` and the same transactional annual counter. Existing invoice numbers
+and historic manually recorded receipt numbers are retained. No old payment is
+silently renumbered. Payment proof is private; only Admin / Management can view it.
+
+After deploying this change, update the **existing** Apps Script Web App using
+`public/billing-mail/gateway.gs`. Preserve the existing `WEBSITE_EMAIL_SECRET`
+constant (or its existing Script Property). Deploy a **New version** of the same
+Web App, executing as `klgcr.noreply@gmail.com`, with the existing access settings
+and URL. No website secret or URL change is needed. The original complaint,
+Gym notification, billing-pack and PO handlers remain supported.
+
+Invoice history now reports the Receipt PDF gateway connection. Until the gateway
+is updated, payments and numbered Receipts remain saved; failed PDF emails remain
+pending and can be checked/retried without issuing another receipt. Gym approvals
+retain their pending email queue and attach the official receipt to the approval
+email when delivery succeeds. Repeating a completed delivery key checks the saved
+result rather than sending a duplicate message.
+
+Select company, month(s), allocation amount(s), company email, payment date and
+payment proof to confirm a rental / utilities payment. Partial payments and one
+payment covering multiple monthly invoices are supported; overpayment and
+cross-company allocation are rejected transactionally. Statements include all
+approved invoices, collections and outstanding balances, independent of the
+current month filter. No Statement action consumes a Receipt number.

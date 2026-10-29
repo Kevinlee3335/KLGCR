@@ -17,6 +17,7 @@ export function MembershipReceiptNumber({id,receipt,name}:{id:string;receipt:str
    else setError(result.error||'Unable to save.');
   }catch{setError('Unable to save. Please try again.');}finally{setPending(false);}
  }
+ if(/^KLGCR\/\d{6,}$/.test(receipt))return <a href={'/api/finance?number='+encodeURIComponent(receipt)} target="_blank" rel="noreferrer" title="View official receipt PDF">{receipt}</a>;
  return <form className={`receipt-number-editor${error?' has-error':''}`} onSubmit={submit}>
   <input aria-label={`Receipt number for ${name}`} value={value} maxLength={100} placeholder="Enter receipt no" disabled={pending} onChange={event=>{editing.current=true;setValue(event.target.value);setSaved(false);setError('');}}/>
   <button type="submit" disabled={pending||value.trim()===expected} aria-label={`Save receipt number for ${name}`} title={saved?'Saved':'Save receipt number'}>{pending?<LoaderCircle size={13} className="receipt-save-spin"/>:saved?<Check size={13}/>:<Save size={13}/>}</button>
