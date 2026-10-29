@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function prepareAdminDailyTaskEvidence(taskId: number, photoCount: number) {
   await requireRole(["admin"]);
-  if (!Number.isSafeInteger(taskId) || taskId < 1 || !Number.isInteger(photoCount) || photoCount < 1 || photoCount > 6) return { error: "Attach between 1 and 6 photos." };
+  if (!Number.isSafeInteger(taskId) || taskId < 1 || !Number.isInteger(photoCount) || photoCount < 1 || photoCount > 20) return { error: "Attach between 1 and 20 photos." };
   const db = await createClient();
   const { data: task, error } = await db.from("admin_daily_tasks").select("id").eq("id", taskId).maybeSingle();
   if (error || !task) return { error: error?.message || "Daily task not found." };
@@ -27,7 +27,7 @@ export async function prepareAdminDailyTaskEvidence(taskId: number, photoCount: 
 
 export async function completeAdminDailyTask(taskId: number, comment: string, paths: string[]) {
   const profile = await requireRole(["admin"]);
-  if (!Number.isSafeInteger(taskId) || taskId < 1 || !Array.isArray(paths) || paths.length < 1 || paths.length > 6 || new Set(paths).size !== paths.length || paths.some((path) => typeof path !== "string" || !new RegExp(`^daily-tasks/${taskId}/[0-9a-f-]+\\.jpg$`).test(path))) return { error: "Invalid completion photos." };
+  if (!Number.isSafeInteger(taskId) || taskId < 1 || !Array.isArray(paths) || paths.length < 1 || paths.length > 20 || new Set(paths).size !== paths.length || paths.some((path) => typeof path !== "string" || !new RegExp(`^daily-tasks/${taskId}/[0-9a-f-]+\\.jpg$`).test(path))) return { error: "Invalid completion photos." };
   const db = await createClient();
   const { data: task, error: taskError } = await db.from("admin_daily_tasks").select("id,title,status,task_date,task_category").eq("id", taskId).maybeSingle();
   if (taskError || !task) return { error: taskError?.message || "Daily task not found." };

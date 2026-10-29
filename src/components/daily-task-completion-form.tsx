@@ -1,8 +1,8 @@
 "use client";
 
-import { Camera, ImageUp } from "lucide-react";
+import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { completeDailyTask, prepareDailyTaskEvidence } from "@/app/(dashboard)/staff/daily-tasks/actions";
 import { prepareAdminDailyTaskEvidence, completeAdminDailyTask } from "@/app/(dashboard)/admin/daily-tasks/evidence-actions";
 import { createClient } from "@/lib/supabase/client";
@@ -34,23 +34,9 @@ async function compressPhoto(file: File) {
 
 export function DailyTaskCompletionForm({ taskId, admin = false, supplemental = false }: { taskId: number; admin?: boolean; supplemental?: boolean }) {
   const router = useRouter();
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  function choose(files: FileList | null, source: "camera" | "upload") {
-    const selected = Array.from(files || []);
-    if (!selected.length) return;
-    // Keep earlier photos when the cleaner takes several camera shots one by one.
-    const combined = [...photos, ...selected];
-    if (combined.length > 6) { setError("You can attach up to 6 photos."); return; }
-    setPhotos(combined);
-    setError("");
-    if (source === "camera" && uploadRef.current) uploadRef.current.value = "";
-    if (source === "upload" && cameraRef.current) cameraRef.current.value = "";
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,8 +59,6 @@ export function DailyTaskCompletionForm({ taskId, admin = false, supplemental = 
       const completed = await (admin ? completeAdminDailyTask : completeDailyTask)(taskId, comment, prepared.uploads.map((upload) => upload.path));
       if ("error" in completed) { setError(completed.error || "Unable to complete this task."); return; }
       setPhotos([]);
-      if (cameraRef.current) cameraRef.current.value = "";
-      if (uploadRef.current) uploadRef.current.value = "";
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to complete this task.");
@@ -86,15 +70,7 @@ export function DailyTaskCompletionForm({ taskId, admin = false, supplemental = 
   return <form className="daily-task-complete-form" onSubmit={submit}>
     {error && <p className="error">{error}</p>}
     <label className="field"><span>Completion notes</span><textarea disabled={busy} name="comment" rows={4} maxLength={1000} placeholder="Describe the work completed, or any handover note." /></label>
-    <section className="cleaner-photo-section">
-      <div><span>Completion photos *</span><small>Attach 1 to 6 photos. Camera photos are compressed before upload.</small></div>
-      <div className="cleaner-photo-actions">
-        <label className="cleaner-photo-button"><Camera size={22}/><span>Take Photo</span><input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={(event) => { choose(event.target.files, "camera"); event.target.value = ""; }} /></label>
-        <label className="cleaner-photo-button"><ImageUp size={22}/><span>Upload Photos</span><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(event) => { choose(event.target.files, "upload"); event.target.value = ""; }} /></label>
-      </div>
-      {photos.length > 0 && <p className="cleaner-photo-selected">✓ {photos.length} photo{photos.length === 1 ? "" : "s"} ready</p>}
-    {photos.map((photo, index) => <div className="task-selected-photo" key={`${photo.name}-${index}`}><span>{photo.name}</span><button type="button" className="button secondary button-compact" disabled={busy} onClick={() => setPhotos(photos.filter((_, i) => i !== index))} aria-label={`Remove photo ${index + 1}`}>Remove</button></div>)}
-    </section>
+    <EvidencePhotoPicker photos={photos} onChange={setPhotos} disabled={busy}/>
     <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : supplemental ? "Save additional photos" : "Confirm Completion"}</button>
   </form>;
 }

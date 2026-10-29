@@ -5,11 +5,11 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
-const maxPhotos = 6;
+const maxPhotos = 20;
 
 export async function prepareDailyTaskEvidence(taskId: number, photoCount: number) {
   const profile = await requireRole(["maintenance_staff", "cleaner"]);
-  if (!Number.isSafeInteger(taskId) || photoCount < 1 || photoCount > maxPhotos) {
+  if (!Number.isSafeInteger(taskId) || taskId < 1 || !Number.isInteger(photoCount) || photoCount < 1 || photoCount > maxPhotos) {
     return { error: `Attach between 1 and ${maxPhotos} photos.` };
   }
 

@@ -14,6 +14,6 @@ it('offers a separate photo and update submission for each open defect',async()=
  const {container}=render(await Page({params:Promise.resolve({id:'room'}),searchParams:Promise.resolve({})}));
  const buttons=screen.getAllByRole('button',{name:'Update this defect'});expect(buttons).toHaveLength(2);
  expect(buttons.map(b=>b.closest('form')?.querySelector<HTMLInputElement>('input[name=rectifiedDefects]')?.value)).toEqual(['a','b']);
- for(const button of buttons){const form=button.closest('form')!;expect(form.querySelectorAll('[name=rectifiedDefects]')).toHaveLength(1);expect(form.querySelector('input[type=file]')).toBeRequired();expect(form.querySelector('textarea')).toBeRequired()}
+ for(const button of buttons){const form=button.closest('form')!;expect(form.querySelectorAll('[name=rectifiedDefects]')).toHaveLength(1);expect(form.querySelector('input[type=file][multiple]')).toBeInTheDocument();expect(form.querySelector('input[capture=environment]')).toBeInTheDocument();expect(form.querySelector('textarea')).toBeRequired()}
  expect(container.querySelector('form form')).toBeNull();
 });

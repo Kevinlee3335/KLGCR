@@ -1,5 +1,6 @@
 "use server";
 
+import { MAX_EVIDENCE_PHOTOS } from "@/lib/photo-limits";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -51,8 +52,9 @@ export async function prepareCompletionUpload(jobId: string, file: CompletionUpl
 }
 
 async function saveCompletionPhotoRecords(supabase: Awaited<ReturnType<typeof createClient>>, jobId: string, staffId: string, data: FormData) {
-  const paths = data.getAll("completionPhotoPaths").map((value) => completionPhotoPath(jobId, value)).filter((path): path is string => Boolean(path));
-  if (!paths.length) throw new Error("Add at least one completion photo before confirming the job.");
+  const rawPaths = data.getAll("completionPhotoPaths");
+  const paths = rawPaths.map((value) => completionPhotoPath(jobId, value)).filter((path): path is string => Boolean(path));
+  if (!paths.length || paths.length > MAX_EVIDENCE_PHOTOS || paths.length !== rawPaths.length || new Set(paths).size !== paths.length) throw new Error("Attach between 1 and 20 valid completion photos.");
   const { error } = await supabase.from("maintenance_job_photos").insert(paths.map((storage_path) => ({ job_id: jobId, storage_path, uploaded_by: staffId })));
   if (error) throw new Error(`Unable to save completion photo: ${error.message}`);
 }

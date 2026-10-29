@@ -1,5 +1,7 @@
 "use client";
 
+import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
+import { validateEvidenceFiles } from "@/lib/photo-limits";
 import { useRef, useState } from "react";
 import { completeJob, prepareCompletionUpload } from "@/app/(dashboard)/staff/jobs/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -8,19 +10,22 @@ const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxBytes = 10 * 1024 * 1024;
 
 export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: string }) {
+  const [photos, setPhotos] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   async function submit(formData: FormData) {
-    const files = formData.getAll("completionPhotos").filter((value): value is File => value instanceof File && value.size > 0);
-    if (!files.length) {
-      setError("Add at least one completion photo before confirming the job.");
+    const files = photos;
+    const invalid = validateEvidenceFiles(files);
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
     setError("");
     setPending(true);
+    formData.delete("completionPhotoPaths");
     try {
       const storage = createClient().storage.from("maintenance-evidence");
       for (const file of files) {
@@ -58,7 +63,7 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
   return <form ref={formRef} action={submit}>
     <input type="hidden" name="returnTo" value={returnTo}/>
     <label className="field"><span>Action Taken / Work Done *</span><textarea name="actionTaken" rows={5} required placeholder="Describe the repair or work completed"/></label>
-    <div className="field completion-photo-field"><span>Completion photo *</span><label className="completion-photo-camera" title="Take or choose completion photos"><input name="completionPhotos" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple required onChange={() => setError("")}/><span aria-hidden="true">📷</span><b>Take Photo</b></label><small className="subtle">At least one photo is required. You may add more than one.</small></div>
+    <EvidencePhotoPicker photos={photos} onChange={setPhotos} disabled={pending}/>
     {error && <p className="error" role="alert">{error}</p>}
     <button className="button" type="submit" disabled={pending} aria-disabled={pending}>{pending ? "Completing…" : "Confirm completion"}</button>
   </form>;

@@ -153,4 +153,13 @@ describe("Admin Job Detail", () => {
     expect(html).toContain("Some completion photos could not be loaded");
     expect(html).toContain('href="https://evidence.example/valid.jpg"');
   });
+  it("renders all twenty completion photos for Admin", async () => {
+    queries.set("maintenance_jobs",query({data:{...job,status:"completed",completed_at:"2026-10-12T03:00:00Z"},error:null}));
+    const photos=Array.from({length:20},(_,i)=>({id:`photo-${i}`,storage_path:`photo-${i}.jpg`,created_at:"2026-10-12T02:59:00Z"}));
+    queries.set("maintenance_job_photos",query({data:photos,error:null}));
+    storage.sign.mockResolvedValue({data:photos.map(photo=>({path:photo.storage_path,signedUrl:`https://evidence.example/${photo.storage_path}`,error:null})),error:null});
+    const html=renderToStaticMarkup(await AdminJobDetail({params:Promise.resolve({id:job.id})}));
+    for(const photo of photos)expect(html).toContain(`href="https://evidence.example/${photo.storage_path}"`);
+  });
+
 });
