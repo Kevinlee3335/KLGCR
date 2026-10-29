@@ -5,6 +5,7 @@ import { InventoryItemFinder } from "@/components/inventory-item-finder";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { OfficeUsageSection } from "@/components/office-usage-section";
+import { StockOutItemPicker } from "@/components/stock-out-item-picker";
 import { Fragment } from "react";
 
 function stockState(balance: number, reorder: number) {
@@ -62,7 +63,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <div className="section-head compact-head"><div><p className="eyebrow">Stock Movement</p><h3>Stock Out</h3><p className="subtle">Record materials collected by General Staff or other recipients.</p></div><a className="button secondary-button" href={`${base}&view=all#inventory-stock-list`}>Stock In / Adjust</a></div>
       <form action="/admin/inventory/action" method="post" className="inventory-form">
         <input type="hidden" name="action" value="stock_out"/><input type="hidden" name="store" value={store}/>
-        <label className="span-2"><span>Item</span><select name="itemId" defaultValue="" required><option value="" disabled>Select item</option>{itemOptions.filter((item) => !item.quantity_unverified).map((item) => <option key={item.id} value={item.id}>{item.item_code} · {item.description} · Available: {item.balance_qty} {item.unit || ""}</option>)}</select></label>
+        <StockOutItemPicker items={itemOptions.filter((item) => !item.quantity_unverified)}/>
         <label><span>Quantity</span><input name="qty" type="number" min="0.01" step="0.01" required/></label>
         <label><span>Taken By</span><input name="takenBy" placeholder="Name of person collecting" maxLength={100} required/></label>
         <label className="span-2"><span>Purpose / Room / Location</span><input name="note" placeholder="e.g. General Staff — painting Block A room 103" maxLength={500} required/></label>
