@@ -7,6 +7,7 @@ export async function POST(request: Request) {
   const profile = await requireRole(["maintenance_staff"]);
   const form = await request.formData();
   const jobId = String(form.get("jobId") || "");
+  const checkoutId = jobId.startsWith("checkout:") ? jobId.slice(9) : null;
   const note = String(form.get("note") || "");
   const itemIds = form.getAll("itemId").map((value) => String(value || ""));
   const quantities = form.getAll("qty").map((value) => Number(value));
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     return inventory_item_id && Number.isFinite(qty) && qty > 0 ? [{ inventory_item_id: inventory_item_id === "other" ? null : inventory_item_id, other_item_name:inventory_item_id === "other" ? otherNames[index] : null, qty }] : [];
   });
   const url = new URL("/staff/material-request", request.url);
-  if (jobId) url.searchParams.set("job", jobId);
+  if (jobId) url.searchParams.set(checkoutId ? "checkout" : "job", checkoutId || jobId);
   if (itemIds.some((id,index)=>id && (!Number.isFinite(quantities[index]) || quantities[index]<=0 || (id==="other" && !otherNames[index])))) {
     url.searchParams.set("error","Enter a name and valid quantity for every selected material.");
     return NextResponse.redirect(url,303);
@@ -30,25 +31,26 @@ export async function POST(request: Request) {
     return NextResponse.redirect(url, 303);
   }
   const supabase = await createClient();
-  const { data: requestId, error } = await supabase.rpc("create_material_request", { p_job_id: jobId, p_note: note, p_items: items });
+  const { data: requestId, error } = await supabase.rpc(checkoutId ? "create_checkout_material_request" : "create_material_request", { [checkoutId ? "p_checkout_id" : "p_job_id"]: checkoutId || jobId, p_note: note, p_items: items });
   if (error) {
     url.searchParams.set("error", error.message);
   } else {
     try {
       const { data: materialRequest } = await supabase.from("material_requests")
-        .select("id,request_no,job:maintenance_jobs!job_id(job_no,room_no)")
-        .eq("job_id", jobId)
+        .select("id,request_no,checkout:checkout_rooms!checkout_room_id(reference_no,room_no),job:maintenance_jobs!job_id(job_no,room_no)")
+        .eq(checkoutId ? "checkout_room_id" : "job_id", checkoutId || jobId)
         .eq("requested_by", profile.id)
         .eq("id",requestId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (materialRequest) {
+        const checkout = materialRequest.checkout as unknown as {reference_no:string;room_no:string}|null;
         const job = materialRequest.job as unknown as { job_no: string; room_no: string } | null;
         await notifyActiveMaterialApprovers({
           type: "material_request",
           title: "New material request",
-          body: materialRequest.request_no + " for " + (job?.job_no || "a maintenance job") + " · Room " + (job?.room_no || "—") + " is awaiting review.",
+          body: materialRequest.request_no + " for " + (checkout?.reference_no || job?.job_no || "a maintenance job") + " · Room " + (checkout?.room_no || job?.room_no || "—") + " is awaiting review.",
           href: "/admin/material-requests",
           entityId: materialRequest.id,
         });
