@@ -3943,3 +3943,16 @@ button.calendar-item {
 .procurement-controls button:disabled{opacity:.5;cursor:not-allowed}
 .procurement-controls details{margin-top:8px}
 @media(max-width:600px){.procurement-toolbar .button{flex:1 1 160px}.procurement-search{max-width:none}}
+
+/* Inventory search and order quantity controls. */
+.procurement-search{max-width:620px;gap:9px;margin:22px 0}
+.procurement-search>span:first-child{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#80662f}
+.procurement-search-field{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 16px;background:#fffefa;border:1px solid #d9c9a8;border-radius:12px;box-shadow:0 2px 8px rgba(54,43,20,.04);transition:border-color .15s,box-shadow .15s}
+.procurement-search-field>svg{color:#9b7a38;flex-shrink:0}
+.procurement-search-field:focus-within{border-color:#a8843e;box-shadow:0 0 0 3px rgba(168,132,62,.13)}
+.procurement-search-field input[type=search]{appearance:none;width:100%;min-width:0;min-height:48px;margin:0;padding:0;border:0!important;border-radius:0;background:transparent;box-shadow:none!important;outline:none;font:inherit;font-size:14px;color:#26231d}
+.procurement-search-field input::placeholder{color:#969185}
+.procurement-controls input[type=number],.procurement-controls td select{min-height:42px;padding:10px 12px;border:1px solid #d9c9a8;border-radius:9px;background:#fffefa;color:#26231d;font:inherit;font-size:14px;box-sizing:border-box}
+.procurement-controls input[type=number]:focus,.procurement-controls td select:focus{outline:2px solid rgba(168,132,62,.3);outline-offset:2px;border-color:#a8843e}
+.procurement-controls td select{display:block;max-width:260px;margin-bottom:8px}
+@media(max-width:600px){.procurement-search{max-width:none}.procurement-search-field{min-height:48px;padding:0 12px}}

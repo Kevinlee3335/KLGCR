@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Search } from "lucide-react";
 import type { ProcurementRow } from "@/lib/inventory-procurement";
 
 export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: {
@@ -33,7 +34,7 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
       <button type="button" className={`button ${view === "order" ? "" : "secondary-button"}`} aria-pressed={view === "order"} onClick={() => changeView("order")}>Items to Order ({rows.filter((row) => row.needsOrder).length})</button>
       <button type="button" className={`button ${view === "hidden" ? "" : "secondary-button"}`} aria-pressed={view === "hidden"} onClick={() => changeView("hidden")}>Buy When Needed ({rows.filter((row) => row.buyWhenNeeded).length})</button>
     </div>
-    <label className="procurement-search"><span>Search Item Code, Material or Brand</span><input type="search" value={search} placeholder="Search cement, paint, E00018…" onChange={(event) => { setSearch(event.target.value); setSelected(new Set()); setExpanded(false); }}/></label>
+    <label className="procurement-search"><span>Search inventory</span><span className="procurement-search-field"><Search size={19} aria-hidden="true"/><input type="search" value={search} placeholder="Search cement, paint, E00018…" onChange={(event) => { setSearch(event.target.value); setSelected(new Set()); setExpanded(false); }}/></span></label>
     <form action="/admin/inventory/action" method="post" onSubmit={() => setSaving(true)}>
       <input type="hidden" name="action" value="procurement_mode"/>
       <input type="hidden" name="store" value={store}/>
