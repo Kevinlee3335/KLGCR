@@ -12,7 +12,7 @@ function PhotoPreview({ file, number }: { file: File; number: number }) {
   return url ? <img src={url} alt={`Selected photo ${number}`} style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}/> : null;
 }
 
-export function EvidencePhotoPicker({ photos, onChange, disabled = false }: { photos: File[]; onChange: (files: File[]) => void; disabled?: boolean }) {
+export function EvidencePhotoPicker({ photos, onChange, disabled = false, label = "Completion photos *" }: { label?:string; photos: File[]; onChange: (files: File[]) => void; disabled?: boolean }) {
   const id = useId();
   const [error, setError] = useState("");
   function add(input: HTMLInputElement) {
@@ -26,7 +26,7 @@ export function EvidencePhotoPicker({ photos, onChange, disabled = false }: { ph
     setError("");
   }
   return <section className="cleaner-photo-section">
-    <div><span>Completion photos *</span><small>Take photos one by one or select multiple from your gallery. Maximum 20 photos.</small></div>
+    <div><span>{label}</span><small>Take photos one by one or select multiple from your gallery. Maximum 20 photos.</small></div>
     <div className="cleaner-photo-actions">
       <label className="cleaner-photo-button"><Camera size={22}/><span>Take Photo</span><input id={`${id}-camera`} aria-label="Take Photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={disabled || photos.length >= MAX_EVIDENCE_PHOTOS} onChange={event => add(event.currentTarget)}/></label>
       <label className="cleaner-photo-button"><ImageUp size={22}/><span>Upload Photos</span><input id={`${id}-upload`} aria-label="Upload Photos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={disabled || photos.length >= MAX_EVIDENCE_PHOTOS} onChange={event => add(event.currentTarget)}/></label>

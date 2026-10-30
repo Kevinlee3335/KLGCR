@@ -13,7 +13,7 @@ export function inspectionFindings(record:ABInspection) {
  for(const [name,item] of Object.entries(record.fac||{}))if(item.status==="defect"){
   if(!item.type)throw new Error(`Enter the defect for ${name}.`);
   findings.push({description:`${name} · ${item.type} · Qty ${item.qty||1}${item.remark?": "+item.remark:""}`,photos:item.photos||[]});
- }
+ }else if(item.photos?.length)findings.push({description:"",photos:item.photos});
  if(findings.reduce((n,f)=>n+f.photos.length,0)>20)throw new Error("Maximum 20 photos per room. Remove extra photos before submitting.");
  return findings;
 }
