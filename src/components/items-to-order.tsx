@@ -56,10 +56,16 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
           <td>{item.unverified ? "Pending confirmation" : `${item.balance_qty} ${item.unit || ""}`}</td><td>{item.reorder_level} {item.unit || ""}</td>
           <td><strong>{view === "hidden" || item.unverified ? "—" : `${Math.max(0, item.reorder_level - item.balance_qty)} ${item.unit || ""}`}</strong></td>
           <td><span className={`stock-state ${view === "hidden" ? "ok" : item.balance_qty <= 0 ? "out" : "near"}`}>{view === "hidden" ? "Buy When Needed" : item.balance_qty <= 0 ? "Out of Stock" : "Near Reorder"}</span></td>
-          {canManage && <><td><input aria-label={`PO quantity for ${item.description}`} type="number" min="0.01" max="1000000" step="0.01" value={quantity(item)} onChange={event => setQuantities(previous => ({...previous, [item.id]: event.target.value}))} style={{width:100}}/></td><td>{item.itemIds.length > 1 && <select aria-label={`PO brand for ${item.description}`} value={poItems[item.id] || item.itemIds[0]} onChange={event=>setPoItems(previous=>({...previous,[item.id]:event.target.value}))}>{item.itemIds.map((id,index)=><option key={id} value={id}>{item.brands[index]?.split(" · ").slice(0,2).join(" · ") || id}</option>)}</select>}<button type="button" className="button secondary-button" disabled={saving} onClick={() => addToPO([item])}>Add to PO</button></td></>}
+          {canManage && <><td><input aria-label={`PO quantity for ${item.description}`} type="number" min="0.01" max="1000000" step="0.01" value={quantity(item)} onChange={event => setQuantities(previous => ({...previous, [item.id]: event.target.value}))} style={{width:100}}/></td><td>{item.itemIds.length > 1 && <select aria-label={`PO brand for ${item.description}`} value={poItems[item.id] || item.itemIds[0]} onChange={event=>setPoItems(previous=>({...previous,[item.id]:event.target.value}))}>{item.itemIds.map((id,index)=><option key={id} value={id}>{item.brands[index]?.split(" · ").slice(0,2).join(" · ") || id}</option>)}</select>}<button type="button" className="button secondary-button" disabled={saving} onClick={() => addToPO([item])}>Add to PO</button> <button type="submit" form={`procurement-item-${item.id}`} className="button secondary-button" disabled={saving}>{view === "hidden" ? "Restore Stock Alert" : "Buy When Needed"}</button></td></>}
         </tr>)}</tbody>
       </table></div>}
     </form>
+    {canManage && visible.map(item => <form key={item.id} id={`procurement-item-${item.id}`} action="/admin/inventory/action" method="post" onSubmit={() => setSaving(true)}>
+      <input type="hidden" name="action" value="procurement_mode"/>
+      <input type="hidden" name="store" value={store}/>
+      <input type="hidden" name="mode" value={view === "hidden" ? "maintain_stock" : "buy_when_needed"}/>
+      {item.itemIds.map(id => <input key={id} type="hidden" name="itemIds" value={id}/>)}
+    </form>)}
     {matching.length > 5 && <button type="button" className="button secondary-button" style={{ marginTop: 16 }} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Show first 5 items" : `Show all ${matching.length} items`}</button>}
   </div>;
 }

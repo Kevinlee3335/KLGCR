@@ -8,9 +8,9 @@ it('selects all matches including collapsed rows and submits every selected id',
   const {container}=render(<ItemsToOrder rows={rows} store="building" canManage/>);
   fireEvent.click(screen.getByLabelText('Select All (7)'));
   expect(screen.getByText('7 selected')).toBeTruthy();
-  expect(container.querySelectorAll('input[name="itemIds"]')).toHaveLength(7);
+  expect(container.querySelector('form')!.querySelectorAll('input[name="itemIds"]')).toHaveLength(7);
   fireEvent.change(screen.getByRole('searchbox'),{target:{value:'CODE-3'}});
-  expect(container.querySelectorAll('input[name="itemIds"]')).toHaveLength(0);
+  expect(container.querySelector('form')!.querySelectorAll('input[name="itemIds"]')).toHaveLength(0);
   fireEvent.click(screen.getByLabelText('Select Material 3'));
   expect(container.querySelector<HTMLInputElement>('input[name="itemIds"]')?.value).toBe('id-3');
 });
@@ -19,7 +19,7 @@ it('shows hidden materials on reopening and supports restore without losing stoc
   expect(screen.getByText('Material 0')).toBeTruthy();
   fireEvent.click(screen.getByLabelText('Select Material 0'));
   expect(container.querySelector<HTMLInputElement>('input[name="mode"]')?.value).toBe('maintain_stock');
-  expect(screen.getByRole('button',{name:'Restore Stock Alert'})).toBeTruthy();
+  expect(screen.getAllByRole('button',{name:'Restore Stock Alert'})[0]).toBeTruthy();
 });
 it('does not offer management viewers mutation controls',()=>{
   render(<ItemsToOrder rows={rows} store="building" canManage={false}/>);
@@ -33,4 +33,13 @@ it('allows editing PO quantities and rejects zero without navigating',()=>{
  expect(screen.getByRole('alert').textContent).toContain('Enter a quantity');
  fireEvent.change(screen.getByLabelText('PO quantity for Material 0'),{target:{value:'12'}});
  expect((screen.getByLabelText('PO quantity for Material 0') as HTMLInputElement).value).toBe('12');
+});
+
+it('each row submits only its own group without the bulk selection',()=>{
+ const {container}=render(<ItemsToOrder rows={rows} store="building" canManage/>);
+ const button=screen.getAllByRole('button',{name:'Buy When Needed'})[1] as HTMLButtonElement;
+ expect(button.form?.id).toBe('procurement-item-0');
+ expect(new FormData(button.form!).getAll('itemIds')).toEqual(['id-0']);
+ expect(new FormData(button.form!).get('mode')).toBe('buy_when_needed');
+ expect(container.querySelector('form')!.querySelectorAll('input[name="itemIds"]')).toHaveLength(0);
 });

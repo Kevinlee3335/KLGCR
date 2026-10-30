@@ -3966,12 +3966,14 @@ button.calendar-item {
 .procurement-controls .procurement-managed th:nth-child(5){width:110px}
 .procurement-controls .procurement-managed th:nth-child(6){width:115px}
 .procurement-controls .procurement-managed th:nth-last-child(2){width:120px}
-.procurement-controls .procurement-managed th:last-child{width:160px}
+.procurement-controls .procurement-managed th:last-child{width:310px}
 .procurement-controls .procurement-managed td{white-space:normal;overflow-wrap:anywhere}
 .procurement-controls .procurement-managed td:nth-child(2) strong,.procurement-controls .procurement-managed td:nth-child(2) small{white-space:normal;overflow-wrap:anywhere}
-.procurement-controls .procurement-managed th:nth-last-child(2),.procurement-controls .procurement-managed td:nth-last-child(2){position:sticky;right:160px;background:#fffefa;z-index:2}
+.procurement-controls .procurement-managed th:nth-last-child(2),.procurement-controls .procurement-managed td:nth-last-child(2){position:sticky;right:310px;background:#fffefa;z-index:2}
 .procurement-controls .procurement-managed th:last-child,.procurement-controls .procurement-managed td:last-child{position:sticky;right:0;background:#fffefa;z-index:2}
 .procurement-controls .procurement-managed th:nth-last-child(2),.procurement-controls .procurement-managed th:last-child{background:#f4edda;z-index:3}
 .procurement-controls .procurement-managed td:nth-last-child(2){box-shadow:-6px 0 9px -8px rgba(45,35,13,.4)}
 .procurement-controls .procurement-managed td:last-child .button{white-space:nowrap}
 .procurement-controls .procurement-managed td select{width:100%;max-width:100%;font-size:12px}
+
+.procurement-controls .procurement-managed td:last-child .button{font-size:12px;padding:10px 12px;display:inline-flex;margin:3px 0}
