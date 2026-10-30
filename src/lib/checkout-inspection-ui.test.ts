@@ -16,11 +16,11 @@ function setup(){
  w.eval("window.testUI={start,fs,status,save,photos,facilityPhotos,getRecord:()=>cur,getCategories:()=>FAC,getPending:()=>photoPending};");
  return {dom,w,ui:w.testUI as {start:(room:string)=>void;fs:(name:string,status:string)=>void;status:(i:number,o:number,s:string)=>void;save:(final:boolean)=>void;photos:(i:number,o:number,files:File[])=>Promise<void>;facilityPhotos:(n:string,files:File[])=>Promise<void>;getRecord:()=>ABInspection;getCategories:()=>[string,string[]][];getPending:()=>number}};
 }
-it("every X across all 24 inspection items converts to a defect, and switching back to Good removes only that defect",()=>{
+it("every X across all 26 inspection items converts to a defect, and switching back to Good removes only that defect",()=>{
  const {dom,ui}=setup();try{
  ui.start("B106");const r=ui.getRecord();
  for(let i=0;i<5;i++){ui.status(i,0,"defect");r.items[i][0].confirm=true;}
- const names=ui.getCategories().flatMap(c=>c[1]);for(const n of names)ui.fs(n,"defect");
+ const names=ui.getCategories().flatMap(c=>c[1]);expect(names).toContain("Window");expect(names).toContain("Window Handle");expect(r.fac.Window.status).toBe("good");expect(r.fac["Window Handle"].status).toBe("good");for(const n of names)ui.fs(n,"defect");
  const findings=inspectionFindings(r);expect(findings.filter(f=>f.description)).toHaveLength(5+names.length);
  for(const n of names)expect(findings.some(f=>f.description.startsWith(n+" ·"))).toBe(true);
  ui.fs("Fan","good");expect(inspectionFindings(r)).toHaveLength(4+names.length);
