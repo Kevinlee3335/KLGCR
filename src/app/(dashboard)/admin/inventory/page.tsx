@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { OfficeUsageSection } from "@/components/office-usage-section";
 import { StockOutItemPicker } from "@/components/stock-out-item-picker";
 import { Fragment } from "react";
+import { procurementRows } from "@/lib/inventory-procurement";
 
 function stockState(balance: number, reorder: number) {
   if (balance <= 0) return "Out of Stock";
@@ -18,7 +19,7 @@ function qtyToOrder(balance: number, reorder: number) {
   return Math.max(0, reorder - balance);
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; warning?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; warning?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string; purchaseView?: string }> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
@@ -34,11 +35,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     inventoryQuery = inventoryQuery.or(`item_code.ilike.${pattern},description.ilike.${pattern}`);
   }
   if (category) inventoryQuery = inventoryQuery.eq("category", category);
-  const [{ data: items, error }, { data: issues }, { data: adjustments }, { data: catalog }] = await Promise.all([
+  const [{ data: items, error }, { data: issues }, { data: adjustments }, { data: catalog, error: catalogError }] = await Promise.all([
     inventoryQuery,
     supabase.from("inventory_issue_history").select("id,qty,balance_before,balance_after,issued_at,item:inventory_items!inner(item_code,description,inventory_group),job:maintenance_jobs(job_no,room_no),staff:profiles!staff_id(full_name)").eq("item.inventory_group",store).order("issued_at", { ascending: false }).limit(30),
     supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,item:inventory_items!inner(item_code,description,inventory_group),user:profiles!adjusted_by(full_name)").eq("item.inventory_group",store).order("adjusted_at", { ascending: false }).limit(30),
-    supabase.from("inventory_items").select("id,item_code,description,category,balance_qty,unit,quantity_unverified").eq("inventory_group",store).eq("is_active", true).order("item_code"),
+    supabase.from("inventory_items").select("id,item_code,description,category,balance_qty,reorder_level,unit,quantity_unverified,is_active,stock_group,procurement_mode").eq("inventory_group",store).eq("is_active", true).order("item_code"),
   ]);
   const rows = items || [];
   const itemOptions = catalog || [];
@@ -49,13 +50,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const groupedRows = category
     ? [{ category, items: stockRows }]
     : categoryOrder.map((name) => ({ category: name, items: stockRows.filter((item: any) => item.category === name) })).filter((group) => group.items.length > 0);
-  const orderRows = rows.filter((x: any) => Number(x.balance_qty) <= Number(x.reorder_level) && x.is_active && !x.quantity_unverified);
+  const purchaseRows = procurementRows(itemOptions);
+  const orderRows = purchaseRows.filter((row) => row.needsOrder);
   const out = rows.filter((x: any) => Number(x.balance_qty) <= 0 && x.is_active && !x.quantity_unverified).length;
   const near = rows.filter((x: any) => Number(x.balance_qty) > 0 && Number(x.balance_qty) <= Number(x.reorder_level) && x.is_active && !x.quantity_unverified).length;
 
   return <AppShell profile={profile} title={storeTitle}>
     <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
-    {query.warning && <p className="error">{query.warning}</p>}{query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">{query.success === "stock_out" ? "Stock Out saved successfully. Stock balance and history updated." : "Inventory saved successfully."}</p>}{error && <p className="error">{error.message}</p>}
+    {query.warning && <p className="error">{query.warning}</p>}{query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">{query.success === "buy_when_needed" ? "Selected materials saved as Buy When Needed and hidden from Items to Order." : query.success === "maintain_stock" ? "Stock alerts restored. Materials appear when stock reaches the reorder point." : query.success === "stock_out" ? "Stock Out saved successfully. Stock balance and history updated." : "Inventory saved successfully."}</p>}{error && <p className="error">{error.message}</p>}{catalogError && <p className="error">Purchase list could not be loaded: {catalogError.message}</p>}
 
     {store === "office" && <OfficeUsageSection profile={profile} page={query.usagePage} search={query.usageQ} base={base}/>}
     <section className="panel"><div className="section-head"><div><h3>Purchase Orders</h3><p className="subtle">Create a PO from Inventory items and save a PDF for HQ.</p></div><a className="button" href="/admin/inventory/purchase-orders">Purchase Orders</a></div></section>
@@ -66,9 +68,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <article className="gold"><span>Need to Order</span><strong>{orderRows.length}</strong><small>Items recommended for purchase</small></article>
     </section>
 
-    <section className="panel inventory-order-panel">
-      <div className="section-head compact-head"><div><h3>Items to Order</h3><p className="subtle">Current items that have reached their reorder point.</p></div></div>
-      <ItemsToOrder rows={orderRows}/>
+    <section id="items-to-order" className="panel inventory-order-panel">
+      <div className="section-head compact-head"><div><h3>Items to Order</h3><p className="subtle">Combined brand stock and purchase reminders. Select materials to buy only when needed.</p></div></div>
+      <ItemsToOrder rows={purchaseRows} store={store} canManage={profile.role === "admin"} initialView={query.purchaseView}/>
     </section>
 
     {profile.role === "admin" && <section className="panel inventory-form-card"><div className="section-head compact-head"><div><h3>Add Inventory Item</h3><p className="subtle">Create a new stock item and define its reorder point.</p></div></div><InventoryItemFinder items={itemOptions}/><form action="/admin/inventory/action" method="post" className="inventory-form"><input type="hidden" name="action" value="create"/><input type="hidden" name="store" value={store}/><label><span>Item Code</span><input name="itemCode" placeholder={store === "office" ? "OFF-0041" : store === "cleaner" ? "CLN-0001" : "KLGCR-B00001"} required/></label><label className="span-2"><span>Description</span><input name="description" required/></label><label><span>Category</span><select name="category" defaultValue={store === "office" ? "Office Inventory" : store === "cleaner" ? "Cleaner Supplies" : "Building"} required><option value="Office Inventory">Office Inventory</option><option value="Cleaner Supplies">Cleaner Supplies</option><option value="Building">Building</option><option value="Electrical">Electrical</option><option value="Painting">Painting</option><option value="Piping">Piping</option></select></label><label><span>Movement</span><select name="movement"><option value="fast">Fast Moving</option><option value="slow">Slow Moving</option><option value="once_in_a_while">Once in a while</option></select></label><label><span>Opening Balance</span><input name="balance" type="number" min="0" step="0.01" defaultValue="0" required/></label><label><span>Reorder Level</span><input name="reorder" type="number" min="0" step="0.01" defaultValue="0" required/></label><label><span>Unit</span><input name="unit" placeholder="pcs / box / tube"/></label><label><span>Cost (RM)</span><input name="cost" type="number" min="0" step="0.01"/></label><div className="span-2"><button className="button" type="submit">Add Inventory Item</button></div></form></section>}

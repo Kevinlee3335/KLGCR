@@ -12,3 +12,17 @@ it('rejects invalid quantities and missing recipients/purposes before deduction'
 it('does not deduct unverified or unavailable inventory',async()=>{mocks.available=null;expect((await submit()).searchParams.has('error')).toBe(true);mocks.available={id:'item',quantity_unverified:true};expect((await submit()).searchParams.has('error')).toBe(true);expect(mocks.rpc).not.toHaveBeenCalled();});
 it('does not sync when the database refuses an excessive withdrawal',async()=>{mocks.rpc.mockResolvedValue({error:{message:'Adjustment would make stock negative'}});expect((await submit()).searchParams.get('error')).toContain('negative');expect(mocks.sync).not.toHaveBeenCalled();});
 it('reports a sync failure without implying the saved stock must be deducted again',async()=>{mocks.sync.mockResolvedValue({skipped:false,ok:false});const url=await submit();expect(url.searchParams.get('success')).toBe('stock_out');expect(url.searchParams.get('warning')).toContain('Stock saved');});
+it('bulk hide and restore use the store-scoped RPC without syncing stock',async()=>{
+ const id='11111111-1111-4111-8111-111111111111';
+ for(const mode of ['buy_when_needed','maintain_stock']){
+  const form=new FormData();form.set('action','procurement_mode');form.set('store','building');form.set('mode',mode);form.append('itemIds',id);
+  const response=await POST(new Request('https://example.com/admin/inventory/action',{method:'POST',body:form}));
+  expect(mocks.rpc).toHaveBeenCalledWith('set_inventory_procurement_mode',{p_item_ids:[id],p_store:'building',p_mode:mode});
+  expect(new URL(response.headers.get('location')!).searchParams.get('success')).toBe(mode);
+ }
+ expect(mocks.sync).not.toHaveBeenCalled();
+});
+it('rejects an empty bulk selection before calling the database',async()=>{
+ const url=await submit({action:'procurement_mode',mode:'buy_when_needed'});
+ expect(url.searchParams.has('error')).toBe(true);expect(mocks.rpc).not.toHaveBeenCalled();
+});

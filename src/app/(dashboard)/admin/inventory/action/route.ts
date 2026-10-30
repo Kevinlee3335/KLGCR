@@ -20,6 +20,23 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   let error: { message: string } | null = null;
 
+  if (action === "procurement_mode") {
+    const itemIds = [...new Set(form.getAll("itemIds").map(String))];
+    const mode = String(form.get("mode") || "");
+    if (!itemIds.length || itemIds.length > 1000 || itemIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) || !["maintain_stock", "buy_when_needed"].includes(mode)) {
+      url.searchParams.set("error", "Select valid materials and a purchase mode.");
+      return NextResponse.redirect(url, 303);
+    }
+    const result = await supabase.rpc("set_inventory_procurement_mode", {
+      p_item_ids: itemIds, p_store: store, p_mode: mode,
+    });
+    if (result.error) url.searchParams.set("error", result.error.message);
+    else url.searchParams.set("success", mode);
+    url.searchParams.set("purchaseView", mode === "maintain_stock" ? "hidden" : "order");
+    url.hash = "items-to-order";
+    return NextResponse.redirect(url, 303);
+  }
+
   if (action === "create") {
     const balance = numberField(form.get("balance"));
     const reorder = numberField(form.get("reorder"));
