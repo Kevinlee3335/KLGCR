@@ -29,8 +29,9 @@ const detailsSchema = z.object({
   }
 });
 
-export async function prepareCleanerComplaint(formData: FormData) {
+export async function prepareCleanerComplaint(formData: FormData, count = 1) {
   await requireRole(["cleaner"]);
+  if (!Number.isInteger(count) || count < 1 || count > 20) return { error: "Attach between 1 and 20 photos." };
   const parsed = detailsSchema.safeParse({
     locationType: formData.get("locationType"),
     blockId: formData.get("blockId"),
@@ -57,23 +58,28 @@ export async function prepareCleanerComplaint(formData: FormData) {
     const complaint = createdComplaint as unknown as { id: string; complaint_no: string } | null;
     if (insertError || !complaint) return { error: insertError?.message || "Unable to create the complaint." };
 
-    const path = `complaints/${complaint.id}/${crypto.randomUUID()}.jpg`;
-    const { data: signed, error: signError } = await supabase.storage.from("checkout-evidence").createSignedUploadUrl(path);
-    if (signError || !signed?.token) {
-      await supabase.from("complaints").delete().eq("id", complaint.id);
-      return { error: signError?.message || "Unable to prepare the photo upload." };
+    const uploads = [];
+    for (let index = 0; index < count; index++) {
+      const path = `complaints/${complaint.id}/${crypto.randomUUID()}.jpg`;
+      const { data: signed, error: signError } = await supabase.storage.from("checkout-evidence").createSignedUploadUrl(path);
+      if (signError || !signed?.token) {
+        await supabase.from("complaints").delete().eq("id", complaint.id);
+        return { error: signError?.message || "Unable to prepare the photo upload." };
+      }
+      uploads.push({path, token: signed.token});
     }
-    return { complaintId: complaint.id, complaintNo: complaint.complaint_no, path, token: signed.token };
+    return { complaintId: complaint.id, complaintNo: complaint.complaint_no, uploads };
+
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Unable to prepare the complaint." };
   }
 }
 
-export async function finalizeCleanerComplaint(complaintId: string, path: string) {
+export async function finalizeCleanerComplaint(complaintId: string, paths: string[]) {
   const actor = await requireRole(["cleaner"]);
   try {
     const supabase = await createClient();
-    const { data: complaintNo, error } = await supabase.rpc("finalize_cleaner_complaint", { p_complaint_id: complaintId, p_path: path });
+    const { data: complaintNo, error } = await supabase.rpc("finalize_cleaner_complaint_photos", { p_complaint_id: complaintId, p_paths: paths });
     if (error || !complaintNo) return { error: error?.message || "Complaint verification failed." };
     try {
       await notifyActiveAdmins({ type: "complaint_created", title: "New cleaner report", body: `${actor.full_name} submitted complaint ${complaintNo}.`, href: `/admin/complaints/${complaintId}`, entityId: complaintId });
@@ -89,11 +95,12 @@ export async function finalizeCleanerComplaint(complaintId: string, path: string
   }
 }
 
-export async function cancelCleanerComplaint(complaintId: string, path: string) {
+export async function cancelCleanerComplaint(complaintId: string, paths: string[]) {
   await requireRole(["cleaner"]);
   try {
     const supabase = await createClient();
-    if (path.startsWith(`complaints/${complaintId}/`)) await supabase.storage.from("checkout-evidence").remove([path]);
+    const validPaths = paths.filter(path => path.startsWith(`complaints/${complaintId}/`));
+    if (validPaths.length) await supabase.storage.from("checkout-evidence").remove(validPaths);
     await supabase.from("complaints").delete().eq("id", complaintId);
   } catch {
     // Best-effort cleanup after a failed client upload.

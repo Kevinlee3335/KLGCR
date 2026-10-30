@@ -6,17 +6,18 @@ import { prepareCheckoutEvidence } from "@/app/(dashboard)/staff/checkouts/actio
 import { createClient } from "@/lib/supabase/client";
 import { validateEvidenceFiles } from "@/lib/photo-limits";
 
-export function CheckoutCompletionForm({ roomId, kind, action, children, buttonLabel }: { roomId: string; kind: "completion" | "cleaning"; action: (data: FormData) => Promise<void>; children: ReactNode; buttonLabel: string }) {
+export function CheckoutCompletionForm({ roomId, kind, action, children, buttonLabel }: { roomId: string; kind: "inspection" | "completion" | "cleaning"; action: (data: FormData) => Promise<void>; children: ReactNode; buttonLabel: string }) {
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
   async function submit(data: FormData) {
     const invalid = validateEvidenceFiles(photos);
-    if (invalid) { setError(invalid); return; }
+    if (invalid && !(kind === "inspection" && !photos.length)) { setError(invalid); return; }
     setBusy(true); setError("");
     try {
       data.delete("photoPaths");
+      if (photos.length) {
       const prepared = await prepareCheckoutEvidence(roomId, kind, photos.map(file => ({type:file.type,size:file.size})));
       if ("error" in prepared) throw new Error(prepared.error);
       const storage = createClient().storage.from("checkout-evidence");
@@ -26,6 +27,7 @@ export function CheckoutCompletionForm({ roomId, kind, action, children, buttonL
         const {error: uploadError} = await storage.uploadToSignedUrl(upload.path, upload.token, photos[i]);
         if (uploadError) throw new Error(`Photo ${i + 1} could not upload: ${uploadError.message}`);
         data.append("photoPaths", upload.path);
+      }
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to upload photos. Please try again.");

@@ -1,4 +1,5 @@
 "use client";
+import { CameraFileInput } from "@/components/camera-file-input";
 import { UploadCloud, FileCheck2, CheckCircle2 } from "lucide-react";
 import { useActionState, useState, useId } from "react";
 import { MembershipCountrySelect } from "./membership-country-select";
@@ -48,7 +49,7 @@ export function MembershipForm({ token, period, fee, submissionEnabled = true, r
     <div className="wide receipt-example-layout"><label className="receipt-field" htmlFor={receiptId}><span>Payment receipt{!receiptRequired ? <span className="receipt-optional">Optional during testing</span> : ""}</span><span className={`receipt-upload${fileName ? " has-file" : ""}`}>
       {fileName ? <FileCheck2 size={26} aria-hidden="true"/> : <UploadCloud size={26} aria-hidden="true"/>}
       <span className="receipt-upload-copy"><strong>{fileName || "Upload payment receipt"}</strong><small>{fileName ? "Click to replace file" : "Click to browse or choose a photo"}</small></span><span className="receipt-browse">Browse files</span>
-      <input id={receiptId} name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required={receiptRequired} aria-describedby={`${receiptId}-help`} onChange={event => {
+      <CameraFileInput id={receiptId} name="receipt" type="file" accept="image/jpeg,image/png,application/pdf" required={receiptRequired} aria-describedby={`${receiptId}-help`} onChange={event => {
         const file=event.currentTarget.files?.[0];
         setPreviewResult(null);
         if (file && (file.size > 3*1024*1024 || !["image/jpeg","image/png","application/pdf"].includes(file.type))) {

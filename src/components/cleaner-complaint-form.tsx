@@ -1,10 +1,13 @@
 "use client";
 
-import { Camera, ImageUp, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { cancelCleanerComplaint, finalizeCleanerComplaint, prepareCleanerComplaint } from "@/app/(dashboard)/staff/complaints/new/actions";
 import { createClient } from "@/lib/supabase/client";
+
+import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
+import { validateEvidenceFiles } from "@/lib/photo-limits";
 
 type Block = { id: number; code: string };
 const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Kitchen Block C", "Kitchen Block D", "Other"];
@@ -43,10 +46,7 @@ async function compressPhoto(file: File) {
 
 export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]; reporterName: string }) {
   const router = useRouter();
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoSource, setPhotoSource] = useState<"camera" | "upload" | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [locationType, setLocationType] = useState<"room" | "bathroom" | "common" | "external">("common");
@@ -54,19 +54,10 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
   const [defectType, setDefectType] = useState("Lighting");
   const needsOtherDetails = area === "Other" || defectType === "Other";
 
-  function choosePhoto(file: File | undefined, source: "camera" | "upload") {
-    if (!file) return;
-    setPhoto(file);
-    setPhotoSource(source);
-    setError("");
-    if (source === "camera" && uploadRef.current) uploadRef.current.value = "";
-    if (source === "upload" && cameraRef.current) cameraRef.current.value = "";
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!photo) {
-      setError("Take a photo or upload one before sending.");
+    if (validateEvidenceFiles(photos)) {
+      setError(validateEvidenceFiles(photos)!);
       return;
     }
     setBusy(true);
@@ -74,20 +65,19 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
     let prepared: Awaited<ReturnType<typeof prepareCleanerComplaint>> | null = null;
     try {
       const formData = new FormData(event.currentTarget);
-      prepared = await prepareCleanerComplaint(formData);
+      prepared = await prepareCleanerComplaint(formData, photos.length);
       if ("error" in prepared) {
         setError(prepared.error ?? "Unable to prepare the complaint.");
         return;
       }
-      const compressed = await compressPhoto(photo);
       const supabase = createClient();
-      const { error: uploadError } = await supabase.storage.from("checkout-evidence").uploadToSignedUrl(prepared.path, prepared.token, compressed);
-      if (uploadError) {
-        await cancelCleanerComplaint(prepared.complaintId, prepared.path);
-        setError(`Photo upload failed: ${uploadError.message}`);
-        return;
+      for (let index = 0; index < photos.length; index++) {
+        const compressed = await compressPhoto(photos[index]);
+        const upload = prepared.uploads[index];
+        const { error: uploadError } = await supabase.storage.from("checkout-evidence").uploadToSignedUrl(upload.path, upload.token, compressed);
+        if (uploadError) throw new Error(`Photo ${index + 1}: ${uploadError.message}`);
       }
-      const finalized = await finalizeCleanerComplaint(prepared.complaintId, prepared.path);
+      const finalized = await finalizeCleanerComplaint(prepared.complaintId, prepared.uploads.map(upload => upload.path));
       if ("error" in finalized) {
         setError(finalized.error ?? "Unable to finish sending the complaint.");
         return;
@@ -95,7 +85,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       router.replace(`/staff/complaints/new?created=${encodeURIComponent(finalized.complaintNo)}`);
       router.refresh();
     } catch (cause) {
-      if (prepared && !("error" in prepared)) await cancelCleanerComplaint(prepared.complaintId, prepared.path);
+      if (prepared && !("error" in prepared)) await cancelCleanerComplaint(prepared.complaintId, prepared.uploads.map(upload => upload.path));
       setError(cause instanceof Error ? cause.message : "Unable to send the complaint.");
     } finally {
       setBusy(false);
@@ -119,14 +109,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       <label className="field"><span>Priority *</span><select name="priority" required defaultValue="normal"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
       <label className="field field-wide"><span>{needsOtherDetails ? "Describe Other Problem *" : "Description"}</span><textarea name="description" required={needsOtherDetails} maxLength={3000} rows={5} placeholder={needsOtherDetails ? "Write the problem clearly." : "Explain what is broken and where it is."}/></label>
     </div>
-    <section className="cleaner-photo-section">
-      <div><span>Evidence Photo *</span><small>Choose one option. The photo is private and visible to authorized staff only.</small></div>
-      <div className="cleaner-photo-actions">
-        <label className={`cleaner-photo-button${photoSource === "camera" ? " selected" : ""}`}><Camera size={22}/><span>Take Photo</span><input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => choosePhoto(event.target.files?.[0], "camera")}/></label>
-        <label className={`cleaner-photo-button${photoSource === "upload" ? " selected" : ""}`}><ImageUp size={22}/><span>Upload Photo</span><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0], "upload")}/></label>
-      </div>
-      {photo && <p className="cleaner-photo-selected">✓ {photoSource === "camera" ? "Photo taken" : "Photo selected"} · {photo.name}</p>}
-    </section>
+    <EvidencePhotoPicker photos={photos} onChange={setPhotos} disabled={busy} label="Evidence photos"/>
     <button className="button cleaner-report-submit" type="submit" disabled={busy}><Send size={18}/>{busy ? "Sending..." : "Send to Admin"}</button>
   </form>;
 }

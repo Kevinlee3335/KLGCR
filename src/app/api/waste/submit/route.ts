@@ -8,7 +8,9 @@ export async function POST(request: Request) {
   if (!access) return NextResponse.json({ error: 'Please reopen your Security link.' }, { status: 401 });
   const db = createAdminClient(); const paths: string[] = [];
   try {
-    const form = await request.formData();
+    const json=request.headers.get('content-type')?.includes('application/json') ? await request.json() : null;
+    const form=json ? new FormData() : await request.formData();
+    if(json)for(const key of ['requestId','date','time','bins','scheduleId','remarks'])form.set(key,String(json[key]??''));
     const id = String(form.get('requestId') || '');
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid submission. Refresh this page.');
     const { data: existing, error: existingError } = await db.from('waste_collections').select('id').eq('id', id).eq('security_link_id', access.id).maybeSingle();
@@ -22,14 +24,28 @@ export async function POST(request: Request) {
       const { data: schedule, error } = await db.from('waste_schedule_dates').select('collection_date,review_status').eq('id', scheduleId).single();
       if (error || !schedule || schedule.review_status === 'cancelled' || schedule.collection_date > date) throw new Error('Select a scheduled date on or before the collection date.');
     }
+    if(json){
+      const supplied=json.photoPaths;
+      if(!Array.isArray(supplied)||supplied.length<1||supplied.length>20||new Set(supplied).size!==supplied.length||supplied.some(p=>typeof p!=='string'||!new RegExp(`^photos/${access.id}/${id}/[a-f0-9-]{36}\\.jpg$`).test(p)))throw Error('Attach between 1 and 20 valid photos.');
+      const {data:objects,error}=await db.storage.from(WASTE_BUCKET).list(`photos/${access.id}/${id}`,{limit:1000});
+      if(error||supplied.some(p=>!objects?.some(o=>o.name===p.split('/').at(-1)&&Number(o.metadata?.size)>0&&Number(o.metadata?.size)<=700000)))throw Error('Photo upload is incomplete.');
+      for(const path of supplied){
+        const {data:file,error:readError}=await db.storage.from(WASTE_BUCKET).download(path);
+        if(readError||!file)throw Error('Photo upload is incomplete.');
+        const bytes=new Uint8Array(await file.arrayBuffer());
+        if(bytes[0]!==0xff||bytes[1]!==0xd8||bytes[2]!==0xff)throw Error('Invalid photo. Please take a new photo.');
+      }
+      paths.push(...supplied);
+    }else{
     const files = form.getAll('photos').filter((file): file is File => file instanceof File && file.size > 0);
-    if (!files.length || files.length > 5 || files.some(file => file.type !== 'image/jpeg' || file.size > 700_000)) throw new Error('Upload 1–5 photos, each under 700 KB.');
+    if (!files.length || files.length > 20 || files.some(file => file.type !== 'image/jpeg' || file.size > 700_000)) throw new Error('Upload 1–20 photos, each under 700 KB.');
     for (const file of files) {
       const buffer = new Uint8Array(await file.arrayBuffer());
       if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) throw new Error('Invalid photo. Please take a new photo.');
       const path = `photos/${id}/${crypto.randomUUID()}.jpg`;
       const { error } = await db.storage.from(WASTE_BUCKET).upload(path, buffer, { contentType: 'image/jpeg' });
       if (error) throw error; paths.push(path);
+    }
     }
     const { error } = await db.from('waste_collections').insert({ id, schedule_id: scheduleId, security_link_id: access.id, guard_name: access.guard_name, collected_at: actual.toISOString(), bins, photos: paths, remarks: String(form.get('remarks') || '').trim().slice(0, 1000) });
     if (error) {
