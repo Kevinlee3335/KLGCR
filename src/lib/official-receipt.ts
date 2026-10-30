@@ -15,8 +15,8 @@ export async function financialPdf(input:{receipt?:OfficialReceipt;title?:string
  const clean=(s:string)=>s.replace(/[^\x20-\x7E\u00A0-\u00FF]/g,'-');
  function text(s:string,x:number,at:number,size=12,strong=false){page.drawText(clean(s),{x,y:at,size,font:strong?bold:font,color:navy})}
  function wrap(s:string,width:number,size=13){const out:string[]=[];let line='';for(const word of clean(s).split(/\s+/)){const candidate=line?line+' '+word:word;if(font.widthOfTextAtSize(candidate,size)>width&&line){out.push(line);line=word}else line=candidate;}if(line)out.push(line);return out;}
- const logo=await pdf.embedJpg(await readFile(join(process.cwd(),'public/billing/logo.jpg')));page.drawImage(logo,{x:42,y:470,width:85,height:80});
- text('K HOTEL SDN. BHD. (901651-W)',170,y,25,true);y-=25;text('(KLG Campus Residence)',290,y,17,true);y-=21;text('Taman Sri Pulai, 81300 Skudai, Johor.',260,y,13,true);y-=19;text('No. 29, Jalan Persiaran Abu Bakar Sultan, Straits View, 80200 Johor Bahru, Johor.',164,y,11);y-=18;text('Tel: +607-5281080   Fax: +607-2210782   E-mail: klgresidenceenquiry@gmail.com',160,y,11);
+ // Original letterhead extracted from the supplied company letter. Preserve pixels and aspect ratio.
+ const letterhead=await pdf.embedPng(await readFile(join(process.cwd(),'public/billing/receipt-letterhead.png')));page.drawImage(letterhead,{x:71,y:448,width:700,height:700*letterhead.height/letterhead.width});
  y=421;text(input.receipt?'OFFICIAL RECEIPT':input.title||'STATEMENT OF ACCOUNT',42,y,22,true);y-=38;
  if(input.receipt){const r=input.receipt;text('No: '+r.receipt_no,580,425,14,true);text('Date: '+r.paid_on.split('-').reverse().join('/'),580,402,13);
  for(const [label,value] of [['Received From',r.payer],['The Sum of RM',amountWords(Number(r.amount))+' (RM '+Number(r.amount).toFixed(2)+')'],['Being Payment Of',r.description]]){text(label+' :',42,y,14,true);const rows=wrap(value,570);for(const row of rows){if(y<160){page=pdf.addPage([842,595]);y=545;}text(row,210,y,13);y-=19;}page.drawLine({start:{x:210,y:y+10},end:{x:800,y:y+10},thickness:.5,color:navy});y-=24;}
