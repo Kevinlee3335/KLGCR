@@ -1,6 +1,10 @@
 'use client';
-import { Camera, CheckCircle2, ArrowRight, LoaderCircle } from 'lucide-react';
+import { CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
+import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
+import { validateEvidenceFiles } from "@/lib/photo-limits";
+import { createClient } from "@/lib/supabase/client";
+import { WASTE_BUCKET } from "@/lib/waste/shared";
 import { malaysiaDate } from '@/lib/waste/shared';
 async function compressPhoto(file: File) {
   const bitmap = await createImageBitmap(file);
@@ -16,19 +20,23 @@ async function compressPhoto(file: File) {
 export function WasteSecurityForm({ schedules }: { schedules: { id: string; date: string }[] }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [done, setDone] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [photoNames, setPhotoNames] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
   const today = malaysiaDate();
-  if (done) return <section className="panel waste-success"><CheckCircle2 size={48}/><h2>Collection recorded</h2><p>Your collection record and photos have been saved.</p><button className="button" onClick={() => { setDone(false); setPhotoNames([]); setRequestId(crypto.randomUUID()); }}>Record another collection</button></section>;
+  if (done) return <section className="panel waste-success"><CheckCircle2 size={48}/><h2>Collection recorded</h2><p>Your collection record and photos have been saved.</p><button className="button" onClick={() => { setDone(false); setPhotos([]); setRequestId(crypto.randomUUID()); }}>Record another collection</button></section>;
   return <form className="panel waste-form" onSubmit={async event => {
     event.preventDefault(); if (busy) return; setBusy(true); setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const files = form.getAll('photos').filter((file): file is File => file instanceof File && file.size > 0);
-      if (!files.length || files.length > 5) throw new Error('Upload 1–5 photos.');
-      form.delete('photos');
-      for (const file of files) form.append('photos', await compressPhoto(file));
-      form.set('requestId', requestId);
-      const response = await fetch('/api/waste/submit', { method: 'POST', body: form });
+      const invalid=validateEvidenceFiles(photos);if(invalid)throw Error(invalid);
+      const preparedResponse=await fetch('/api/waste/photos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,count:photos.length})});
+      const prepared=await preparedResponse.json();if(!preparedResponse.ok)throw Error(prepared.error||'Unable to prepare photos.');
+      const storage=createClient().storage.from(WASTE_BUCKET);
+      for(let index=0;index<photos.length;index++){
+        const file=await compressPhoto(photos[index]),upload=prepared.uploads[index];
+        const {error}=await storage.uploadToSignedUrl(upload.path,upload.token,file);
+        if(error)throw Error(`Photo ${index+1}: ${error.message}`);
+      }
+      const response=await fetch('/api/waste/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...Object.fromEntries(form),requestId,photoPaths:prepared.uploads.map((upload:{path:string})=>upload.path)})});
       const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Submission failed.');
       setDone(true);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit. Please retry.'); }
@@ -38,7 +46,7 @@ export function WasteSecurityForm({ schedules }: { schedules: { id: string; date
     <label>Collection time (Malaysia)<input required type="time" name="time" defaultValue={new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' }).format(new Date())}/></label>
     <label>Bins collected<input required name="bins" type="number" min="1" max="999" step="1" inputMode="numeric" placeholder="Number of bins"/></label>
     <label>Scheduled collection<select name="scheduleId" defaultValue={schedules.find(s => s.date === today)?.id || ''}><option value="">Extra / unplanned collection</option>{schedules.map(s => <option value={s.id} key={s.id}>{s.date}{s.date < today ? ' · Earlier scheduled date' : ''}</option>)}</select><small>For a delayed collection, select the original scheduled date.</small></label>
-    <label className="waste-upload"><Camera size={30} strokeWidth={1.7}/><strong>Take / upload photos</strong><span className="waste-photo-button">Choose photos <ArrowRight size={16}/></span><input required aria-label="Take or upload collection photos" name="photos" type="file" accept="image/*" multiple onChange={event => setPhotoNames(Array.from(event.target.files || []).map(file => file.name))}/><small>{photoNames.length ? `${photoNames.length} photo(s) selected` : '1–5 photos · Camera or photo library'}</small>{photoNames.length > 0 && <span className="waste-selected">{photoNames.join(' · ')}</span>}</label>
+    <EvidencePhotoPicker photos={photos} onChange={setPhotos} disabled={busy} label="Collection photos"/>
     <label>Remarks (optional)<textarea name="remarks" maxLength={1000} rows={3}/></label>
     {error && <p className="error" role="alert">{error}</p>}
     <button className="button" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="waste-spin" size={19}/> Uploading…</> : <><CheckCircle2 size={20}/> Complete collection</>}</button>
