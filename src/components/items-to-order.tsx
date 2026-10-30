@@ -48,7 +48,7 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
       </div>}
       {poError && <p role="alert">{poError}</p>}
       <p className="subtle">{view === "hidden" ? "Hidden from purchase reminders, including when stock is zero. Restore alerts whenever needed." : "Select materials to buy only when needed. Group totals include all approved brands."}</p>
-      {matching.length === 0 ? <p className="dashboard-empty">{search ? "No matching materials." : view === "hidden" ? "No materials marked Buy When Needed." : "No items currently require ordering."}</p> : <div className="table-wrap"><table className="table inventory-table">
+      {matching.length === 0 ? <p className="dashboard-empty">{search ? "No matching materials." : view === "hidden" ? "No materials marked Buy When Needed." : "No items currently require ordering."}</p> : <div className="table-wrap"><table className={`table inventory-table ${canManage ? "procurement-managed" : ""}`}>
         <thead><tr>{canManage && <th>Select</th>}<th>Material / Item Code</th><th>Balance</th><th>Minimum Stock</th><th>Qty to Order</th><th>Status</th>{canManage && <><th>PO Quantity</th><th>Purchase Order</th></>}</tr></thead>
         <tbody>{visible.map((item) => <tr key={item.id}>
           {canManage && <td><input type="checkbox" aria-label={`Select ${item.description}`} checked={selected.has(item.id)} disabled={saving} onChange={() => setSelected((previous) => { const next = new Set(previous); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; })}/></td>}
