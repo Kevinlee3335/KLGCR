@@ -26,3 +26,11 @@ it('does not offer management viewers mutation controls',()=>{
   expect(screen.queryByRole('checkbox')).toBeNull();
   expect(screen.queryByRole('button',{name:'Restore Stock Alert'})).toBeNull();
 });
+it('allows editing PO quantities and rejects zero without navigating',()=>{
+ render(<ItemsToOrder rows={rows} store="building" canManage/>);
+ fireEvent.change(screen.getByLabelText('PO quantity for Material 0'),{target:{value:'0'}});
+ fireEvent.click(screen.getAllByRole('button',{name:'Add to PO'})[0]);
+ expect(screen.getByRole('alert').textContent).toContain('Enter a quantity');
+ fireEvent.change(screen.getByLabelText('PO quantity for Material 0'),{target:{value:'12'}});
+ expect((screen.getByLabelText('PO quantity for Material 0') as HTMLInputElement).value).toBe('12');
+});

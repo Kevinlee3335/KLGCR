@@ -9,11 +9,11 @@ import { receivingLines,type GoodsReceipt } from '@/lib/purchase-orders/receipts
 import type { PurchaseOrder, PurchaseOrderInput } from '@/lib/purchase-orders/schema';
 type Item={id:string;item_code:string;description:string;unit:string|null};
 type Line=PurchaseOrderInput['items'][number]&{query:string};
-export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,canApprove=false,viewerId='',dispatches=[],initialSearch=''}:{items:Item[];orders:PurchaseOrder[];receipts?:GoodsReceipt[];requester:string;canCreate:boolean;canApprove?:boolean;initialSearch?:string;viewerId?:string;dispatches?:{order_id:string;revision:number;status:string;inventory_group:string}[]}) {
+export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,canApprove=false,viewerId='',dispatches=[],initialSearch='',initialItems=[]}:{initialItems?:{itemId:string;quantity:number}[];items:Item[];orders:PurchaseOrder[];receipts?:GoodsReceipt[];requester:string;canCreate:boolean;canApprove?:boolean;initialSearch?:string;viewerId?:string;dispatches?:{order_id:string;revision:number;status:string;inventory_group:string}[]}) {
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date());
  const blank=():Line=>({itemId:'',query:'',specification:'',quantity:1,location:''});
- const [lines,setLines]=useState<Line[]>([blank()]);const [date,setDate]=useState(today);
- const [store,setStore]=useState('building');
+ const [lines,setLines]=useState<Line[]>(initialItems.length ? initialItems.map(line=>({...line,query:items.find(item=>item.id===line.itemId)?.description||'',specification:'',location:''})) : [blank()]);const [date,setDate]=useState(today);
+ const [store,setStore]=useState(()=>{const code=items.find(item=>item.id===initialItems[0]?.itemId)?.item_code||'';return code.startsWith('OFF-')?'office':code.startsWith('CLN-')?'cleaner':'building';});
  const itemStore=(code:string)=>code.startsWith('OFF-')?'office':code.startsWith('CLN-')?'cleaner':'building';
  const [name,setName]=useState(requester);
  const [requestedDate,setRequestedDate]=useState(today);
