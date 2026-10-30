@@ -14,15 +14,34 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [poItems, setPoItems] = useState<Record<string, string>>({});
   const [poError, setPoError] = useState("");
+  const [modes, setModes] = useState<Record<string, boolean>>({});
+  const [cart, setCart] = useState<Record<string, {itemId:string;quantity:number}>>({});
+  const [notice, setNotice] = useState("");
+  const currentRows = rows.map(row => modes[row.id] === undefined ? row : {...row, buyWhenNeeded:modes[row.id], needsOrder:!modes[row.id] && !row.unverified && (row.balance_qty <= 0 || (row.itemIds.length > 1 ? row.balance_qty < row.reorder_level : row.balance_qty <= row.reorder_level))});
+  async function saveMode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if(saving)return;
+    const data=new FormData(event.currentTarget); const ids=new Set(data.getAll("itemIds").map(String));
+    setSaving(true);setPoError("");setNotice("");
+    try {
+      const response=await fetch("/admin/inventory/action",{method:"POST",body:data});
+      const result=new URL(response.url,window.location.origin);
+      if(!response.ok || !result.searchParams.has("success"))throw Error(result.searchParams.get("error") || "Unable to save. Please retry.");
+      const hidden=data.get("mode")==="buy_when_needed";
+      setModes(previous=>({...previous,...Object.fromEntries(rows.filter(row=>row.itemIds.some(id=>ids.has(id))).map(row=>[row.id,hidden]))}));
+      setSelected(previous=>new Set([...previous].filter(id=>!rows.some(row=>row.id===id&&row.itemIds.some(itemId=>ids.has(itemId))))));
+      setNotice(hidden?"Saved as Buy When Needed.":"Stock alert restored.");
+    }catch(error){setPoError(error instanceof Error?error.message:"Unable to save. Please retry.");}finally{setSaving(false);}
+  }
   const quantity = (row: ProcurementRow) => quantities[row.id] ?? String(Math.max(1, row.reorder_level - row.balance_qty));
   function addToPO(materials: ProcurementRow[]) {
     if (materials.some(row => !Number.isFinite(Number(quantity(row))) || Number(quantity(row)) < 0.01 || Number(quantity(row)) > 1000000)) { setPoError("Enter a quantity between 0.01 and 1,000,000."); return; }
-    if (materials.length > 100) { setPoError("A PO supports up to 100 items. Select fewer materials."); return; }
-    const params = new URLSearchParams({ draft: JSON.stringify(materials.map(row => ({ itemId: poItems[row.id] || row.itemIds[0], quantity: Number(quantity(row)) }))) });
-    window.location.assign(`/admin/inventory/purchase-orders?${params}`);
+    const next={...cart};
+    materials.forEach(row=>{const itemId=poItems[row.id] || row.itemIds[0];next[itemId]={itemId,quantity:Number(quantity(row))};});
+    if(Object.keys(next).length>100){setPoError("A PO supports up to 100 items.");return;}
+    setCart(next);setPoError("");setNotice("Added to PO list. Continue choosing materials, then open PO.");
   }
   const [saving, setSaving] = useState(false);
-  const matching = rows.filter((row) => (view === "hidden" ? row.buyWhenNeeded : row.needsOrder)
+  const matching = currentRows.filter((row) => (view === "hidden" ? row.buyWhenNeeded : row.needsOrder)
     && `${row.item_code} ${row.description} ${row.brands.join(" ")}`.toLowerCase().includes(search.trim().toLowerCase()));
   const visible = expanded ? matching : matching.slice(0, 5);
   const chosen = matching.filter((row) => selected.has(row.id));
@@ -31,11 +50,11 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
 
   return <div className="procurement-controls">
     <div className="procurement-toolbar" role="group" aria-label="Purchase list view">
-      <button type="button" className={`button ${view === "order" ? "" : "secondary-button"}`} aria-pressed={view === "order"} onClick={() => changeView("order")}>Items to Order ({rows.filter((row) => row.needsOrder).length})</button>
-      <button type="button" className={`button ${view === "hidden" ? "" : "secondary-button"}`} aria-pressed={view === "hidden"} onClick={() => changeView("hidden")}>Buy When Needed ({rows.filter((row) => row.buyWhenNeeded).length})</button>
+      <button type="button" className={`button ${view === "order" ? "" : "secondary-button"}`} aria-pressed={view === "order"} onClick={() => changeView("order")}>Items to Order ({currentRows.filter((row) => row.needsOrder).length})</button>
+      <button type="button" className={`button ${view === "hidden" ? "" : "secondary-button"}`} aria-pressed={view === "hidden"} onClick={() => changeView("hidden")}>Buy When Needed ({currentRows.filter((row) => row.buyWhenNeeded).length})</button>
     </div>
     <label className="procurement-search"><span>Search inventory</span><span className="procurement-search-field"><Search size={19} aria-hidden="true"/><input type="search" value={search} placeholder="Search cement, paint, E00018…" onChange={(event) => { setSearch(event.target.value); setSelected(new Set()); setExpanded(false); }}/></span></label>
-    <form action="/admin/inventory/action" method="post" onSubmit={() => setSaving(true)}>
+    <form action="/admin/inventory/action" method="post" onSubmit={saveMode}>
       <input type="hidden" name="action" value="procurement_mode"/>
       <input type="hidden" name="store" value={store}/>
       <input type="hidden" name="mode" value={view === "hidden" ? "maintain_stock" : "buy_when_needed"}/>
@@ -46,6 +65,8 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
         <span className="subtle" aria-live="polite">{chosen.length} selected</span>
         <button className="button" type="submit" disabled={!chosen.length || saving}>{saving ? "Saving…" : view === "hidden" ? "Restore Stock Alert" : "Buy When Needed"}</button>
       </div>}
+      {notice && <p role="status">{notice}</p>}
+      {Object.keys(cart).length > 0 && <div className="procurement-toolbar procurement-cart"><strong>{Object.keys(cart).length} items in PO list</strong><a className="button" href={`/admin/inventory/purchase-orders?${new URLSearchParams({draft:JSON.stringify(Object.values(cart))})}`}>Open PO ({Object.keys(cart).length})</a><button type="button" className="button secondary-button" onClick={()=>{setCart({});setNotice("PO list cleared.");}}>Clear PO List</button></div>}
       {poError && <p role="alert">{poError}</p>}
       <p className="subtle">{view === "hidden" ? "Hidden from purchase reminders, including when stock is zero. Restore alerts whenever needed." : "Select materials to buy only when needed. Group totals include all approved brands."}</p>
       {matching.length === 0 ? <p className="dashboard-empty">{search ? "No matching materials." : view === "hidden" ? "No materials marked Buy When Needed." : "No items currently require ordering."}</p> : <div className="table-wrap"><table className={`table inventory-table ${canManage ? "procurement-managed" : ""}`}>
@@ -60,7 +81,7 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
         </tr>)}</tbody>
       </table></div>}
     </form>
-    {canManage && visible.map(item => <form key={item.id} id={`procurement-item-${item.id}`} action="/admin/inventory/action" method="post" onSubmit={() => setSaving(true)}>
+    {canManage && visible.map(item => <form key={item.id} id={`procurement-item-${item.id}`} action="/admin/inventory/action" method="post" onSubmit={saveMode}>
       <input type="hidden" name="action" value="procurement_mode"/>
       <input type="hidden" name="store" value={store}/>
       <input type="hidden" name="mode" value={view === "hidden" ? "maintain_stock" : "buy_when_needed"}/>
