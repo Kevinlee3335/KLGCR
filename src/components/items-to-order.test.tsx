@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ItemsToOrder } from './items-to-order';
 import type { ProcurementRow } from '@/lib/inventory-procurement';
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+afterEach(()=>{cleanup();localStorage.clear();vi.unstubAllGlobals();});
 const rows:ProcurementRow[]=Array.from({length:7},(_,i)=>({id:String(i),itemIds:[`id-${i}`],item_code:`CODE-${i}`,description:`Material ${i}`,brands:[],balance_qty:0,reorder_level:2,unit:'pcs',buyWhenNeeded:false,needsOrder:true,unverified:false}));
 it('selects all matches including collapsed rows and submits every selected id',()=>{
   const {container}=render(<ItemsToOrder rows={rows} store="building" canManage/>);
@@ -61,7 +61,7 @@ it('adds multiple items to a PO list without leaving or collapsing the table',()
  fireEvent.change(screen.getByLabelText('PO quantity for Material 0'),{target:{value:'8'}});
  fireEvent.click(screen.getAllByRole('button',{name:'Add to PO'})[0]);
  fireEvent.click(screen.getAllByRole('button',{name:'Add to PO'})[6]);
- const link=screen.getByRole('link',{name:'Open PO (2)'});
+ const link=screen.getAllByRole('link',{name:'Open PO (2)'})[1];
  const draft=JSON.parse(new URL(link.getAttribute('href')!,'https://example.com').searchParams.get('draft')!);
  expect(draft).toEqual([{itemId:'id-0',quantity:8},{itemId:'id-6',quantity:2}]);
  expect(screen.getByText('Material 6')).toBeTruthy();

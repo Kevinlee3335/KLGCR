@@ -1,7 +1,8 @@
 'use client';
+import { activePODraftStore, readPODraft, writePODraft } from '@/lib/po-draft';
 import { SignaturePad } from './signature-pad';
 import { recentPurchaseOrders } from '@/lib/business-documents';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pencil, PackageCheck, Eye, CheckCircle } from 'lucide-react';
 import './purchase-orders.css';
 import { GoodsReceiving } from './po-receiving';
@@ -19,6 +20,12 @@ export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,can
  const [requestedDate,setRequestedDate]=useState(today);
  const [records,setRecords]=useState(orders);const [search,setSearch]=useState(initialSearch);
  const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [saved,setSaved]=useState<PurchaseOrder|null>(null);
+ useEffect(()=>{
+  if(!canCreate||initialItems.length)return;
+  const draftStore=activePODraftStore();
+  const draft=readPODraft(draftStore).filter(line=>items.some(item=>item.id===line.itemId&&itemStore(item.item_code)===draftStore));
+  if(draft.length){setStore(draftStore);setLines(draft.map(line=>({...line,query:items.find(item=>item.id===line.itemId)!.description,specification:'',location:''})));setMessage(`${draft.length} items loaded from your Inventory PO list.`);}
+ },[]);
  const [requestId,setRequestId]=useState('');
  const [receivingId,setReceivingId]=useState<string|null>(null);const [deliveryRecords,setDeliveryRecords]=useState(receipts);
  const receivingOrder=records.find(o=>o.id===receivingId);
@@ -31,6 +38,7 @@ export function PurchaseOrders({items,orders,receipts=[],requester,canCreate,can
   const key=requestId||crypto.randomUUID();setRequestId(key);
   try {const res=await fetch('/api/purchase-orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:editing?.id,expectedRevision:editing?.revision||1,requestId:key,date,useSignature:true,requestedBy:name,approvedBy:'',requestedDate,approvedDate:'',items:lines.map(l=>({itemId:l.itemId,specification:l.specification,quantity:l.quantity,location:l.location}))})});
    const result=await res.json();if(!res.ok)throw Error(result.error||'Unable to save');
+   try{const submitted=new Set(lines.map(line=>line.itemId));writePODraft(store,readPODraft(store).filter(line=>!submitted.has(line.itemId)));}catch{/* The PO is already saved; browser storage must not turn success into an error. */}
    setSaved(result.order);setRecords(old=>[result.order,...old.filter(o=>o.id!==result.order.id)]);setMessage(`${result.order.po_no} saved successfully. You can review the PO below.`);
   }catch(e){setMessage(e instanceof Error?e.message:'Unable to save. Please retry.');}finally{setBusy(false);}
  }

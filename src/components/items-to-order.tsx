@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { readPODraft, writePODraft } from "@/lib/po-draft";
 import { Search } from "lucide-react";
 import type { ProcurementRow } from "@/lib/inventory-procurement";
 
@@ -16,6 +17,7 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
   const [poError, setPoError] = useState("");
   const [modes, setModes] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<Record<string, {itemId:string;quantity:number}>>({});
+  useEffect(()=>{setCart(Object.fromEntries(readPODraft(store).map(line=>[line.itemId,line])));},[store]);
   const [notice, setNotice] = useState("");
   const currentRows = rows.map(row => modes[row.id] === undefined ? row : {...row, buyWhenNeeded:modes[row.id], needsOrder:!modes[row.id] && !row.unverified && (row.balance_qty <= 0 || (row.itemIds.length > 1 ? row.balance_qty < row.reorder_level : row.balance_qty <= row.reorder_level))});
   async function saveMode(event: React.FormEvent<HTMLFormElement>) {
@@ -38,6 +40,7 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
     const next={...cart};
     materials.forEach(row=>{const itemId=poItems[row.id] || row.itemIds[0];next[itemId]={itemId,quantity:Number(quantity(row))};});
     if(Object.keys(next).length>100){setPoError("A PO supports up to 100 items.");return;}
+    try{writePODraft(store,Object.values(next));}catch{setPoError("Unable to save PO list in this browser. Please allow browser storage and retry.");return;}
     setCart(next);setPoError("");setNotice("Added to PO list. Continue choosing materials, then open PO.");
   }
   const [saving, setSaving] = useState(false);
@@ -65,8 +68,8 @@ export function ItemsToOrder({ rows, store, canManage, initialView = "order" }: 
         <span className="subtle" aria-live="polite">{chosen.length} selected</span>
         <button className="button" type="submit" disabled={!chosen.length || saving}>{saving ? "Saving…" : view === "hidden" ? "Restore Stock Alert" : "Buy When Needed"}</button>
       </div>}
-      {notice && <p role="status">{notice}</p>}
-      {Object.keys(cart).length > 0 && <div className="procurement-toolbar procurement-cart"><strong>{Object.keys(cart).length} items in PO list</strong><a className="button" href={`/admin/inventory/purchase-orders?${new URLSearchParams({draft:JSON.stringify(Object.values(cart))})}`}>Open PO ({Object.keys(cart).length})</a><button type="button" className="button secondary-button" onClick={()=>{setCart({});setNotice("PO list cleared.");}}>Clear PO List</button></div>}
+      {notice && <div className="procurement-feedback" role="status">{notice}{Object.keys(cart).length > 0 && <a className="button" href="/admin/inventory/purchase-orders">Open PO ({Object.keys(cart).length})</a>}</div>}
+      {Object.keys(cart).length > 0 && <div className="procurement-toolbar procurement-cart"><strong>{Object.keys(cart).length} items in PO list</strong><a className="button" href={`/admin/inventory/purchase-orders?${new URLSearchParams({draft:JSON.stringify(Object.values(cart))})}`}>Open PO ({Object.keys(cart).length})</a><button type="button" className="button secondary-button" onClick={()=>{try{writePODraft(store,[]);setCart({});setNotice("PO list cleared.");}catch{setPoError("Unable to clear PO list.");}}}>Clear PO List</button></div>}
       {poError && <p role="alert">{poError}</p>}
       <p className="subtle">{view === "hidden" ? "Hidden from purchase reminders, including when stock is zero. Restore alerts whenever needed." : "Select materials to buy only when needed. Group totals include all approved brands."}</p>
       {matching.length === 0 ? <p className="dashboard-empty">{search ? "No matching materials." : view === "hidden" ? "No materials marked Buy When Needed." : "No items currently require ordering."}</p> : <div className="table-wrap"><table className={`table inventory-table ${canManage ? "procurement-managed" : ""}`}>
