@@ -10,5 +10,5 @@ export const purchaseOrderSchema = z.object({
   items: z.array(z.object({ itemId: z.string().uuid(), specification: short, quantity: z.number().positive().max(1000000), location: short })).min(1).max(100),
 });
 export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>;
-export type OrderLine = { itemId: string; code: string; description: string; unit: string; specification: string; quantity: number; location: string };
+export type OrderLine = { balanceQty?:number|null; itemId: string; code: string; description: string; unit: string; specification: string; quantity: number; location: string };
 export type PurchaseOrder = { requested_at?:string; created_by?: string; requested_signature?:Signature|null; approved_signature?:Signature|null; requested_signed_by?:string|null; requested_signed_at?:string|null; id: string; po_no: string; order_date: string; requested_by: string; approved_by: string; requested_date: string; approved_date: string; items: OrderLine[]; created_at: string; received_quantities?: Record<string,number>; revision?: number; approved_at?: string | null; approved_by_user?: string | null; updated_at?: string };

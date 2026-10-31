@@ -8,8 +8,8 @@ export default async function Page({searchParams}:{searchParams:Promise<{po?:str
  const query=await searchParams; const selectedPO=query.po;
  const profile=await requireRole(['admin','management_viewer']);const db=await createClient();
  // Fetch in batches so the Supabase 1,000-row limit does not hide items or old POs.
- const items:{id:string;item_code:string;description:string;unit:string|null}[]=[];const orders=[];const receipts=[];let error='';
- for(let from=0;;from+=1000){const r=await db.from('inventory_items').select('id,item_code,description,unit').eq('is_active',true).order('id').range(from,from+999);if(r.error){error='Unable to load inventory items.';break;}items.push(...r.data);if(r.data.length<1000)break;}
+ const items:{id:string;item_code:string;description:string;unit:string|null;balance_qty:number|null;stock_group:string|null;inventory_group:string;quantity_unverified:boolean}[]=[];const orders=[];const receipts=[];let error='';
+ for(let from=0;;from+=1000){const r=await db.from('inventory_items').select('id,item_code,description,unit,balance_qty,stock_group,inventory_group,quantity_unverified').eq('is_active',true).order('id').range(from,from+999);if(r.error){error='Unable to load inventory items.';break;}items.push(...r.data);if(r.data.length<1000)break;}
  for(let from=0;;from+=1000){const r=await db.from('inventory_purchase_orders').select('id,po_no,order_date,requested_by,approved_by,requested_date,approved_date,items,created_at,revision,updated_at,received_quantities,approved_at,approved_by_user,created_by').order('created_at',{ascending:false}).order('id').range(from,from+999);if(r.error){error='Purchase Order storage is unavailable. Please try again shortly.';break;}orders.push(...r.data);if(r.data.length<1000)break;}
  for(let from=0;;from+=1000){const r=await db.from('inventory_po_receipts').select('*').order('received_at',{ascending:false}).order('id').range(from,from+999);if(r.error){error='Unable to load receiving records.';break;}receipts.push(...r.data);if(r.data.length<1000)break;}
  let initialItems:{itemId:string;quantity:number}[]=[];
