@@ -7,10 +7,7 @@ import {complaintReceivedEmail, jobCompletedEmail, tenantNotAvailableEmail, COMM
 import {financialPdf, type OfficialReceipt} from '@/lib/official-receipt';
 import {purchaseOrderPdf} from '@/lib/purchase-orders/pdf';
 import type {PurchaseOrder} from '@/lib/purchase-orders/schema';
-import {buildBillingPrintHtml} from '@/lib/billing-print-template';
-import type {BillingSnapshot} from '@/lib/billing-preview';
-import {readFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {renderEmailBody} from '@/lib/email-layout';
 import {z} from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -33,8 +30,8 @@ const cases = [
   ['utility-statement', 'Utilities statement of account', 'Sample Statement PDF'],
   ['building-po', 'Building Material approved PO', 'Sample PO PDF'],
   ['office-po', 'Office Supplies approved PO', 'Sample PO PDF'],
-  ['rental-invoice', 'James-approved Rental invoice pack', 'Sample PDF + invoice HTML in body'],
-  ['utility-invoice', 'James-approved Utilities invoice pack', 'Sample PDF + invoice HTML in body'],
+  ['rental-invoice', 'James-approved Rental invoice pack', 'Sample PDF + formatted email'],
+  ['utility-invoice', 'James-approved Utilities invoice pack', 'Sample PDF + formatted email'],
 ] as const;
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const day = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -82,16 +79,19 @@ async function messageFor(id: string) {
     return {subject:office?'Purchase Order SAMPLE-PO-ONLY – Office Supplies | K HOTEL SDN BHD':'Approved Purchase Order SAMPLE-PO-ONLY — KLGCR',text:office?'Dear Supplier,\n\nPlease find attached our approved Purchase Order SAMPLE-PO-ONLY for office supplies for K HOTEL SDN BHD (KLG Campus Residence).\n\nKindly confirm receipt of this order and advise on item availability and the expected delivery date. If any items are unavailable, please inform us before making any substitutions.\n\nDelivery location: KLG Campus Residence.\n\nThank you.\n\nBest regards,\nManagement Office\nK HOTEL SDN BHD\nKLG Campus Residence':'Building Material Purchase Order: SAMPLE-PO-ONLY\nApproved by: SAMPLE APPROVER\n\nSample PDF only. No actual approval or signature.\n\nKLG Campus Residence Management',pdf:await watermark(await purchaseOrderPdf(order))};
   }
   const line = {accountId:kind==='utility'?'laundrette':'sample',name:'SAMPLE TENANT - TEST ONLY',billNo:'SAMPLE-INVOICE-001',amount:kind==='utility'?128.50:800,description:`SAMPLE ${kind} for ${period} - NOT PAYABLE`,addr:['SAMPLE ADDRESS'],details:kind==='utility'?[{label:'ELECTRICITY (kWh)',prev:1000,curr:1200,usage:200,rate:.6,amount:120,unit:'kWh',serial:'SAMPLE-METER'}]:undefined};
-  const snapshot: BillingSnapshot = {kind,period,issueDate:date,total:line.amount,lines:[line],testMode:true,createdBy:'Sample administrator'};
-  const logo = await readFile(join(process.cwd(),'public/billing/logo.jpg'));
-  return {subject:`James-approved ${kind==='rental'?'Rental':'Utilities'} invoices - ${period}`,text:`SAMPLE approved invoice pack\n${line.billNo} | ${line.name} | RM ${line.amount.toFixed(2)}\n\nTest only. No approval or actual invoice was created.\nThe production invoice email uses an HTML attachment to Accounting; this test uses the shared PDF transport to Kevin only.`,html:buildBillingPrintHtml(snapshot,'data:image/jpeg;base64,'+logo.toString('base64')),pdf:await watermark(await financialPdf({title:'SAMPLE '+kind.toUpperCase()+' INVOICE',lines:['SAMPLE / TEST ONLY - NOT PAYABLE',line.name,line.billNo,line.description,`AMOUNT RM ${line.amount.toFixed(2)}`,'The original invoice HTML preview is included in the email body.','This sample PDF is a mail attachment test, not the production invoice layout.']}))};
+  return {subject:`James-approved ${kind==='rental'?'Rental':'Utilities'} invoices - ${period}`,text:`Dear Accounts Team,\n\nPlease find the sample ${kind==='rental'?'rental':'utilities'} invoice attached for review.\n\nCompany: ${line.name}\nInvoice No.: ${line.billNo}\nBilling Month: ${period}\nTotal Amount: RM ${line.amount.toFixed(2)}\n\nThis is a layout test only. No payment is required and no actual invoice or approval has been created.\n\nKLG Campus Residence Management`,pdf:await watermark(await financialPdf({title:'SAMPLE '+kind.toUpperCase()+' INVOICE',lines:['SAMPLE / TEST ONLY - NOT PAYABLE',line.name,line.billNo,line.description,`AMOUNT RM ${line.amount.toFixed(2)}`,'This sample PDF is for reviewing email attachment delivery.']}))};
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const profile = await getSessionProfile();
   if (!profile || profile.role!=='admin') return new NextResponse('Admin permission required',{status:403});
+  const preview = req.nextUrl.searchParams.get('preview');
+  if (preview && cases.some(c=>c[0]===preview)) {
+    const sample = await messageFor(preview);
+    return new NextResponse(renderEmailBody({subject:'[TEST V2] '+sample.subject,text:sample.text,html:'html' in sample?sample.html:undefined}),{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+  }
   const run = crypto.randomUUID();
-  const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KLGCR email samples</title><style>body{background:#101318;color:#ede8dd;font:16px system-ui;margin:0;padding:32px}main{max-width:1000px;margin:auto}h1{color:#d7b66b}p{line-height:1.6}button{background:#d7b66b;color:#101318;border:0;border-radius:8px;padding:14px 24px;font-weight:700;cursor:pointer}button:disabled{opacity:.5}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{text-align:left;padding:12px;border-bottom:1px solid #35383e}small{color:#c0bbb1}.status{color:#e5c77f}</style><main><h1>Noreply email sample test</h1><p>From: <b>${FROM}</b><br>All tests go only to: <b>${TO}</b></p><p>Sample data only. No real payment, approval, membership, PO or running number is created. No tenant or supplier receives these messages. PDF samples are marked TEST. Production PO / invoice destination rules stay in place; these samples use the shared PDF gateway to the fixed test inbox.</p><p>Invoice samples include HTML in the email body and a sample PDF. The production Accounting invoice email still uses an HTML attachment.</p><button id="send">Send all ${cases.length} sample emails</button> <span id="summary" role="status">Ready</span><table><thead><tr><th>Email type</th><th>Attachment</th><th>Status</th></tr></thead><tbody>${cases.map(([id,label,attachment])=>`<tr><td>${esc(label)}</td><td>${esc(attachment)}</td><td id="s-${id}" class="status">Not sent</td></tr>`).join('')}</tbody></table><p><small>Bell / push notifications, Daily Task and Meeting reminders, Cleaner Supplies approvals and daily reports have no noreply email sender in current website code. No email is created for those here.</small></p></main><script>
+  const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KLGCR email samples</title><style>body{background:#101318;color:#ede8dd;font:16px system-ui;margin:0;padding:32px}main{max-width:1000px;margin:auto}h1{color:#d7b66b}p{line-height:1.6}button{background:#d7b66b;color:#101318;border:0;border-radius:8px;padding:14px 24px;font-weight:700;cursor:pointer}button:disabled{opacity:.5}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{text-align:left;padding:12px;border-bottom:1px solid #35383e}small{color:#c0bbb1}.status{color:#e5c77f}</style><main><h1>Noreply email sample test</h1><p>From: <b>${FROM}</b><br>All tests go only to: <b>${TO}</b></p><p>Sample data only. No real payment, approval, membership, PO or running number is created. No tenant or supplier receives these messages. PDF samples are marked TEST. Production PO / invoice destination rules stay in place; these samples use the shared PDF gateway to the fixed test inbox.</p><p>Invoice samples use an email-safe summary and a sample PDF. Printable invoice pages are never embedded in the email body. The production Accounting invoice email still uses an HTML attachment.</p><button id="send">Send all ${cases.length} corrected samples</button> <span id="summary" role="status">Ready</span><table><thead><tr><th>Email type</th><th>Attachment</th><th>Status</th></tr></thead><tbody>${cases.map(([id,label,attachment])=>`<tr><td>${esc(label)}</td><td>${esc(attachment)}</td><td id="s-${id}" class="status">Not sent</td></tr>`).join('')}</tbody></table><p><small>Bell / push notifications, Daily Task and Meeting reminders, Cleaner Supplies approvals and daily reports have no noreply email sender in current website code. No email is created for those here.</small></p></main><script>
 const cases=${JSON.stringify(cases)},run=${JSON.stringify(run)};
 document.getElementById('send').onclick=async function(){this.disabled=true;let sent=0,failed=0;for(const [id] of cases){const cell=document.getElementById('s-'+id);cell.textContent='Sending…';try{const r=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,run})});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Unconfirmed delivery');cell.textContent='Sent from '+j.sender+' to '+j.to;sent++}catch(e){cell.textContent='Needs review: '+e.message;failed++}document.getElementById('summary').textContent=sent+' sent · '+failed+' need review · '+(cases.length-sent-failed)+' remaining'}document.getElementById('summary').textContent='Complete: '+sent+' sent · '+failed+' need review. No automatic resend.'};</script></html>`;
   return new NextResponse(html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const index = cases.findIndex(c=>c[0]===id);
     if(index<0) return NextResponse.json({error:'Unknown test case'},{status:400});
     const sample = await messageFor(id);
-    const subject = `[TEST ${String(index+1).padStart(2,'0')}/${cases.length}] ${sample.subject}`;
+    const subject = `[TEST V2 ${String(index+1).padStart(2,'0')}/${cases.length}] ${sample.subject}`;
     const notice = 'TEST / SAMPLE ONLY. Sent only to Kevin for review. No action or payment is required.\n\n';
     const html = 'html' in sample ? `<p style="color:#a00;font-weight:bold">TEST / SAMPLE ONLY - NOT A REAL REQUEST</p>${sample.html}` : undefined;
     // Separate deterministic key for every test case. Never touches production queues or counters.

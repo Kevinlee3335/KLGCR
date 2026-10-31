@@ -1,3 +1,4 @@
+import {renderEmailBody} from './email-layout';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createAdminClient} from './supabase/admin';
@@ -10,8 +11,9 @@ class BillingGatewayError extends Error {
 export async function gmailGateway(payload:Record<string,unknown>,timeoutMs=15000){
  const url=process.env.KLGCR_GMAIL_WEB_APP_URL,secret=process.env.KLGCR_GMAIL_WEB_APP_SECRET;
  if(!url||!secret)throw new BillingGatewayError('missing_configuration','The website Gmail gateway URL or shared secret is not configured.');
+ const mailPayload=typeof payload.subject==='string'&&typeof payload.text==='string'?{...payload,html:renderEmailBody({subject:payload.subject,text:payload.text,html:typeof payload.html==='string'?payload.html:undefined})}:payload;
  let response:Response;
- try{response=await fetch(url,{method:'POST',signal:AbortSignal.timeout(timeoutMs),headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,secret})});}
+ try{response=await fetch(url,{method:'POST',signal:AbortSignal.timeout(timeoutMs),headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...mailPayload,secret})});}
  catch(error){if(error instanceof Error&&['TimeoutError','AbortError'].includes(error.name))throw new BillingGatewayError('gateway_timeout','Gmail did not respond in time. Wait a moment and check again.');throw new BillingGatewayError('gateway_unreachable','The website could not reach the Gmail gateway. Please check again.');}
  if(!response.ok)throw new BillingGatewayError('gateway_http_error',`Gmail gateway returned HTTP ${response.status}. Check the existing Web App deployment and access settings.`);
  try{const result=await response.json();if(!result||typeof result!=='object'||Array.isArray(result))throw Error();return result;}
