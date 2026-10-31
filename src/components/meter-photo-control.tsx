@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Upload } from "lucide-react";
 
-export function MeterPhotoControl({label,busy,onPhoto}:{label:string;busy:boolean;onPhoto:(file:File)=>void}) {
+export function MeterPhotoControl({label,busy,onPhoto,hint="Photo saves automatically, then AI reads the meter. Check the suggested reading before confirming."}:{label:string;busy:boolean;onPhoto:(file:File)=>void;hint?:string}) {
   const camera=useRef<HTMLInputElement>(null);
   const upload=useRef<HTMLInputElement>(null);
   const video=useRef<HTMLVideoElement>(null);
@@ -41,7 +41,7 @@ export function MeterPhotoControl({label,busy,onPhoto}:{label:string;busy:boolea
     <button type="button" disabled={busy} aria-label={`Upload photo for ${label}`} onClick={()=>upload.current?.click()}><Upload size={18}/> Upload photo</button>
     <input ref={camera} hidden type="file" accept="image/*" capture="environment" aria-label={`Camera photo for ${label}`} disabled={busy} onChange={e=>receive(e.currentTarget)}/>
     <input ref={upload} hidden type="file" accept="image/*" aria-label={`Photo file for ${label}`} disabled={busy} onChange={e=>receive(e.currentTarget)}/>
-    <small>Photo saves automatically, then AI reads the meter. Check the suggested reading before confirming.</small>
+    <small>{hint}</small>
     {error&&<small role="alert">{error}</small>}
     {cameraOpen&&<div className="billing-camera-overlay"><div className="billing-camera-dialog" role="dialog" aria-modal="true" aria-label={`Camera for ${label}`}><h3>{label}</h3><video ref={video} autoPlay muted playsInline controls/><div><button type="button" disabled={busy} onClick={()=>void capturePhoto()}><Camera size={18}/> Capture photo</button><button type="button" onClick={closeCamera}>Cancel camera</button></div></div></div>}
   </div>;

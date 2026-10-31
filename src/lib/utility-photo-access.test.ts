@@ -1,0 +1,11 @@
+import {describe,it,expect} from "vitest";
+import {canCaptureUtilityPhotos,replaceUtilityPhoto,utilityPhotoData,UTILITY_PHOTO_STAFF_ID} from "./utility-photo-access";
+import {defaultBillingConfig,type BillingConfig} from "./billing-preview";
+import type {Profile} from "./types";
+const profile:Profile={id:UTILITY_PHOTO_STAFF_ID,username:"faiz",full_name:"Faiz",role:"maintenance_staff",is_active:true};
+function config():BillingConfig{return {...defaultBillingConfig,utilityAccounts:[{id:"emma-omar",seq:1,name:"Emma",addr:[],title:"",subsidy:0,cap:null,kind:"invoice",meters:[{id:"electric",label:"Electricity",serial:"E1",unit:"kWh",rate:.6,prev:10,curr:20,confirmed:true,role:"charge",previousPhoto:"data:image/jpeg;base64,YQ==",photo:"data:image/jpeg;base64,Yg=="}]}]}}
+describe("Faiz Utilities photo access",()=>{
+ it("allows only the active authorized maintenance account and admins",()=>{expect(canCaptureUtilityPhotos(profile)).toBe(true);expect(canCaptureUtilityPhotos({...profile,id:"someone-else"})).toBe(false);expect(canCaptureUtilityPhotos({...profile,is_active:false})).toBe(false);expect(canCaptureUtilityPhotos({...profile,role:"cleaner"})).toBe(false);expect(canCaptureUtilityPhotos(null)).toBe(false)});
+ it("shares current photos with Admin while preserving previous photos, rates and rental settings",()=>{const before=config();const next=replaceUtilityPhoto(before,{period:before.utilityPeriod,accountId:"emma-omar",meterId:"electric",photo:"data:image/jpeg;base64,Yw=="},"2026-10-31");expect(next.utilityAccounts[0].meters[0]).toMatchObject({photo:"data:image/jpeg;base64,Yw==",previousPhoto:"data:image/jpeg;base64,YQ==",curr:null,confirmed:false,prev:10,rate:.6,currentDate:"2026-10-31"});expect(before.utilityAccounts[0].meters[0].curr).toBe(20);expect(next.tenants).toEqual(before.tenants);const view=utilityPhotoData(next,9);expect(view.accounts[0].meters[0].photo).toBe("data:image/jpeg;base64,Yw==");expect(view).not.toHaveProperty("tenants");expect(view.accounts[0].meters[0]).not.toHaveProperty("rate")});
+ it("rejects unknown meters and stale billing months",()=>{for(const change of [{meterId:"wrong"},{accountId:"wrong"},{period:"2027-01"}])expect(()=>replaceUtilityPhoto(config(),{period:"2026-10",accountId:"emma-omar",meterId:"electric",photo:"data:image/jpeg;base64,Yw==",...change},"2026-10-31")).toThrow()});
+});

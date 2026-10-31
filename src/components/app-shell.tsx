@@ -1,3 +1,4 @@
+import {canCaptureUtilityPhotos} from "@/lib/utility-photo-access";
 import { assistantEnabled } from "@/lib/ai-assistant";
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
@@ -72,7 +73,7 @@ function AdminNavigation({ mobile = false, currentTitle }: { mobile?: boolean; c
 
 export function AppShell({ profile, children, title }: { profile: Profile; children: React.ReactNode; title: string }) {
   const isStaff = profile.role === "maintenance_staff" || profile.role === "cleaner";
-  const operationalNav = [...(profile.role === "cleaner" ? cleanerNav : [...staffNav, ["Check-out Rooms", "/staff/checkouts"] as const]), ["Documents", "/documents"] as const];
+  const operationalNav = [...(canCaptureUtilityPhotos(profile) ? [["Utilities", "/staff/utilities"] as const] : []), ...(profile.role === "cleaner" ? cleanerNav : [...staffNav, ["Check-out Rooms", "/staff/checkouts"] as const]), ["Documents", "/documents"] as const];
   const date = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
   const current = (item: string) => title === item || (item === "New Complaints" && title === "Complaint Detail") ? "page" : undefined;
 
