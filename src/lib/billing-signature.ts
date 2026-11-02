@@ -1,3 +1,4 @@
+import {companySealDataUrl} from './company-seal';
 import type {BillingSnapshot} from './billing-preview';
 import {BILLING_APPROVER_ID} from './billing-approval';
 import {signatureSchema} from './purchase-orders/signature';
@@ -7,7 +8,7 @@ export function billingSignatureSvg(snapshot:BillingSnapshot,box?:{x:number;y:nu
  if(approval?.approved_by_user!==BILLING_APPROVER_ID||!Number.isFinite(Date.parse(approval.approved_at))||!parsed.success)return '';
  const sig=parsed.data,content=sig.imageDataUrl?`<image href="${esc(sig.imageDataUrl)}" x="0" y="0" width="600" height="180" preserveAspectRatio="xMidYMid meet"/>`:sig.strokes.map(s=>`<polyline points="${s.map(([x,y])=>`${x*600},${y*180}`).join(' ')}" fill="none" stroke="#17212c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
  const position=box?`x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"`:'style="display:block;width:100%;height:100%"';
- return `<svg xmlns="http://www.w3.org/2000/svg" ${position} viewBox="0 0 600 180" preserveAspectRatio="xMidYMid meet" role="img" aria-label="James approval signature">${content}</svg>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" ${position} viewBox="0 0 790 180" preserveAspectRatio="xMidYMid meet" role="img" aria-label="James approval signature">${content}<image href="${companySealDataUrl}" x="610" width="175" height="175"/></svg>`;
 }
 // Original Excel signature lines, in the source SVG's A4 coordinate system.
 const lines:Record<string,[number,number,number]>={
