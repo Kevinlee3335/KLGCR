@@ -87,30 +87,31 @@ export async function gymReportPdf(input:ReportInput){
  }
  if(y<100){start(true);row(headers,true);}
  row(headers.map((_,i)=>i===1?'TOTAL':i===headers.length-1?money(total):''),true);
- if(input.approved_at&&input.signature){
+
    if(y<225)start(true);
    y-=34;
-   const slots=[...(input.verifications||[]).map(v=>({label:'Verified by '+v.name,date:v.verified_at,signature:v.signature})),{label:'Approved by James',date:input.approved_at,signature:input.signature}];
+   const verified=input.verifications||[];
+   const slots=[{label:'Verified by Fikri',date:verified[0]?.verified_at,signature:verified[0]?.signature},{label:'Verified by Kevin',date:verified[1]?.verified_at,signature:verified[1]?.signature},{label:'Approved by James',date:input.approved_at,signature:input.approved_at?input.signature:undefined}];
    const cellWidth=width/3;
    for(const [i,slot] of slots.entries()){
-     const x=margin+i*cellWidth,sig=signatureSchema.parse(slot.signature);
+     const x=margin+i*cellWidth,parsed=signatureSchema.safeParse(slot.signature);
+     const sig=parsed.success?parsed.data:null;
      text(slot.label,x,y,10,true);
      const inkY=y-78;
-     if(sig.imageDataUrl){
+     if(sig?.imageDataUrl){
        const bounds=signaturePhotoBounds(sig.imageDataUrl),ink=await pdf.embedPng(sig.imageDataUrl);
        const scale=Math.min(108/bounds.width,55/bounds.height);
        const drawX=x+54-(bounds.left+bounds.width/2)*scale;
        const bottom=bounds.imageHeight-bounds.top-bounds.height;
        page.drawImage(ink,{x:drawX,y:inkY-bottom*scale,width:bounds.imageWidth*scale,height:bounds.imageHeight*scale});
-     }else for(const stroke of sig.strokes)for(let n=1;n<stroke.length;n++){
+     }else if(sig)for(const stroke of sig.strokes)for(let n=1;n<stroke.length;n++){
        const pt=(p:number[])=>({x:x+p[0]*108,y:inkY+55-p[1]*55});
        page.drawLine({start:pt(stroke[n-1]),end:pt(stroke[n]),thickness:1.2});
      }
-     if(i===slots.length-1)page.drawImage(await pdf.embedPng(companySealDataUrl),{x:x+113,y:inkY,width:44,height:44});
+     if(i===slots.length-1&&sig&&input.approved_at)page.drawImage(await pdf.embedPng(companySealDataUrl),{x:x+113,y:inkY,width:44,height:44});
      page.drawLine({start:{x,y:inkY-7},end:{x:x+cellWidth-14,y:inkY-7},thickness:.6,color:line});
-     text(new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',x,inkY-22,7);
+     text(slot.date?new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Pending',x,inkY-22,7);
    }
- }
  for(const [i,p] of pdf.getPages().entries())p.drawText((i+1)+' / '+pdf.getPageCount(),{x:page.getWidth()-64,y:22,size:8,font,color:navy});
  return Buffer.from(await pdf.save());
 }
