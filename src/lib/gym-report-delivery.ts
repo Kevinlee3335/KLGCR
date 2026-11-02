@@ -1,14 +1,9 @@
 import {documentVerification,documentReviewers,type Verification} from './document-review';
-import { PDFDocument } from 'pdf-lib';
 import { createAdminClient } from './supabase/admin';
-import { financialPdf } from './official-receipt';
+import {gymReportPdf} from './gym-report-pdf';
 import { gmailGateway } from './billing-mail';
 import { BILLING_MAIL_FROM, BILLING_MAIL_TO } from './billing-mail-settings';
 import { BILLING_APPROVER_ID } from './billing-approval';
-import { companySealDataUrl } from './company-seal';
-import type { CommitteeReport } from './committee-report';
-import type { PaymentListRow } from './membership-payment-list';
-import { signatureSchema } from './purchase-orders/signature';
 
 export async function deliverGymReport(id:string) {
  const db=createAdminClient();
@@ -20,37 +15,11 @@ export async function deliverGymReport(id:string) {
  const reviewer=documentReviewers[verifications.length];
  if(!approved && r.reviewer_notices?.[reviewer.username])return;
  const title=(r.kind==='committee'?'Sports Committee Report':'Monthly Payment List')+' - '+r.month.slice(0,7);
- const lines:string[]=[];
- if(r.kind==='committee'){
-   const report=r.snapshot as CommitteeReport;
-   lines.push('Members: '+report.member_count+'   Payments: '+report.payment_count,
-     'Total collection: RM '+report.total_amount+'   Committee payable: RM '+report.remuneration,report.calculation_rule);
-   for(const entry of report.entries)lines.push(entry.full_name+' | RM '+entry.amount, ...entry.payments.map(p=>p.approved_at.slice(0,10)+' | '+p.kind+' | '+p.membership_month+' | RM '+p.amount));
- }else{
-   const entries=r.snapshot as PaymentListRow[];
-   lines.push(entries.length+' entries','No. | Date | Receipt | Member | Room / Member No. | Amount');
-   entries.forEach((p,i)=>lines.push([i+1,p.collected_on,p.receipt_no||'-',p.full_name,p.member_reference||'-',p.amount==null?'-':'RM '+p.amount].join(' | ')));
- }
- let pdf=await financialPdf({title,lines});
+ const pdf=await gymReportPdf(r);
  let to:string,key:string,body:string;
  if(approved){
    if(r.approver!==BILLING_APPROVER_ID)throw Error('James approval required');
-   const doc=await PDFDocument.load(pdf);
-   const page=doc.addPage([842,595]);
-   page.drawText(title,{x:42,y:524,size:18});
-   const slots=[...verifications.map(v=>({name:'Verified by '+v.name,date:v.verified_at,signature:v.signature})),{name:'Approved by James',date:r.approved_at,signature:r.signature}];
-   for(const [i,slot] of slots.entries()){
-     const x=42+i*255,sig=signatureSchema.parse(slot.signature);
-     page.drawText(slot.name,{x,y:460,size:12});
-     page.drawText(new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',{x,y:438,size:9});
-     if(sig.imageDataUrl){const ink=await doc.embedPng(sig.imageDataUrl);page.drawImage(ink,{x,y:352,...ink.scaleToFit(150,65)});}
-     else for(const stroke of sig.strokes)for(let n=1;n<stroke.length;n++){
-       const pt=(p:number[])=>({x:x+p[0]*150,y:417-p[1]*65});
-       page.drawLine({start:pt(stroke[n-1]),end:pt(stroke[n]),thickness:1.2});
-     }
-     if(i===slots.length-1)page.drawImage(await doc.embedPng(companySealDataUrl),{x:x+158,y:352,width:60,height:60});
-   }
-   pdf=Buffer.from(await doc.save());to=BILLING_MAIL_TO;key='membership_'+r.id;
+   to=BILLING_MAIL_TO;key='membership_'+r.id;
    body='Dear Joey,\n\nAttached is the '+title+' approved by James.\n\nKLG Campus Residence';
  }else{
    const person=await db.from('profiles').select('email').eq('id',reviewer.id).eq('is_active',true).single();
