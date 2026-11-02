@@ -38,3 +38,13 @@ it('keeps authorization and accounting limits',async()=>{
  mocks.profile.mockResolvedValue({id:'staff',role:'maintenance_staff'});expect((await POST(request())).status).toBe(403);expect(mocks.fetch).not.toHaveBeenCalled();
  mocks.profile.mockResolvedValue({id:'admin',role:'admin'});mocks.rpc.mockResolvedValue({data:null,error:{message:'Budget reached'}});expect((await POST(request())).status).toBe(429);expect(mocks.fetch).not.toHaveBeenCalled();
 });
+
+it('waits once for the ledger cooldown so consecutive uploads can both read automatically',async()=>{
+ vi.useFakeTimers();
+ try{
+  let attempts=0;mocks.rpc.mockImplementation(async(name:string)=>name==='klgcr_ai_reserve'&&attempts++===0?{data:null,error:{message:'Please wait 10 seconds'}}:{data:name==='klgcr_ai_reserve'?{id:'retry'}:null,error:null});
+  model({integerDigits:'44348',decimalDigits:'9',confidence:'high',note:''});
+  const pending=POST(request('other-meter'));await vi.advanceTimersByTimeAsync(10000);
+  expect((await(await pending).json()).reading).toBe(44348);expect(mocks.fetch).toHaveBeenCalledTimes(1);
+ }finally{vi.useRealTimers()}
+});

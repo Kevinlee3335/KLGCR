@@ -1,5 +1,5 @@
 import { afterEach,beforeEach,describe,it,expect,vi } from "vitest";
-import { render,screen,fireEvent,waitFor,cleanup } from "@testing-library/react";
+import { render,screen,fireEvent,waitFor,cleanup,within } from "@testing-library/react";
 import { BillingPanel } from "./billing-panel";
 import { configSchema,defaultBillingConfig } from "@/lib/billing-preview";
 import fixture from "@/lib/billing-preview-fixture.json";
@@ -38,6 +38,21 @@ describe('camera upload and automatic meter reading',()=>{
  });
  it('replaces the current photo without rolling the previous reading forward',async()=>{await open();const input=screen.getAllByLabelText('Replace current photo for Meter 1')[0];fireEvent.change(input,{target:{files:[new File(['replacement'],'wrong-photo-fixed.jpg',{type:'image/jpeg'})]}});await screen.findByText(/suggested reading 71000 saved/);const meter=configSchema.parse(requests[0].body.config).utilityAccounts[0].meters[0];expect(meter.prev).toBe(fixture.utilityAccounts[0].meters[0].prev);expect(meter.curr).toBeNull();expect(meter.confirmed).toBe(false)});
  it('replaces the previous photo and reads into Previous while preserving Current',async()=>{await open();const input=screen.getAllByLabelText('Replace previous photo for Meter 1')[0];fireEvent.change(input,{target:{files:[new File(['replacement'],'previous.jpg',{type:'image/jpeg'})]}});await screen.findByText(/suggested reading 71000 saved/);const meter=configSchema.parse(requests[2].body.config).utilityAccounts[0].meters[0];expect(meter.prev).toBe(71000);expect(meter.curr).toBe(fixture.utilityAccounts[0].meters[0].curr);expect(meter.confirmed).toBe(false)});
+ it('keeps duplicate meter IDs scoped to the selected account for edits and OCR',async()=>{
+   const config=configSchema.parse({...defaultBillingConfig,...fixture});
+   config.utilityAccounts[0].meters[0].id='shared';config.utilityAccounts[1].meters[0].id='shared';
+   const before=structuredClone(config.utilityAccounts[0].meters[0]);
+   config.utilityAccounts[1].meters[0].serial='SECOND-ACCOUNT';
+   render(<BillingPanel initialData={{config,revision:0,runs:[],clock:{date:'2026-11-02',time:'09:00'}}}/>);
+   fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));
+   const account=screen.getAllByRole('article')[1];fireEvent.click(within(account).getByRole('button',{name:'Open readings'}));
+   const input=within(account).getAllByLabelText('Current (whole digits only)')[0];fireEvent.change(input,{target:{value:String((config.utilityAccounts[1].meters[0].prev??0)+1)}});fireEvent.click(within(account).getAllByRole('button',{name:'Save & confirm reading'})[0]);
+   await screen.findByText(/Corrected reading saved and confirmed/);expect(configSchema.parse(requests[0].body.config).utilityAccounts[0].meters[0]).toEqual(before);
+   requests.length=0;
+   fireEvent.change(within(account).getAllByLabelText('Camera photo for Meter 1')[0],{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
+   await screen.findByText(/suggested reading 71000 saved/);
+   expect(requests[1].body.serial).toBe('SECOND-ACCOUNT');expect(configSchema.parse(requests[2].body.config).utilityAccounts[0].meters[0]).toEqual(before);
+ });
  it('retains the saved photo when OCR fails, without retaining an old reading',async()=>{
    failOcr=true;const camera=await open();fireEvent.change(camera,{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
    await screen.findByText(/Photo is saved.*AI unavailable/);
