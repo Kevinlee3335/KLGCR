@@ -16,6 +16,17 @@ export default async function PaymentListPage({searchParams}:{searchParams:Promi
  if(!membershipEnabled())return <AppShell profile={profile} title="Monthly Payment List"><p>Membership is not enabled.</p></AppShell>;
  const search=await searchParams;
  const month=validPaymentListMonth(search.month||'')?search.month!:malaysiaDay().slice(0,7);
+ const currentMonth=malaysiaDay().slice(0,7);
+ const latestMonth=month>currentMonth?month:currentMonth;
+ const monthTabs:string[]=[];
+ for(let year=2026,monthIndex=8;;){
+  const tabMonth=`${year}-${String(monthIndex).padStart(2,'0')}`;
+  if(tabMonth>latestMonth)break;
+  monthTabs.push(tabMonth);
+  if(++monthIndex>12){monthIndex=1;year++;}
+ }
+ if(!monthTabs.includes(month))monthTabs.push(month);
+ monthTabs.sort();
  const {start,end}=paymentListRange(month),db=createAdminClient();
  const all=[];
  let failed=false;
@@ -26,7 +37,7 @@ export default async function PaymentListPage({searchParams}:{searchParams:Promi
  const {data:imports}=await db.from('membership_payment_imports').select('source_file,issues,row_count,months').order('imported_at',{ascending:false}).limit(10);
  return <AppShell profile={profile} title="Monthly Payment List"><div className="payment-list-compact"><MembershipPaymentListRefresh/><div className="section-head"><div><p className="eyebrow">GYM MEMBERSHIP · DAILY PAYMENT</p><h2>Monthly Payment List</h2><p className="subtle">New approved registrations and renewals appear automatically in the month of approval. Historical months remain available.</p></div><Link className="button secondary" href="/admin/members"><ArrowLeft size={13}/>Membership</Link></div>
  <section className="panel"><div className="payment-list-controls"><form method="get" className="payment-list-month-form"><label>Month<input type="month" name="month" defaultValue={month} required/></label><button className="button">View</button></form><Link className="button secondary" href={`/admin/members/payment-list/${month}/print`} target="_blank"><Printer size={13}/>Print / PDF</Link></div>
- <nav className="payment-month-tabs" aria-label="Imported monthly lists">{['2026-08','2026-09','2026-10'].map(m=><Link aria-current={m===month?"page":undefined} key={m} href={`?month=${m}`}>{new Date(m+"-01T00:00:00+08:00").toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"})}</Link>)}</nav>
+ <nav className="payment-month-tabs" aria-label="Monthly payment lists" style={{maxWidth:"100%",overflowX:"auto"}}>{monthTabs.map(m=><Link aria-current={m===month?"page":undefined} key={m} href={`?month=${m}`}>{new Date(m+"-01T00:00:00+08:00").toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"})}</Link>)}</nav>
  <div className="payment-list-heading"><div><h3>{paymentListMonthLabel(month)}</h3><p className="subtle">{all.length} entries · Edit receipt no and click the save icon · Updates automatically</p></div><span className="badge">Live list</span></div>
  {failed?<p className="error">Unable to load this month. Please refresh.</p>:!all.length?<p>No approved payments recorded for this month.</p>:<div className="table-wrap"><table className="table payment-list-table"><colgroup><col style={{width:'4%' }}/><col style={{width:'11%' }}/><col style={{width:'19%' }}/><col style={{width:'30%' }}/><col style={{width:'16%' }}/><col style={{width:'10%' }}/><col style={{width:'10%' }}/></colgroup><thead><tr><th>NO</th><th>DATE</th><th>RECEIPT NO</th><th>NAME</th><th>ROOM NO</th><th>AMOUNT (RM)</th><th>Action</th></tr></thead><tbody>{all.map((r,i)=><tr key={r.id}><td>{i+1}</td><td>{paymentListDate(r.collected_on)}</td><td><MembershipReceiptNumber id={r.id} receipt={r.receipt_no||""} name={r.full_name}/></td><td style={{whiteSpace:'normal',overflowWrap:'anywhere'}}>{r.full_name}{r.kind==='access_card_deposit'&&<span className="payment-entry-type">Access Card Deposit</span>}</td><td>{r.member_reference||'—'}</td><td>{r.amount==null?'—':Number(r.amount).toFixed(2)}</td><td><MembershipPaymentDelete id={r.id} name={r.full_name}/></td></tr>)}</tbody></table></div>}
  <MembershipDepositAdd defaultDate={month===malaysiaDay().slice(0,7)?malaysiaDay():month+"-01"}/>
