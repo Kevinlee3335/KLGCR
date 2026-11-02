@@ -1,3 +1,4 @@
+import {signaturePhotoBounds} from './signature-image-layout';
 import {companySealDataUrl} from './company-seal';
 import fontkit from "@pdf-lib/fontkit";
 import {PDFDocument,rgb} from 'pdf-lib';
@@ -31,8 +32,10 @@ export async function financialPdf(input:{receipt?:OfficialReceipt;title?:string
    const signature = r.issuer_signature;
    if (signature.imageDataUrl) {
      const ink = await pdf.embedPng(signature.imageDataUrl);
-     const size = ink.scaleToFit(144, 52);
-     page.drawImage(ink, {x:580, y:97, ...size});
+     const bounds=signaturePhotoBounds(signature.imageDataUrl);
+     const scale=Math.min(144/bounds.width,52/bounds.height);
+     const bottom=bounds.imageHeight-bounds.top-bounds.height;
+     page.drawImage(ink,{x:580+72-(bounds.left+bounds.width/2)*scale,y:97-bottom*scale,width:bounds.imageWidth*scale,height:bounds.imageHeight*scale});
    } else {
      for (const stroke of signature.strokes || []) {
        for (let i=1; i<stroke.length; i++) {
