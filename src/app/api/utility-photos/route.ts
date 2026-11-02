@@ -11,7 +11,7 @@ async function settings(){const db=createAdminClient();const {data,error}=await 
 function meterResponse(config: ReturnType<typeof configSchema.parse>, revision: number, accountId: string | null, meterId: string | null) {
  const result=utilityPhotoData(config,revision);
  for(const account of result.accounts) for(const meter of account.meters) {
-  if(account.id!==accountId||meter.id!==meterId){meter.photo=undefined;meter.previousPhoto=undefined}
+  if(account.id!==accountId||(meterId!==null&&meter.id!==meterId)){meter.photo=undefined;meter.previousPhoto=undefined}
  }
  return reply(result);
 }
@@ -24,6 +24,6 @@ export async function POST(req:NextRequest){
  const config=configSchema.parse(replaceUtilityPhoto(s.config,input,malaysiaClock().date));
  const {data,error}=await s.db.from("billing_preview_settings").update({config,revision:s.revision+1,updated_by:profile!.id,updated_at:new Date().toISOString()}).eq("id",1).eq("revision",s.revision).select("revision").maybeSingle();
  if(error)return reply({error:"Photo could not be saved. Please try again."},503);if(!data)return reply({error:"Another user updated the readings. Reload and try again."},409);
- return meterResponse(config,data.revision,input.accountId,input.meterId);
+ return meterResponse(config,data.revision,input.accountId,null);
  }catch(e){return reply({error:e instanceof z.ZodError?"Invalid photo input":e instanceof Error&&/month changed|Meter not found/.test(e.message)?e.message:"Unable to save photo. Please reload and try again."},400)}
 }
