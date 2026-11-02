@@ -18,6 +18,7 @@ export default async function AdminPage() {
   const isPoApprover=profile.id==='eeab5f04-30c3-42bd-a095-58e56c814358'&&profile.role==='admin';
   const pendingPOPromise=isPoApprover?supabase.from('inventory_purchase_orders').select('id,po_no,requested_by,revision',{count:'exact'}).is('approved_at',null).order('created_at',{ascending:true}).limit(10):Promise.resolve(null);
   const pendingGymPromise=isPoApprover?createAdminClient().from('gym_monthly_approvals').select('id,month,kind',{count:'exact'}).is('approved_at',null).order('month',{ascending:true}).order('kind').limit(10):Promise.resolve(null);
+  const pendingBillingPromise=isPoApprover?createAdminClient().from('billing_preview_runs').select('id,kind,period,total,billing_run_approvals!left(run_id)',{count:'exact'}).is('billing_run_approvals.run_id',null).order('period',{ascending:true}).order('id').limit(10):Promise.resolve(null);
   const today = malaysiaToday();
   const [{ data: countRows, error: countError }, { data: statusRows }, { data: complaints }, { data: tasks }, { data: inventory },{count:todayAppointments},{count:pendingAppointments},{count:completionPhotos},{data:noShowRows,error:noShowError},{data:complaintIntake,error:intakeError}] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
@@ -52,6 +53,6 @@ export default async function AdminPage() {
     complaintIntake: intakeError ? null : complaintIntake,
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
-  const [pendingPOs,pendingGym]=await Promise.all([pendingPOPromise,pendingGymPromise]);
-  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0} reports={pendingGym?.data||[]} reportTotal={pendingGym?.count||0} reportError={!!pendingGym?.error}/>)}<SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<MonitoringFollowUp/>}/></AppShell>;
+  const [pendingPOs,pendingGym,pendingBilling]=await Promise.all([pendingPOPromise,pendingGymPromise,pendingBillingPromise]);
+  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0} reports={pendingGym?.data||[]} reportTotal={pendingGym?.count||0} reportError={!!pendingGym?.error} bills={pendingBilling?.data||[]} billTotal={pendingBilling?.count||0} billError={!!pendingBilling?.error}/>)}<SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<MonitoringFollowUp/>}/></AppShell>;
 }
