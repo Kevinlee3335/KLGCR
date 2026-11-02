@@ -1,3 +1,4 @@
+import {ensureUtilityMonth} from "@/lib/utility-months";
 import {NextRequest,NextResponse} from "next/server";
 import {z} from "zod";
 import {getSessionProfile} from "@/lib/auth";
@@ -7,7 +8,7 @@ import {canCaptureUtilityPhotos,replaceUtilityPhoto,utilityPhotoData} from "@/li
 export const dynamic="force-dynamic";
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"private, no-store"}});
 const inputSchema=z.object({period:monthSchema,revision:z.number().int().nonnegative(),accountId:z.string().min(1).max(100),meterId:z.string().min(1).max(100),photo:z.string().max(220000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)}).strict();
-async function settings(){const db=createAdminClient();const {data,error}=await db.from("billing_preview_settings").select("config,revision").eq("id",1).single();if(error||!data)throw Error("Storage unavailable");return {db,config:configSchema.parse(data.config),revision:data.revision as number}}
+async function settings(){await ensureUtilityMonth();const db=createAdminClient();const {data,error}=await db.from("billing_preview_settings").select("config,revision").eq("id",1).single();if(error||!data)throw Error("Storage unavailable");return {db,config:configSchema.parse(data.config),revision:data.revision as number}}
 function meterResponse(config: ReturnType<typeof configSchema.parse>, revision: number, accountId: string | null, meterId: string | null) {
  const result=utilityPhotoData(config,revision);
  for(const account of result.accounts) for(const meter of account.meters) {

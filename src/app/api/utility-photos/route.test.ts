@@ -1,3 +1,4 @@
+vi.mock("@/lib/utility-months",()=>({ensureUtilityMonth:vi.fn().mockResolvedValue(undefined)}));
 import {beforeEach,describe,it,expect,vi} from "vitest";
 import {NextRequest} from "next/server";
 import {defaultBillingConfig,type BillingConfig} from "@/lib/billing-preview";
