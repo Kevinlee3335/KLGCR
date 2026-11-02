@@ -1,3 +1,4 @@
+import {dispatchDocumentReviewPushes} from './document-review-notifications';
 import {documentVerification,documentReviewers,type Verification} from './document-review';
 import { createAdminClient } from './supabase/admin';
 import {gymReportPdf} from './gym-report-pdf';
@@ -6,6 +7,7 @@ import { BILLING_MAIL_FROM, BILLING_MAIL_TO } from './billing-mail-settings';
 import { BILLING_APPROVER_ID } from './billing-approval';
 
 export async function deliverGymReport(id:string) {
+ await dispatchDocumentReviewPushes(id).catch(error=>console.error('Document phone notification pending retry',error));
  const db=createAdminClient();
  const {data:r,error}=await db.from('gym_monthly_approvals').select('*').eq('id',id).single();
  if(error)throw error;
