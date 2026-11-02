@@ -51,7 +51,8 @@ export async function financialPdf(input:{receipt?:OfficialReceipt;title?:string
  }else{for(const raw of input.lines||[]){for(const line of wrap(raw,511,12)){if(y<55){page=pdf.addPage(financePaperSizes.a4);y=802;}text(line,42,y,12);y-=19;}y-=7;}}
  if(input.receipt){
    const receiptPdf=await PDFDocument.create();
-   for(const source of pdf.getPages()){
+   const sourcePdf=await PDFDocument.load(await pdf.save());
+   for(const source of sourcePdf.getPages()){
      const embedded=await receiptPdf.embedPage(source);
      const target=receiptPdf.addPage(financePaperSizes.a5Landscape);
      const scale=Math.min(target.getWidth()/source.getWidth(),target.getHeight()/source.getHeight());
