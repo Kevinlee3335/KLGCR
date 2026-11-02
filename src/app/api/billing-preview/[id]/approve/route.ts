@@ -13,7 +13,7 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{id:string}>
  const {id}=await params;if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))return NextResponse.json({error:'Invalid invoice pack'},{status:400});
  try{
   const db=await createClient();const {data,error}=await db.rpc('approve_billing_run',{billing_run_id:id});
-  if(error)return NextResponse.json({error:error.message.includes('signature')?'Save your E-signature above before approving.':'Unable to approve. Reload and review the saved invoice pack.'},{status:409});
+  if(error)return NextResponse.json({error:error.message.includes('must verify')?'Fikri and Kevin must verify this pack before James approves.':error.message.includes('signature')?'Save your E-signature above before approving.':'Unable to approve. Reload and review the saved invoice pack.'},{status:409});
   const mail=await dispatchBillingMail(id).catch(()=>({status:"pending",error:"Approval saved. Email delivery needs checking."}));
   return NextResponse.json({approval:data,mail},{headers:{'Cache-Control':'no-store'}});
  }catch{return NextResponse.json({error:'Unable to approve. Please reload to check the current status.'},{status:503});}

@@ -1,3 +1,5 @@
+import {DocumentReviewQueue} from '@/components/document-review-queue';
+import {createAdminClient} from "@/lib/supabase/admin";
 import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
 import { SupplierMailSummary } from "@/components/supplier-mail-summary";
 import { PoApprovalQueue } from '@/components/po-approval-queue';
@@ -51,5 +53,5 @@ export default async function AdminPage() {
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
   const pendingPOs=await pendingPOPromise;
-  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<MonitoringFollowUp/>}/></AppShell>;
+  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<DocumentReviewQueue userId={profile.id}/><SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<MonitoringFollowUp/>}/></AppShell>;
 }

@@ -1,3 +1,4 @@
+import {documentVerification,documentReviewers,type Verification} from './document-review';
 import { PDFDocument } from 'pdf-lib';
 import { createAdminClient } from './supabase/admin';
 import { financialPdf } from './official-receipt';
@@ -14,7 +15,10 @@ export async function deliverGymReport(id:string) {
  const {data:r,error}=await db.from('gym_monthly_approvals').select('*').eq('id',id).single();
  if(error)throw error;
  const approved=!!r.approved_at;
- if(r.sent_at || (!approved && r.notified_at))return;
+ if(r.sent_at)return;
+ const verifications=approved?(r.verifications||[]) as Verification[]:await documentVerification('gym',id);
+ const reviewer=documentReviewers[verifications.length];
+ if(!approved && r.reviewer_notices?.[reviewer.username])return;
  const title=(r.kind==='committee'?'Sports Committee Report':'Monthly Payment List')+' - '+r.month.slice(0,7);
  const lines:string[]=[];
  if(r.kind==='committee'){
@@ -31,35 +35,40 @@ export async function deliverGymReport(id:string) {
  let to:string,key:string,body:string;
  if(approved){
    if(r.approver!==BILLING_APPROVER_ID)throw Error('James approval required');
-   const sig=signatureSchema.parse(r.signature);
    const doc=await PDFDocument.load(pdf);
    const page=doc.addPage([842,595]);
    page.drawText(title,{x:42,y:524,size:18});
-   page.drawText('Approved by James | '+new Date(r.approved_at).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',{x:42,y:460,size:13});
-   if(sig.imageDataUrl){const ink=await doc.embedPng(sig.imageDataUrl);page.drawImage(ink,{x:42,y:364,...ink.scaleToFit(180,72)});}
-   else for(const stroke of sig.strokes)for(let i=1;i<stroke.length;i++){
-     const pt=(p:number[])=>({x:42+p[0]*180,y:436-p[1]*72});
-     page.drawLine({start:pt(stroke[i-1]),end:pt(stroke[i]),thickness:1.2});
+   const slots=[...verifications.map(v=>({name:'Verified by '+v.name,date:v.verified_at,signature:v.signature})),{name:'Approved by James',date:r.approved_at,signature:r.signature}];
+   for(const [i,slot] of slots.entries()){
+     const x=42+i*255,sig=signatureSchema.parse(slot.signature);
+     page.drawText(slot.name,{x,y:460,size:12});
+     page.drawText(new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',{x,y:438,size:9});
+     if(sig.imageDataUrl){const ink=await doc.embedPng(sig.imageDataUrl);page.drawImage(ink,{x,y:352,...ink.scaleToFit(150,65)});}
+     else for(const stroke of sig.strokes)for(let n=1;n<stroke.length;n++){
+       const pt=(p:number[])=>({x:x+p[0]*150,y:417-p[1]*65});
+       page.drawLine({start:pt(stroke[n-1]),end:pt(stroke[n]),thickness:1.2});
+     }
+     if(i===slots.length-1)page.drawImage(await doc.embedPng(companySealDataUrl),{x:x+158,y:352,width:60,height:60});
    }
-   page.drawImage(await doc.embedPng(companySealDataUrl),{x:236,y:364,width:72,height:72});
    pdf=Buffer.from(await doc.save());to=BILLING_MAIL_TO;key='membership_'+r.id;
    body='Dear Joey,\n\nAttached is the '+title+' approved by James.\n\nKLG Campus Residence';
  }else{
-   const james=await db.from('profiles').select('email').eq('id',BILLING_APPROVER_ID).eq('is_active',true).single();
-   if(james.error||!james.data.email)throw Error('James email unavailable');
-   to=james.data.email;key='membership_'+r.notice_key;
-   body='Dear James,\n\nPlease review the attached '+title+' and approve it in KLGCR:\nhttps://klgcr-maintenance-system.vercel.app/admin/members/report-approvals\n\nKLG Campus Residence';
+   const person=await db.from('profiles').select('email').eq('id',reviewer.id).eq('is_active',true).single();
+   if(person.error||!person.data.email)throw Error('Reviewer email unavailable');
+   to=person.data.email;key='membership_'+r.reviewer_keys[reviewer.username];
+   body='Dear '+reviewer.name+',\n\nPlease review the attached '+title+' in KLGCR:\nhttps://klgcr-maintenance-system.vercel.app/admin/document-review/gym/'+r.id+'\n\nKLG Campus Residence';
+
  }
  const result=await gmailGateway({action:'finance-send',key,from:BILLING_MAIL_FROM,to,subject:(approved?'Approved: ':'Approval required: ')+title,text:body,fileName:title+'.pdf',pdfBase64:pdf.toString('base64')},25000);
  if(result.ok!==true||result.status!=='sent'||result.key!==key||result.sender!==BILLING_MAIL_FROM||result.to!==to)throw Error('Gym report delivery not confirmed');
- const saved=await db.from('gym_monthly_approvals').update(approved?{sent_at:result.sentAt}:{notified_at:result.sentAt}).eq('id',id);
+ const saved=await db.from('gym_monthly_approvals').update(approved?{sent_at:result.sentAt}:{notified_at:result.sentAt,reviewer_notices:{...r.reviewer_notices,[reviewer.username]:result.sentAt}}).eq('id',id);
  if(saved.error)throw saved.error;
 }
 
 export async function deliverDueGymReports(){
  const db=createAdminClient();
  const queued=await db.rpc('queue_gym_monthly_reports');if(queued.error)throw queued.error;
- const due=await db.from('gym_monthly_approvals').select('id').is('sent_at',null).or('notified_at.is.null,approved_at.not.is.null');
+ const due=await db.from('gym_monthly_approvals').select('id').is('sent_at',null);
  if(due.error)throw due.error;
  const results=await Promise.allSettled(due.data.map(row=>deliverGymReport(row.id)));
  if(results.some(r=>r.status==='rejected'))throw Error('Gym report delivery pending retry');
