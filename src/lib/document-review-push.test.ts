@@ -1,0 +1,13 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+const m=vi.hoisted(()=>({subscriptions:[] as Record<string,unknown>[],send:vi.fn(),remove:vi.fn(),vapid:vi.fn()}));
+vi.mock('web-push',()=>({default:{setVapidDetails:m.vapid,sendNotification:m.send}}));
+vi.mock('@/lib/supabase/admin',()=>({createAdminClient:()=>({from:()=>({select:()=>({in:async()=>({data:m.subscriptions,error:null})}),delete:()=>({eq:m.remove})})})}));
+import {sendPushNotifications} from './push';
+const payload={recipientIds:['fikri'],title:'Verify',body:'Rental',href:'/admin/document-review/billing/doc',strict:true,requireSubscription:true,tag:'review-1'};
+beforeEach(()=>{vi.clearAllMocks();vi.stubEnv('VAPID_PUBLIC_KEY','public');vi.stubEnv('VAPID_PRIVATE_KEY','private');m.subscriptions=[{id:'device',endpoint:'https://push.example/device',p256dh:'key',auth:'auth'}];m.send.mockResolvedValue(undefined)});
+afterEach(()=>vi.unstubAllEnvs());
+it('sends a deep link and replacement tag to registered devices',async()=>{await sendPushNotifications(payload);expect(JSON.parse(m.send.mock.calls[0][1])).toMatchObject({href:payload.href,tag:'review-1'});});
+it('does not treat missing configuration as delivery',async()=>{vi.stubEnv('VAPID_PRIVATE_KEY','');await expect(sendPushNotifications(payload)).rejects.toThrow('not configured');expect(m.send).not.toHaveBeenCalled();});
+it('does not treat zero subscribed devices as delivery',async()=>{m.subscriptions=[];await expect(sendPushNotifications(payload)).rejects.toThrow('No registered');});
+it('removes expired subscriptions and keeps the request pending',async()=>{m.send.mockRejectedValue({statusCode:410});await expect(sendPushNotifications(payload)).rejects.toThrow('No reachable');expect(m.remove).toHaveBeenCalledWith('id','device');});
+it('keeps transient failures retryable',async()=>{m.send.mockRejectedValue(Error('timeout'));await expect(sendPushNotifications(payload)).rejects.toThrow('timeout');});
