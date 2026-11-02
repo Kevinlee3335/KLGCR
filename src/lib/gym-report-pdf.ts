@@ -32,8 +32,8 @@ export async function gymReportPdf(input:ReportInput){
  const clean=(s:string)=>s.replace(/[^\x20-\x7E\u00A0-\u00FF]/g,'-');
  let page=pdf.addPage(financePaperSizes.a4),y=0;
  const margin=36,width=page.getWidth()-margin*2;
- const columns=input.kind==='committee'?[28,265,95,width-388]:[26,58,90,166,103,width-443];
- const headers=input.kind==='committee'?['No.','Full name','Payments','Collection (RM)']:['No.','Date','Receipt No.','Full name','Room / Member No.','Amount (RM)'];
+ const columns=input.kind==='committee'?[28,width-143,115]:[26,58,90,166,103,width-443];
+ const headers=input.kind==='committee'?['No.','Full name','Collection (RM)']:['No.','Date','Receipt No.','Full name','Room / Member No.','Amount (RM)'];
  function text(value:string,x:number,at:number,size=9,strong=false){
    page.drawText(clean(value),{x,y:at,size,font:strong?bold:font,color:navy});
  }
@@ -71,7 +71,7 @@ export async function gymReportPdf(input:ReportInput){
    const report=input.snapshot as CommitteeReport;
    text('Members '+report.member_count+' | Collection RM '+money(report.total_amount)+' | Committee payable RM '+money(report.remuneration),margin,y,10,true);
    y-=22;total=Number(report.total_amount);
-   rows=report.entries.map((entry,i)=>[String(i+1),entry.full_name,String(entry.payments.length),money(entry.amount)]);
+   rows=report.entries.map((entry,i)=>[String(i+1),entry.full_name,money(entry.amount)]);
  }else{
    const entries=input.snapshot as PaymentListRow[];
    total=entries.reduce((n,e)=>n+Number(e.amount||0),0);
