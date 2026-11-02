@@ -27,3 +27,23 @@ it.each([
  [{...capabilities,capabilities:['cc']},'incomplete_gateway']
 ])('identifies gateway diagnostic %s',async(body,code)=>{vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify(body))));expect(await billingMailConnection()).toMatchObject({ready:false,code})});
 it('reports HTML authorization pages and timeouts without disclosing upstream response content',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>new Response('<html>Private Google error details</html>')));const html=await billingMailConnection();expect(html).toMatchObject({ready:false,code:'invalid_gateway_response'});expect(JSON.stringify(html)).not.toContain('Private Google');vi.stubGlobal('fetch',vi.fn(async()=>{throw new DOMException('Timed out','TimeoutError')}));expect(await billingMailConnection()).toMatchObject({ready:false,code:'gateway_timeout'})});
+
+it.each(['rental','utility'] as const)('makes one gateway send for the entire monthly %s pack',async kind=>{
+ const keys=['bungalow-l3','umart','laundrette','mmf-cafe','bungalow-l2','norhenany','emma-omar','utm','flextronics','medicassemblage'];
+ const config=configSchema.parse({...defaultBillingConfig,...fixture,utilityAccounts:fixture.utilityAccounts.map((a,i)=>({...a,id:keys[i]}))});
+ const snapshot=makeSnapshot(kind,kind==='rental'?'2026-11':'2026-10','2026-11-02',config,'Admin');
+ expect(snapshot.lines.length).toBeGreaterThan(1);
+ database([{data:{...pack,kind,period:snapshot.period,snapshot}},{data:approval},{data:null},{data:{run_id:key,delivery_key:key,status:'pending'}},{data:{run_id:key}},{data:null}]);
+ const sends:Record<string,unknown>[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(_url:string,options:RequestInit)=>{
+  const request=JSON.parse(options.body as string);
+  if(request.action==='billing-capabilities')return new Response(JSON.stringify(capabilities));
+  sends.push(request);return new Response(JSON.stringify({ok:true,status:'sent',key,sender,to,cc,sentAt:'2026-11-02T05:00:00Z'}));
+ }));
+ expect((await dispatchBillingMail(key)).status).toBe('sent');
+ expect(sends).toHaveLength(1);
+ expect(sends[0]).toMatchObject({action:'billing-send',to,cc,key});
+ for(const line of snapshot.lines){expect(sends[0].text).toContain(line.name);expect(sends[0].invoiceHtml).toContain(line.billNo)}
+ expect(sends[0].text).toContain('GRAND TOTAL:');
+ expect(sends[0].fileName).toBe(`KLGCR-${kind}-${snapshot.period}-approved.html`);
+});
