@@ -20,6 +20,7 @@ async function approve(form:FormData){
  if(saved.error)throw saved.error;
  await deliverGymReport(id);
  revalidatePath('/admin/members/report-approvals');
+ revalidatePath('/admin');
 }
 
 export default async function Page(){
@@ -34,7 +35,7 @@ export default async function Page(){
  <section className="panel"><div className="section-head"><div><h3>{pending} reports awaiting approval</h3><p className="subtle">Approver · James &nbsp; | &nbsp; Accounts · account1@keanlenggroup.com</p></div><div className="actions"><Link className="button secondary" href="/admin/members/payment-list">Payment lists</Link><Link className="button secondary" href="/admin/members/committee-reports">Committee reports</Link></div></div>
  {profile.id!==BILLING_APPROVER_ID&&<p className="subtle">You can review the reports here. James can approve them using his account.</p>}</section>
  {!result.data.length&&<section className="panel"><h3>No reports awaiting review</h3><p className="subtle">Completed monthly reports will appear here.</p></section>}
- {result.data.map(r=><section className="panel" key={r.id}>
+ {result.data.map(r=><section className="panel" key={r.id} id={`report-${r.id}`}>
  <div className="section-head"><div><p className="eyebrow">{new Date(r.month+'T12:00:00Z').toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'Asia/Kuala_Lumpur'})}</p><h3>{r.kind==='committee'?'Sports Committee Report':'Monthly Payment List'}</h3></div><strong style={{color:r.sent_at?'#28704c':'#8b641b'}}>{r.sent_at?'Sent to Accounts':r.approved_at?'Approved · delivery pending':'Awaiting James approval'}</strong></div>
  {r.kind==='committee'?<p><strong>{r.snapshot.member_count} members · {money(r.snapshot.total_amount)}</strong> &nbsp; Committee payable · <strong>{money(r.snapshot.remuneration)}</strong></p>:<p className="subtle">{r.snapshot.length} payment entries</p>}
  <details><summary className="text-link">Review report entries</summary><div className="table-wrap" style={{marginTop:16}}><table className="table">
