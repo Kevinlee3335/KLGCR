@@ -55,3 +55,6 @@ end $$;
 revoke all on function public.require_document_verifications() from public,anon,authenticated;
 create trigger billing_requires_verification before insert on public.billing_run_approvals for each row execute function public.require_document_verifications();
 create trigger gym_requires_verification before insert or update of approved_at on public.gym_monthly_approvals for each row execute function public.require_document_verifications();
+
+alter table public.gym_monthly_approvals add column reviewer_notices jsonb not null default '{}'::jsonb;
+alter table public.gym_monthly_approvals add column reviewer_keys jsonb not null default jsonb_build_object('fikri',gen_random_uuid(),'kevinlee3335',gen_random_uuid(),'james',gen_random_uuid());
