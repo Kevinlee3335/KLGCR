@@ -38,5 +38,15 @@ it('archives each revision, rolls without an invoice, preserves new uploads and 
  await db.exec("set app.role='maintenance_staff'");expect((await db.query('select period from utility_reading_months')).rows).toHaveLength(0);
  await expect(db.exec('select ensure_utility_month()')).rejects.toThrow(/permission denied/);
  await expect(db.exec('select * from utility_reading_revisions')).rejects.toThrow(/permission denied/);
+ await db.exec(`reset role;update billing_preview_settings set revision=4,config=jsonb_set(jsonb_set(jsonb_set(config,'{utilityAccounts,0,meters,0,curr}','30'),'{utilityAccounts,0,meters,0,confirmed}','true'),'{utilityAccounts,0,meters,0,currentDate}','"2026-11-01"')`);
+ await db.exec(definition.replace("to_char(now() at time zone 'Asia/Kuala_Lumpur','YYYY-MM')","'2026-12'"));
+ await db.exec('select ensure_utility_month()');
+ const december=(await db.query<{config:typeof config}>('select config from billing_preview_settings')).rows[0].config;
+ expect(december.utilityPeriod).toBe('2026-12');expect(december.utilityAccounts[0].meters[0]).toMatchObject({prev:30,curr:null,previousPhoto:'replacement',previousDate:'2026-11-01'});
+ await db.exec(definition.replace("to_char(now() at time zone 'Asia/Kuala_Lumpur','YYYY-MM')","'2027-01'"));
+ await db.exec('select ensure_utility_month()');
+ const january=(await db.query<{config:typeof config}>('select config from billing_preview_settings')).rows[0].config;
+ expect(january.utilityPeriod).toBe('2027-01');expect(january.utilityAccounts[0].meters[0].prev).toBeNull();
+ expect((await db.query("select period from utility_reading_months order by period")).rows.map(r=>(r as {period:string}).period)).toEqual(['2026-10','2026-11','2026-12','2027-01']);
  }finally{await db.close()}
 });

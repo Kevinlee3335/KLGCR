@@ -8,22 +8,27 @@ vi.mock("@/lib/auth",()=>({getSessionProfile:mocks.profile}));
 vi.mock("@/lib/supabase/admin",()=>({createAdminClient:mocks.admin}));
 import {GET,POST} from "./route";
 const meter:BillingConfig['utilityAccounts'][number]['meters'][number]={id:"electric",label:"Electric",serial:"E1",unit:"kWh",role:"charge",rate:.6,prev:10,curr:20,confirmed:true};
+let history:Map<number,BillingConfig>;let concurrentWrite:boolean;
 let stored:{config:BillingConfig;revision:number;updated_by?:string};
-beforeEach(()=>{stored={config:{...defaultBillingConfig,utilityAccounts:[{id:"a",seq:1,name:"Account",addr:[],title:"",subsidy:0,cap:null,kind:"invoice",meters:[{...meter}]}]},revision:2};mocks.profile.mockResolvedValue({id:UTILITY_PHOTO_STAFF_ID,username:"faiz",full_name:"Faiz",role:"maintenance_staff",is_active:true});mocks.admin.mockImplementation(()=>{
- return {from:()=>{
+beforeEach(()=>{stored={config:{...defaultBillingConfig,utilityAccounts:[{id:"a",seq:1,name:"Account",addr:[],title:"",subsidy:0,cap:null,kind:"invoice",meters:[{...meter}]}]},revision:2};history=new Map([[2,structuredClone(stored.config)]]);concurrentWrite=false;mocks.profile.mockResolvedValue({id:UTILITY_PHOTO_STAFF_ID,username:"faiz",full_name:"Faiz",role:"maintenance_staff",is_active:true});mocks.admin.mockImplementation(()=>{
+ return {from:(table:string)=>{
   let patch:Partial<typeof stored>={};let expected:number|undefined;
   const chain={
    select:()=>chain,
    eq:(key:string,value:unknown)=>{if(key==="revision")expected=value as number;return chain},
-   single:async()=>({data:structuredClone(stored),error:null}),
+   single:async()=>table==="utility_reading_revisions"?{data:history.has(expected!)?{config:structuredClone(history.get(expected!))}:null,error:history.has(expected!)?null:{code:"PGRST116"}}:{data:structuredClone(stored),error:null},
    update:(value:Partial<typeof stored>)=>{patch=value;return chain},
-   maybeSingle:async()=>{if(expected!==stored.revision)return {data:null,error:null};stored={...stored,...patch};return {data:{revision:stored.revision},error:null}}
+   maybeSingle:async()=>{if(concurrentWrite){concurrentWrite=false;stored.config.utilityAccounts[0].title="Concurrent admin title";stored.revision++;history.set(stored.revision,structuredClone(stored.config));return {data:null,error:null}}if(expected!==stored.revision)return {data:null,error:null};stored={...stored,...patch};history.set(stored.revision,structuredClone(stored.config));return {data:{revision:stored.revision},error:null}}
   };
   return chain;
  }};
 });});
 function post(patch={}){return new NextRequest("https://example.com/api/utility-photos",{method:"POST",headers:{origin:"https://example.com","content-type":"application/json"},body:JSON.stringify({period:stored.config.utilityPeriod,revision:stored.revision,accountId:"a",meterId:"electric",photo:"data:image/jpeg;base64,YQ==",...patch})})}
 describe("Utilities photo API",()=>{
+ it("merges an old-revision upload while preserving unrelated Admin changes",async()=>{stored.config.utilityAccounts[0].name="Admin changed account name";stored.revision=3;const response=await POST(post({revision:2}));expect(response.status).toBe(200);expect(stored.config.utilityAccounts[0].name).toBe("Admin changed account name");expect(stored.config.utilityAccounts[0].meters[0].photo).toBe("data:image/jpeg;base64,YQ==");expect(stored.revision).toBe(4)});
+ it("rejects stale uploads when Admin changed the target meter reading",async()=>{stored.config.utilityAccounts[0].meters[0].curr=25;stored.revision=3;expect((await POST(post({revision:2}))).status).toBe(409);expect(stored.config.utilityAccounts[0].meters[0].curr).toBe(25);expect(stored.revision).toBe(3)});
+ it("retries a compare-and-swap race while preserving the concurrent edit",async()=>{concurrentWrite=true;expect((await POST(post())).status).toBe(200);expect(stored.config.utilityAccounts[0].title).toBe("Concurrent admin title");expect(stored.revision).toBe(4)});
+ it("rejects a stale upload from a previous billing month",async()=>{stored.config.utilityPeriod="2026-11";stored.revision=3;expect((await POST(post({period:"2026-10",revision:2}))).status).toBe(409);expect(stored.revision).toBe(3)});
  it("persists photos and returns them when reopening, without rental or rates",async()=>{expect((await POST(post())).status).toBe(200);const list=await (await GET(new NextRequest("https://example.com/api/utility-photos"))).json();expect(list.accounts[0].meters[0]).not.toHaveProperty("photo");const result=await (await GET(new NextRequest("https://example.com/api/utility-photos?account=a"))).json();expect(result.accounts[0].meters[0].photo).toBe("data:image/jpeg;base64,YQ==");expect(result.accounts[0].meters[0].curr).toBeNull();expect(result).not.toHaveProperty("config");expect(result.accounts[0].meters[0]).not.toHaveProperty("rate");expect(stored.updated_by).toBe(UTILITY_PHOTO_STAFF_ID)});
  it("denies other staff, inactive accounts and anonymous requests",async()=>{for(const p of [null,{id:"other",role:"maintenance_staff",is_active:true},{id:UTILITY_PHOTO_STAFF_ID,role:"maintenance_staff",is_active:false}]){mocks.profile.mockResolvedValue(p);expect((await GET(new NextRequest("https://example.com/api/utility-photos"))).status).toBe(403);expect((await POST(post())).status).toBe(403)}});
  it("rejects stale revisions, extra settings and invalid origins",async()=>{expect((await POST(post({revision:1}))).status).toBe(409);expect((await POST(post({config:{rent:0}}))).status).toBe(400);const req=post();req.headers.set("origin","https://other.com");expect((await POST(req)).status).toBe(403);expect(stored.revision).toBe(2)});
