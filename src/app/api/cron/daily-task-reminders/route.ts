@@ -1,3 +1,4 @@
+import {ensureDueRentalInvoice} from '@/lib/rental-automation';
 import {dispatchPendingPurchases} from '@/lib/purchase-orders/dispatch';
 import {dispatchPoNotifications} from '@/lib/purchase-orders/notifications';
 import { GET as sendMeetingReminders } from "../meeting-reminders/route";
@@ -13,6 +14,8 @@ function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kua
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let rentalOk=true;
+  try{await ensureDueRentalInvoice();}catch(error){rentalOk=false;console.error('Automatic rental generation deferred',error);}
   await dispatchPoNotifications().catch(error=>console.error('PO notification retry deferred',error));
   await dispatchPendingPurchases(request.nextUrl.origin).catch(error=>console.error('PO mail retry deferred',error));
   const db = createAdminClient();
@@ -36,5 +39,5 @@ export async function GET(request: NextRequest) {
   let meetingsOk = false;
   try { meetingsOk = (await sendMeetingReminders(request)).ok; }
   catch (error) { console.error("Unable to send meeting reminders", error); }
-  return NextResponse.json({ ok: true, date, sent, meetingsOk });
+  return NextResponse.json({ ok: rentalOk, date, sent, meetingsOk, rentalOk },{status:rentalOk?200:503});
 }
