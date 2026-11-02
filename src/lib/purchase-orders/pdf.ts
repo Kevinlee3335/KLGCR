@@ -1,3 +1,4 @@
+import {companySealDataUrl} from '../company-seal';
 import { PDFDocument, StandardFonts, rgb, setCharacterSpacing, setWordSpacing, setCharacterSqueeze } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -61,6 +62,10 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
   text(`Time: ${order.approved_at?time(order.approved_at)+' MYT':''}`,375,768,11);
   for(const [x,signature] of [[50.5,order.requested_signature],[375,order.approved_signature]] as const){
     line(x,714,x+165,714);
+    if(x===375 && order.approved_at && signature){
+      const seal=await pdf.embedPng(companySealDataUrl);
+      page.drawImage(seal,{x:541,y:841.9-709,width:44,height:44});
+    }
     if(signature?.imageDataUrl){const picture=await pdf.embedPng(signature.imageDataUrl);page.drawImage(picture,{x,y:841.9-709,width:165,height:49.5});}
     if(signature)for(const stroke of signature.strokes){const points=smoothSignatureStroke(stroke);for(let i=1;i<points.length;i++)line(x+points[i-1][0]*165,661+points[i-1][1]*48,x+points[i][0]*165,661+points[i][1]*48);}
   }
