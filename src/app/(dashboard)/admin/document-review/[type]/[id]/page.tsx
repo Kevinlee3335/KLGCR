@@ -1,3 +1,4 @@
+import {notifyDocumentReviewer} from '@/lib/document-review-notifications';
 import {signaturePhotoBounds} from '@/lib/signature-image-layout';
 import Link from 'next/link';
 import {redirect} from 'next/navigation';
@@ -48,6 +49,7 @@ async function advance(form:FormData){
    if(saved.error)throw Error(saved.error.message);
    await deliverGymReport(id);
  }
+ if(entries.length<2)await notifyDocumentReviewer(type as 'billing'|'gym',id).catch(error=>console.error('Reviewer notification pending retry',error));
  revalidatePath('/admin');revalidatePath('/admin/members/report-approvals');revalidatePath('/admin/document-review/'+type+'/'+id);
  redirect('/admin/document-review/'+type+'/'+id);
 }

@@ -1,3 +1,4 @@
+import {notifyDocumentReviewer} from './document-review-notifications';
 import {createAdminClient} from './supabase/admin';
 import {configSchema,makeSnapshot,malaysiaClock,scheduleDecision,type BillingConfig} from './billing-preview';
 import {companyHolidays} from './company-holidays';
@@ -27,5 +28,6 @@ export async function ensureDueRentalInvoice(clock=malaysiaClock()){
  const saved=await db.from('billing_preview_runs').insert({kind:'rental',period:decision.period,issue_date:decision.due,total:snapshot.total,snapshot,created_by:owner.data.id}).select('id').single();
  if(saved.error?.code==='23505')return {status:'exists'};
  if(saved.error)throw Error('Unable to save automatic rental invoices');
+ await notifyDocumentReviewer('billing',saved.data.id).catch(error=>console.error('Reviewer notification pending retry',error));
  return {status:'created',id:saved.data.id};
 }
