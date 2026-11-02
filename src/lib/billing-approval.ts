@@ -1,7 +1,8 @@
+import type {Verification} from './document-review';
 import type {BillingSnapshot} from './billing-preview';
 import {signatureSchema,type Signature} from './purchase-orders/signature';
 export const BILLING_APPROVER_ID='eeab5f04-30c3-42bd-a095-58e56c814358';
-export type BillingApproval={run_id:string;approved_by_user:string;approved_by:string;approved_at:string;signature:Signature};
+export type BillingApproval={run_id:string;approved_by_user:string;approved_by:string;approved_at:string;signature:Signature;verifications?:Verification[]};
 // The signature comes only from the approval record, never from a submitted invoice snapshot.
 export function withBillingApproval(snapshot:BillingSnapshot,approval?:BillingApproval|null):BillingSnapshot{
  const unsigned={...snapshot};delete unsigned.approval;
