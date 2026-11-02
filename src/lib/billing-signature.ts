@@ -6,6 +6,18 @@ const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;
 export function billingSignatureSvg(snapshot:BillingSnapshot,box?:{x:number;y:number;width:number;height:number}){
  const approval=snapshot.approval,parsed=signatureSchema.safeParse(approval?.signature);
  if(approval?.approved_by_user!==BILLING_APPROVER_ID||!Number.isFinite(Date.parse(approval.approved_at))||!parsed.success)return '';
+ if(approval.verifications?.length===2){
+   const slots=[...approval.verifications.map(v=>({name:'Verified by '+v.name,date:v.verified_at,signature:v.signature})),{name:'Approved by James',date:approval.approved_at,signature:parsed.data}];
+   const blocks=slots.map((slot,i)=>{
+     const valid=signatureSchema.safeParse(slot.signature);
+     if(!valid.success)return '';
+     const sig=valid.data,x=i*600;
+     const ink=sig.imageDataUrl?`<image href="${esc(sig.imageDataUrl)}" x="${x}" y="55" width="420" height="140" preserveAspectRatio="xMidYMid meet"/>`:sig.strokes.map(stroke=>`<polyline points="${stroke.map(([px,py])=>`${x+px*420},${55+py*140}`).join(' ')}" fill="none" stroke="black" stroke-width="2.4"/>`).join('');
+     return `<text x="${x}" y="30" font-family="Arial" font-size="26">${esc(slot.name)}</text>${ink}<text x="${x}" y="235" font-family="Arial" font-size="22">${esc(new Date(slot.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kuala_Lumpur'}))}</text>${i===2?`<image href="${companySealDataUrl}" x="${x+430}" y="55" width="135" height="135"/>`:''}`;
+   }).join('');
+   const position=box?`x="${Math.max(25,box.x-330)}" y="${box.y}" width="${box.width+330}" height="${Math.max(60,box.height)}"`:'style="display:block;width:100%;height:100%"';
+   return `<svg xmlns="http://www.w3.org/2000/svg" ${position} viewBox="0 0 1800 250" role="img" aria-label="Fikri and Kevin verification, James approval">${blocks}</svg>`;
+ }
  const sig=parsed.data,content=sig.imageDataUrl?`<image href="${esc(sig.imageDataUrl)}" x="0" y="0" width="600" height="180" preserveAspectRatio="xMidYMid meet"/>`:sig.strokes.map(s=>`<polyline points="${s.map(([x,y])=>`${x*600},${y*180}`).join(' ')}" fill="none" stroke="#17212c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
  const position=box?`x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"`:'style="display:block;width:100%;height:100%"';
  return `<svg xmlns="http://www.w3.org/2000/svg" ${position} viewBox="0 0 790 180" preserveAspectRatio="xMidYMid meet" role="img" aria-label="James approval signature">${content}<image href="${companySealDataUrl}" x="610" width="175" height="175"/></svg>`;
