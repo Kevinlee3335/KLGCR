@@ -1,7 +1,7 @@
 import {documentVerification,documentReviewers,type Verification} from './document-review';
 import { PDFDocument } from 'pdf-lib';
 import { createAdminClient } from './supabase/admin';
-import { financialPdf } from './official-receipt';
+import { financialPdf, financePaperSizes } from './official-receipt';
 import { gmailGateway } from './billing-mail';
 import { BILLING_MAIL_FROM, BILLING_MAIL_TO } from './billing-mail-settings';
 import { BILLING_APPROVER_ID } from './billing-approval';
@@ -36,19 +36,19 @@ export async function deliverGymReport(id:string) {
  if(approved){
    if(r.approver!==BILLING_APPROVER_ID)throw Error('James approval required');
    const doc=await PDFDocument.load(pdf);
-   const page=doc.addPage([842,595]);
-   page.drawText(title,{x:42,y:524,size:18});
+   const page=doc.addPage(financePaperSizes.a4);
+   page.drawText(title,{x:36,y:770,size:17});
    const slots=[...verifications.map(v=>({name:'Verified by '+v.name,date:v.verified_at,signature:v.signature})),{name:'Approved by James',date:r.approved_at,signature:r.signature}];
    for(const [i,slot] of slots.entries()){
-     const x=42+i*255,sig=signatureSchema.parse(slot.signature);
-     page.drawText(slot.name,{x,y:460,size:12});
-     page.drawText(new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',{x,y:438,size:9});
-     if(sig.imageDataUrl){const ink=await doc.embedPng(sig.imageDataUrl);page.drawImage(ink,{x,y:352,...ink.scaleToFit(150,65)});}
+     const x=36+i*177,sig=signatureSchema.parse(slot.signature);
+     page.drawText(slot.name,{x,y:696,size:10});
+     page.drawText(new Date(slot.date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT',{x,y:675,size:8});
+     if(sig.imageDataUrl){const ink=await doc.embedPng(sig.imageDataUrl);page.drawImage(ink,{x,y:600,...ink.scaleToFit(110,55)});}
      else for(const stroke of sig.strokes)for(let n=1;n<stroke.length;n++){
-       const pt=(p:number[])=>({x:x+p[0]*150,y:417-p[1]*65});
+       const pt=(p:number[])=>({x:x+p[0]*110,y:655-p[1]*55});
        page.drawLine({start:pt(stroke[n-1]),end:pt(stroke[n]),thickness:1.2});
      }
-     if(i===slots.length-1)page.drawImage(await doc.embedPng(companySealDataUrl),{x:x+158,y:352,width:60,height:60});
+     if(i===slots.length-1)page.drawImage(await doc.embedPng(companySealDataUrl),{x:x+116,y:600,width:46,height:46});
    }
    pdf=Buffer.from(await doc.save());to=BILLING_MAIL_TO;key='membership_'+r.id;
    body='Dear Joey,\n\nAttached is the '+title+' approved by James.\n\nKLG Campus Residence';
