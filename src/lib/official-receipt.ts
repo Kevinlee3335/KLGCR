@@ -10,15 +10,20 @@ export function amountWords(value:number):string{
  const cents=Math.round(value*100);return whole(Math.floor(cents/100))+' Ringgit'+(cents%100?' and '+whole(cents%100)+' Sen':'')+' Only';
 }
 export const receiptNote='Note: If payment is by bank transfer, this receipt shall only be valid upon clearance of the bank transfer.';
+export const financePaperSizes = {
+ a4: [595.2755906, 841.8897638] as [number, number],
+ a5Landscape: [595.2755906, 419.5275591] as [number, number],
+};
 export async function financialPdf(input:{receipt?:OfficialReceipt;title?:string;lines?:string[]}){
  const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);const [regularBytes,boldBytes]=await Promise.all([readFile(join(process.cwd(),'src/lib/finance-fonts/regular.ttf')),readFile(join(process.cwd(),'src/lib/finance-fonts/bold.ttf'))]);const font=await pdf.embedFont(regularBytes,{subset:true}),bold=await pdf.embedFont(boldBytes,{subset:true}),navy=rgb(.04,.10,.24);
- let page=pdf.addPage([842,595]),y=555;
+ let page=pdf.addPage(input.receipt?[842,595]:financePaperSizes.a4),y=input.receipt?555:802;
  const clean=(s:string)=>s.replace(/[^\x20-\x7E\u00A0-\u00FF]/g,'-');
  function text(s:string,x:number,at:number,size=12,strong=false){page.drawText(clean(s),{x,y:at,size,font:strong?bold:font,color:navy})}
  function wrap(s:string,width:number,size=13){const out:string[]=[];let line='';for(const word of clean(s).split(/\s+/)){const candidate=line?line+' '+word:word;if(font.widthOfTextAtSize(candidate,size)>width&&line){out.push(line);line=word}else line=candidate;}if(line)out.push(line);return out;}
  // Original letterhead extracted from the supplied company letter. Preserve pixels and aspect ratio.
- const letterhead=await pdf.embedPng(await readFile(join(process.cwd(),'public/billing/receipt-letterhead.png')));page.drawImage(letterhead,{x:71,y:448,width:700,height:700*letterhead.height/letterhead.width});
- y=421;text(input.receipt?'OFFICIAL RECEIPT':input.title||'STATEMENT OF ACCOUNT',42,y,22,true);y-=38;
+ const letterhead=await pdf.embedPng(await readFile(join(process.cwd(),'public/billing/receipt-letterhead.png')));const headerWidth=input.receipt?700:511;
+ page.drawImage(letterhead,{x:input.receipt?71:42,y:input.receipt?448:695,width:headerWidth,height:headerWidth*letterhead.height/letterhead.width});
+ y=input.receipt?421:660;text(input.receipt?'OFFICIAL RECEIPT':input.title||'STATEMENT OF ACCOUNT',42,y,22,true);y-=38;
  if(input.receipt){const r=input.receipt;text('No: '+r.receipt_no,580,425,14,true);text('Date: '+r.paid_on.split('-').reverse().join('/'),580,402,13);
  for(const [label,value] of [['Received From',r.payer],['The Sum of RM',amountWords(Number(r.amount))+' (RM '+Number(r.amount).toFixed(2)+')'],['Being Payment Of',r.description]]){text(label+' :',42,y,14,true);const rows=wrap(value,570);for(const row of rows){if(y<160){page=pdf.addPage([842,595]);y=545;}text(row,210,y,13);y-=19;}page.drawLine({start:{x:210,y:y+10},end:{x:800,y:y+10},thickness:.5,color:navy});y-=24;}
  if(y<155){page=pdf.addPage([842,595]);}
@@ -40,6 +45,16 @@ export async function financialPdf(input:{receipt?:OfficialReceipt;title?:string
    page.drawImage(seal,{x:739,y:97,width:54,height:54});
  }
  page.drawLine({start:{x:570,y:94},end:{x:800,y:94},thickness:.7,color:navy});text('Authorised Signature',620,74,12,true);text(receiptNote,42,34,10);
- }else{for(const raw of input.lines||[]){for(const line of wrap(raw,750,12)){if(y<55){page=pdf.addPage([842,595]);y=550;}text(line,42,y,12);y-=19;}y-=7;}}
+ }else{for(const raw of input.lines||[]){for(const line of wrap(raw,511,12)){if(y<55){page=pdf.addPage(financePaperSizes.a4);y=802;}text(line,42,y,12);y-=19;}y-=7;}}
+ if(input.receipt){
+   const receiptPdf=await PDFDocument.create();
+   for(const source of pdf.getPages()){
+     const embedded=await receiptPdf.embedPage(source);
+     const target=receiptPdf.addPage(financePaperSizes.a5Landscape);
+     const scale=Math.min(target.getWidth()/source.getWidth(),target.getHeight()/source.getHeight());
+     target.drawPage(embedded,{x:(target.getWidth()-source.getWidth()*scale)/2,y:(target.getHeight()-source.getHeight()*scale)/2,width:source.getWidth()*scale,height:source.getHeight()*scale});
+   }
+   return Buffer.from(await receiptPdf.save());
+ }
  return Buffer.from(await pdf.save());
 }
