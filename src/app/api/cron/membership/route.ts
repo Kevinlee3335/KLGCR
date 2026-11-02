@@ -1,3 +1,4 @@
+import {deliverDueGymReports} from '@/lib/gym-report-delivery';
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { membershipEnabled, reminderDates } from "@/lib/membership";
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
    }
   }
   const sent = await deliverMembershipEmails();
+  await deliverDueGymReports();
   if(reportError) return NextResponse.json({error:"Committee report generation pending retry.",sent},{status:500});
   return NextResponse.json({ok:true,sent,reports,date:dates.day});
  } catch (error) { console.error("Membership cron failed",error); return NextResponse.json({error:"Membership reminders could not be completed."},{status:500}); }
