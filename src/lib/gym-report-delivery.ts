@@ -15,7 +15,7 @@ export async function deliverGymReport(id:string) {
  const reviewer=documentReviewers[verifications.length];
  if(!approved && r.reviewer_notices?.[reviewer.username])return;
  const title=(r.kind==='committee'?'Sports Committee Report':'Monthly Payment List')+' - '+r.month.slice(0,7);
- const pdf=await gymReportPdf(r);
+ const pdf=await gymReportPdf({...r,verifications});
  let to:string,key:string,body:string;
  if(approved){
    if(r.approver!==BILLING_APPROVER_ID)throw Error('James approval required');
