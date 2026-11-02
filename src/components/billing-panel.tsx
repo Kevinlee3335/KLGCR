@@ -43,7 +43,7 @@ async function readPhoto(next:State,id:string,side:"current"|"previous"="current
 const meter=next.config.utilityAccounts.flatMap(a=>a.meters).find(m=>m.id===id);
 const image=side==='previous'?meter?.previousPhoto:meter?.photo;if(!image||!meter)throw Error('Take or upload a photo first');
 setMessage('Photo saved in the app. Reading the meter…');
-const res=await fetch('/api/billing-preview/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({photo:image,unit:meter.unit,serial:meter.serial,readingDigits:meter.readingDigits??null})});
+const res=await fetch('/api/billing-preview/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({photo:image,unit:meter.unit,serial:meter.serial,meterId:meter.id,readingDigits:meter.readingDigits??null})});
 const j=await res.json();
 if(!res.ok)throw Error(`Photo is saved. ${j.error||'AI reading failed; enter the reading manually.'}`);
 const updated={...next.config,utilityAccounts:next.config.utilityAccounts.map(a=>({...a,meters:a.meters.map(m=>m.id===id?{...m,[side==="previous"?"prev":"curr"]:j.reading,confirmed:false}:m)}))};
