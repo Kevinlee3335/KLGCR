@@ -1,3 +1,4 @@
+import {billingMailSummary} from './billing-mail-summary';
 import {renderEmailBody} from './email-layout';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -53,10 +54,9 @@ export async function dispatchBillingMail(runId:string){
  try{
   const logo=await readFile(join(process.cwd(),'public/billing/logo.jpg'));
   const invoiceHtml=buildBillingPrintHtml(snapshot,'data:image/jpeg;base64,'+logo.toString('base64')).replace('Test preview · No automatic printer submission','Approved invoice pack · James E-signature');
-  const title=`James-approved ${pack.data.kind==='rental'?'Rental':'Utilities'} invoices - ${pack.data.period}`;
-  const text=`${title}\n\nApproved by: ${snapshot.approval.approved_by}\nApproved on: ${new Date(snapshot.approval.approved_at).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})} MYT\n\n${snapshot.lines.map(l=>`${l.billNo} | ${l.name} | RM ${l.amount.toFixed(2)}`).join('\n')}\n\nTotal: RM ${snapshot.total.toFixed(2)}\n\nThe attached HTML contains the original approved invoices with James's E-signature. Open it in a browser to view or Print / Save as PDF.\n\nKLG Campus Residence Management`;
+  const {subject,text}=billingMailSummary(snapshot);
   started=true;
-  const result=await gmailGateway({action:'billing-send',key:event.delivery_key,from:BILLING_MAIL_FROM,to:BILLING_MAIL_TO,cc:[...BILLING_MAIL_CC],subject:title,text,invoiceHtml,fileName:`KLGCR-${pack.data.kind}-${pack.data.period}-approved.html`},20000);
+  const result=await gmailGateway({action:'billing-send',key:event.delivery_key,from:BILLING_MAIL_FROM,to:BILLING_MAIL_TO,cc:[...BILLING_MAIL_CC],subject,text,invoiceHtml,fileName:`KLGCR-${pack.data.kind}-${pack.data.period}-approved.html`},20000);
   if(result.ok===true&&result.status==='sent'&&result.key===event.delivery_key&&result.sender===BILLING_MAIL_FROM&&result.to===BILLING_MAIL_TO&&JSON.stringify(result.cc)===JSON.stringify([...BILLING_MAIL_CC])&&Number.isFinite(Date.parse(result.sentAt))){status='sent';sentAt=result.sentAt;}
   else{status=result.status==='rejected'?'failed':'uncertain';error=result.status==='rejected'?'Gateway rejected the message; check the mail connection.':'Delivery needs review. Retry checks the same delivery key and does not send another copy.';}
  }catch{status=started?'uncertain':'failed';error=started?'Gateway response was interrupted. Retry checks the same delivery key.':'Unable to prepare the signed invoice email.';}
