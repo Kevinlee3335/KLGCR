@@ -1,3 +1,4 @@
+import {signaturePhotoBounds} from '@/lib/signature-image-layout';
 import Link from 'next/link';
 import {redirect} from 'next/navigation';
 import {revalidatePath} from 'next/cache';
@@ -17,7 +18,10 @@ function valid(type:string,id:string){
 }
 function SignatureImage({signature}:{signature?:Signature|null}){
  if(!signature)return <span className="subtle">Pending</span>;
- if(signature.imageDataUrl)return <img src={signature.imageDataUrl} alt="Personal signature" style={{width:150,height:55,objectFit:'contain'}}/>;
+ if(signature.imageDataUrl){
+ const b=signaturePhotoBounds(signature.imageDataUrl);
+ return <svg viewBox={b.left+' '+b.top+' '+b.width+' '+b.height} role="img" aria-label="Personal signature" style={{width:150,height:55}}><image href={signature.imageDataUrl} width={b.imageWidth} height={b.imageHeight}/></svg>;
+}
  return <svg viewBox="0 0 600 180" role="img" aria-label="Personal signature" style={{width:150,height:55}}>{signature.strokes.map((s,i)=><polyline key={i} points={s.map(([x,y])=>x*600+','+y*180).join(' ')} fill="none" stroke="black" strokeWidth="2.4"/>)}</svg>;
 }
 async function advance(form:FormData){
@@ -67,7 +71,7 @@ export default async function Page({params}:{params:Promise<{type:string;id:stri
  const next=documentReviewers[entries.length];
  return <AppShell profile={user} title="Document review"><div className="section-head"><div><p className="eyebrow">{period} · DOCUMENT REVIEW</p><h2>{title}</h2><p className="subtle">Fikri Verify → Kevin Verify → James Approve</p></div><Link className="button secondary" href="/admin">Back to Dashboard</Link></div>
  <section className="panel"><h3>{approved?'Approved by James':'Awaiting '+next.name+(entries.length===2?' approval':' verification')}</h3>
- <div className="table-wrap"><table className="table"><thead><tr><th>Verified by Fikri</th><th>Verified by Kevin</th><th>Approved by James</th></tr></thead><tbody><tr>{[0,1,2].map(i=><td key={i}><SignatureImage signature={i<2?entries[i]?.signature:approved?.signature}/>{i===2&&approved&&<img src={companySealDataUrl} alt="Company seal" style={{width:55,height:55,objectFit:'contain'}}/>}<p className="subtle">{(i<2?entries[i]?.verified_at:approved?.approved_at)?new Date(i<2?entries[i].verified_at:approved.approved_at).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Pending'}</p></td>)}</tr></tbody></table></div>
+ <div className="table-wrap"><table className="table"><thead><tr><th>Verified by Fikri</th><th>Verified by Kevin</th><th>Approved by James</th></tr></thead><tbody><tr>{[0,1,2].map(i=><td key={i}><SignatureImage signature={i<2?entries[i]?.signature:approved?.signature}/>{i===2&&approved&&<img src={companySealDataUrl} alt="Company seal" style={{width:55,height:55,objectFit:'contain'}}/>}<div style={{borderTop:"1px solid #555",marginTop:8,maxWidth:210}}/><p className="subtle">{(i<2?entries[i]?.verified_at:approved?.approved_at)?new Date(i<2?entries[i].verified_at:approved.approved_at).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Pending'}</p></td>)}</tr></tbody></table></div>
  {!approved&&next.id===user.id&&<form action={advance}><input type="hidden" name="type" value={type}/><input type="hidden" name="id" value={id}/><SubmitButton pendingText={entries.length===2?'Approving…':'Verifying…'}>{entries.length===2?'Approve & send to Accounts':'Verify & forward to '+documentReviewers[entries.length+1].name}</SubmitButton></form>}
  </section>
  <section className="panel"><h3>Report entries</h3><div className="table-wrap"><table className="table">
