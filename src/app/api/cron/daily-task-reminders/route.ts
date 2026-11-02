@@ -1,3 +1,4 @@
+import {dispatchDocumentReviewPushes} from '@/lib/document-review-notifications';
 import {ensureDueRentalInvoice} from '@/lib/rental-automation';
 import {dispatchPendingPurchases} from '@/lib/purchase-orders/dispatch';
 import {dispatchPoNotifications} from '@/lib/purchase-orders/notifications';
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   let rentalOk=true;
   try{await ensureDueRentalInvoice();}catch(error){rentalOk=false;console.error('Automatic rental generation deferred',error);}
+  await dispatchDocumentReviewPushes().catch(error=>console.error('Document phone notification pending retry',error));
   await dispatchPoNotifications().catch(error=>console.error('PO notification retry deferred',error));
   await dispatchPendingPurchases(request.nextUrl.origin).catch(error=>console.error('PO mail retry deferred',error));
   const db = createAdminClient();

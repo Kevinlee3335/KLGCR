@@ -1,3 +1,4 @@
+import {dispatchDocumentReviewPushes} from './document-review-notifications';
 import {ensureDueRentalInvoice} from './rental-automation';
 import {createAdminClient} from './supabase/admin';
 import type {Signature} from './purchase-orders/signature';
@@ -16,6 +17,7 @@ export async function documentVerification(type:string,id:string):Promise<Verifi
 export async function pendingDocumentReviews(userId:string):Promise<ReviewDocument[]>{
  if(!documentReviewers.some(r=>r.id===userId))return [];
  await ensureDueRentalInvoice().catch(error=>console.error('Automatic rental generation pending retry',error));
+ await dispatchDocumentReviewPushes().catch(error=>console.error('Document phone notification pending retry',error));
  const db=createAdminClient();
  const [gym,bills,audit]=await Promise.all([
  db.from('gym_monthly_approvals').select('id,month,kind,snapshot').is('approved_at',null).order('month').order('id'),

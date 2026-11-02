@@ -1,3 +1,4 @@
+import {dispatchDocumentReviewPushes} from '@/lib/document-review-notifications';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,5 +24,6 @@ export async function POST(request: NextRequest) {
   const db = createAdminClient();
   const { error } = await db.from("push_subscriptions").upsert({ user_id: user.id, endpoint, p256dh, auth, user_agent: request.headers.get("user-agent"), updated_at: new Date().toISOString() }, { onConflict: "endpoint" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await dispatchDocumentReviewPushes(undefined,user.id).catch(error=>console.error("Document phone notification pending retry",error));
   return NextResponse.json({ ok: true });
 }
