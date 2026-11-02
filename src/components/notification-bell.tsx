@@ -105,6 +105,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)].slice(0, 30));
         if ("Notification" in window && Notification.permission === "granted") {
           void navigator.serviceWorker.ready.then((registration) => registration.showNotification(item.title, {
+            tag: item.href.startsWith("/admin/document-review/") ? "document-review-" + item.id : undefined,
             body: item.body, icon: "/klg-campus-residence-logo.png", badge: "/klg-campus-residence-logo.png", data: { href: item.href },
           }));
         }
