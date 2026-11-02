@@ -1,6 +1,7 @@
 import type {UtilityAccount} from './billing-preview';
 type Meter=UtilityAccount['meters'][number];
 export function applyNewMeterPhoto(m:Meter,photo:string,date:string):Meter {
- const carry=m.confirmed&&m.curr!==null;
- return {...m,...(carry?{prev:m.curr,previousPhoto:m.photo,previousDate:m.currentDate}:{}),photo,currentDate:date,curr:null,confirmed:false};
+ // Monthly carry-forward is atomic on the server. A retake only replaces
+ // the current image and must never shift the previous month's evidence.
+ return {...m,photo,currentDate:date,curr:null,confirmed:false};
 }

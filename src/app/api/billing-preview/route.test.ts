@@ -1,3 +1,4 @@
+vi.mock("@/lib/utility-months",()=>({ensureUtilityMonth:vi.fn().mockResolvedValue(undefined)}));
 import { beforeEach,describe,it,expect,vi } from "vitest";
 import { NextRequest } from "next/server";
 const mocks=vi.hoisted(()=>({profile:null as null|{id:string;role:string;full_name:string},db:vi.fn()}));
