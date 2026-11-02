@@ -1,4 +1,4 @@
-vi.mock("@/lib/document-review-notifications",()=>({notifyDocumentReviewer:vi.fn()}));
+vi.mock("@/lib/document-review-notifications",()=>({dispatchDocumentReviewPushes:vi.fn().mockResolvedValue(undefined)}));
 vi.mock("@/lib/utility-months",()=>({ensureUtilityMonth:vi.fn().mockResolvedValue(undefined)}));
 import { beforeEach,describe,it,expect,vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -24,7 +24,7 @@ describe('deferred meter photos',()=>{
 
 describe('confirmed utilities submission',()=>{
  it('uses the live Malaysia date and notifies Fikri only after the pack is saved',async()=>{
-  const {notifyDocumentReviewer}=await import('@/lib/document-review-notifications');
+  const {dispatchDocumentReviewPushes}=await import('@/lib/document-review-notifications');
   const {configSchema,defaultBillingConfig,malaysiaClock}=await import('@/lib/billing-preview');
   const config=configSchema.parse({...defaultBillingConfig,...(await import('@/lib/billing-preview-fixture.json')).default});
   config.utilityAccounts.forEach(a=>a.meters.forEach(m=>{m.confirmed=true}));
@@ -33,8 +33,8 @@ describe('confirmed utilities submission',()=>{
   mocks.db.mockResolvedValue({from:(table:string)=>({select(){return this},eq(){return this},insert(value:Record<string,unknown>){inserted=value;return this},single:async()=>({data:table==='billing_preview_settings'?{config}:{id:'saved-pack'},error:null})})});
   const response=await POST(new NextRequest('https://example.test/api/billing-preview',{method:'POST',headers:{origin:'https://example.test'},body:JSON.stringify({action:'submit',kind:'utility',period:config.utilityPeriod})}));
   expect(response.status).toBe(200);expect(inserted?.issue_date).toBe(malaysiaClock().date);
-  expect(await response.json()).toMatchObject({id:'saved-pack',reviewStatus:'Pending Fikri Verification',notificationPending:false});
-  expect(notifyDocumentReviewer).toHaveBeenCalledWith('billing','saved-pack');
+  expect(await response.json()).toMatchObject({id:'saved-pack',reviewStatus:'Pending Fikri Verification'});
+  expect(dispatchDocumentReviewPushes).toHaveBeenCalledWith('saved-pack');
  });
  it('rejects unconfirmed meters before creating any invoice pack',async()=>{
   const {configSchema,defaultBillingConfig}=await import('@/lib/billing-preview');

@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushNotifications } from "@/lib/push";
 
 export type AppNotificationType =
-  | "document_review_requested"
   | "complaint_created"
   | "job_assigned"
   | "tenant_not_available"

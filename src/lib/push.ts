@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type PushPayload = { recipientIds: string[]; title: string; body: string; href: string; expiresAt?: string; strict?: boolean };
+type PushPayload = { recipientIds: string[]; title: string; body: string; href: string; expiresAt?: string; strict?: boolean; requireSubscription?: boolean; tag?: string };
 
 function configured() {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -14,21 +14,25 @@ function configured() {
 export function vapidPublicKey() { return configured(); }
 
 export async function sendPushNotifications(payload: PushPayload) {
-  if (!configured() || !payload.recipientIds.length) return;
+  if (!payload.recipientIds.length) return;
+  if (!configured()) {if(payload.requireSubscription)throw new Error('Push is not configured');return;}
   const ttl = payload.expiresAt ? Math.floor((Date.parse(payload.expiresAt) - Date.now()) / 1000) : 86400;
   if (ttl <= 0) return;
   const db = createAdminClient();
   const { data: subscriptions, error } = await db.from("push_subscriptions")
     .select("id,endpoint,p256dh,auth").in("user_id", [...new Set(payload.recipientIds)]);
   if(error&&payload.strict)throw new Error(error.message);
-  if (error || !subscriptions?.length) return;
+  if (error || !subscriptions?.length) {if(payload.requireSubscription)throw new Error('No registered push device');return;}
+  let delivered=0;
   await Promise.all(subscriptions.map(async (subscription) => {
     try {
-      await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: payload.title, body: payload.body, href: payload.href, expiresAt: payload.expiresAt }), { TTL: Math.min(ttl, 86400) });
+      await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: payload.title, body: payload.body, href: payload.href, expiresAt: payload.expiresAt, tag: payload.tag }), { TTL: Math.min(ttl, 86400), timeout: 10000 });
+      delivered++;
     } catch (error: unknown) {
       const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 0;
       if (statusCode === 404 || statusCode === 410) await db.from("push_subscriptions").delete().eq("id", subscription.id);
       else {console.error("Unable to send push notification", error);if(payload.strict)throw error;}
     }
   }));
+  if(payload.requireSubscription&&!delivered)throw new Error('No reachable push device');
 }
