@@ -13,3 +13,10 @@ it('prints the separate deposit amount and receipt without adding a membership f
  const html=renderPaymentList('2026-10',[{id:'deposit',collected_on:'2026-10-23',full_name:'Deposit Member',member_reference:'A421',member_type:'resident',source:'manual',approved_at:null,amount:10,kind:'access_card_deposit',receipt_no:'D100'}]);
  expect(html).toContain('Access Card Deposit');expect(html).toContain('10.00</td>');expect(html).toContain('D100');expect(html).not.toContain('40.00');
 });
+
+it('shows the total of all displayed payment rows once at the end',()=>{
+ const base={collected_on:'2026-10-01',full_name:'Member',member_reference:'A1',member_type:'resident',source:'manual',approved_at:null,receipt_no:'R1'};
+ const html=renderPaymentList('2026-10',[{...base,id:'1',amount:40},{...base,id:'2',amount:10},{...base,id:'3',amount:null}]);
+ expect(html).toContain('TOTAL AMOUNT (RM)</td><td style="font-weight:bold">50.00</td>');
+ expect(html.match(/TOTAL AMOUNT/g)).toHaveLength(1);
+});
