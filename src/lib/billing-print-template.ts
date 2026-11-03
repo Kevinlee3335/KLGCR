@@ -6,7 +6,13 @@ const esc=(s:unknown)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 const money=(n:number)=>n.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
 const number=(n:number)=>n.toLocaleString('en-MY',{useGrouping:false,maximumFractionDigits:3});
 function periodDate(period:string,previous=false){const d=new Date(period+'-01T00:00:00Z');if(previous)d.setUTCMonth(d.getUTCMonth()-1);return d.toISOString().slice(0,10)}
-/** Meter dates are captured evidence, never inferred billing-period dates. */
+/**
+ * Meter dates are evidence, not a billing-period label.  Keep them compact so
+ * they fit every original invoice cell, including the older Excel layouts.
+ * A missing captured date must stay visibly missing; using the first day of
+ * the billing month here made an old invoice look as if a photo had been taken
+ * on that day.
+ */
 function dateText(date:string|undefined,short=false){
  if(!date)return 'DATE NOT RECORDED';
  const d=new Date(date+'T00:00:00Z');
@@ -48,6 +54,13 @@ function utilitySheet(line:BillingLine,snapshot:BillingSnapshot,letterheadUrl:st
   const subsidy=line.subsidy??Number(/subsidy RM\s*([\d.]+)/.exec(line.description)?.[1]||0);const subtotal=line.subtotal??Math.round(details.reduce((s,d)=>s+d.amount,0)*100)/100;const amounts:Record<string,number>={subtotal,subsidy,rounding:line.rounding??Math.round((line.amount-(subtotal-subsidy))*100)/100,total:line.amount};
   for(const f of t.totals||[])overlay+=text('RM',f.rmX,f.y,f.font)+text(f.key==='rounding'&&amounts[f.key]===0?'-':money(amounts[f.key]),f.x,f.y,f.font,'end',f.key==='total');
   overlay+=text('CREATED BY : '+snapshot.createdBy.toUpperCase(),...point('created'),t.font)+text(words(line.amount),...point('words'),t.font,'start',true);
+ }
+ if(t.fields){
+  // Statements start at the top of the original page. Move the complete
+  // original drawing and its variable fields together below the letterhead.
+  const drawing=t.svg.replace(/(<svg\b[^>]*>)/,'$1<g transform="translate(0 125)">').replace('</svg>','</g></svg>');
+  const header=`<image href="${esc(letterheadUrl)}" x="50" y="10" width="495" height="103" preserveAspectRatio="xMidYMin meet"/>`;
+  return `<section class="excel-sheet">${drawing.replace('</svg>',header+`<g transform="translate(0 125)">${overlay}</g>`+utilitySignatureOverlay(id,snapshot,verifications)+'</svg>')}</section>`;
  }
  const header=`<rect x="0" y="0" width="595.304" height="205" fill="#fff"/><image href="${esc(letterheadUrl)}" x="50" y="10" width="495" height="103" preserveAspectRatio="xMidYMin meet"/>`;
  return `<section class="excel-sheet">${t.svg.replace('</svg>',header+overlay+utilitySignatureOverlay(id,snapshot,verifications)+'</svg>')}</section>`;
