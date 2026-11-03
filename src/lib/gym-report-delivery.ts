@@ -12,6 +12,8 @@ export async function deliverGymReport(id:string) {
  const {data:r,error}=await db.from('gym_monthly_approvals').select('*').eq('id',id).single();
  if(error)throw error;
  const approved=!!r.approved_at;
+ // Committee reports stop after approval and are not emailed to Accounts.
+ if(approved && r.kind==='committee')return;
  if(r.sent_at)return;
  const verifications=approved?(r.verifications||[]) as Verification[]:await documentVerification('gym',id);
  const reviewer=documentReviewers[verifications.length];
