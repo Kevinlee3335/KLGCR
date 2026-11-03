@@ -59,13 +59,13 @@ export default async function Page({params}:{params:Promise<{type:string;id:stri
  const {type,id}=await params;
  if(!valid(type,id))redirect('/admin');
  const db=createAdminClient();
- const [document,entries]=await Promise.all([
+ const [document,entries,billingApproval]=await Promise.all([
  type==='billing'?db.from('billing_preview_runs').select('*').eq('id',id).single():db.from('gym_monthly_approvals').select('*').eq('id',id).single(),
- documentVerification(type,id)
+ documentVerification(type,id),
+ type==='billing'?db.from('billing_run_approvals').select('*').eq('run_id',id).maybeSingle():Promise.resolve(null)
  ]);
  if(document.error)throw Error('Unable to load this document');
  const doc=document.data;
- const billingApproval=type==='billing'?await db.from('billing_run_approvals').select('*').eq('run_id',id).maybeSingle():null;
  if(billingApproval?.error)throw Error('Unable to load approval');
  const approved=type==='billing'?billingApproval?.data:doc.approved_at?doc:null;
  const title=type==='billing'?(doc.kind==='rental'?'Rental invoice pack':'Utilities invoice pack'):doc.kind==='committee'?'Sports Committee Report':'Monthly Payment List';
