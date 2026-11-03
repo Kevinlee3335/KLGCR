@@ -8,9 +8,9 @@ import type { PurchaseOrder } from './schema';
 
 export async function purchaseOrderPdf(order: PurchaseOrder) {
   const pdf = await PDFDocument.create();
-  const source = await PDFDocument.load(await readFile(path.join(process.cwd(), 'src/lib/purchase-orders/template.pdf')));
-  // Embed only the original letterhead and title; old PO data is never copied.
-  const header = await pdf.embedPage(source.getPage(0), { left: 0, bottom: 660, right: 595.3, top: 841.9 });
+  // Use the current K Hotel letterhead for every generated PO. Receipt generation
+  // continues to use this same approved artwork independently.
+  const letterhead = await pdf.embedPng(await readFile(path.join(process.cwd(), 'public/billing/receipt-letterhead.png')));
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const clean = (s: string) => s.replace(/[^\x20-\x7e\xa0-\xff\n]/g, '?');
@@ -31,7 +31,9 @@ export async function purchaseOrderPdf(order: PurchaseOrder) {
   const text = (value: string, x: number, top: number, size = 11, heavy = false) => { page.pushOperators(setCharacterSpacing(0), setWordSpacing(0), setCharacterSqueeze(100)); page.drawText(clean(value), { x, y: 841.9-top-size, size, font: heavy ? bold : font }); };
   const line = (x1: number, top1: number, x2: number, top2: number) => page.drawLine({ start: { x:x1, y:841.9-top1 }, end:{ x:x2, y:841.9-top2 }, thickness:0.5, color:rgb(0,0,0) });
   const start = () => {
-    page.drawPage(header, { x:0, y:660 });
+    const letterheadWidth = 511;
+    page.drawImage(letterhead, { x:42, y:730, width:letterheadWidth, height:letterheadWidth * letterhead.height / letterhead.width });
+    text('PURCHASE ORDER', (595.3 - bold.widthOfTextAtSize('PURCHASE ORDER', 15)) / 2, 178, 15, true);
     text('PO NO',24.3,205.9,14,true); text(`: ${order.po_no}`,97,205.9,14,true);
     const d = new Date(order.order_date+'T12:00:00Z'); const day=d.getUTCDate();
     const suffix=day%100>=11&&day%100<=13?'th':({1:'st',2:'nd',3:'rd'}[day%10]||'th');

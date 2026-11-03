@@ -31,7 +31,7 @@ export function QuotationPanel(){
   return ()=>{active=false;clearTimeout(timer)};
  },[customerData,loaded,selected,input.customer,retryCustomer]);
  function change<K extends keyof QuotationInput>(key:K,value:QuotationInput[K]){setInput(v=>({...v,[key]:value}));setMessage('')}
- function print(q:Quotation){const w=window.open('','_blank');if(!w){setMessage('Please allow the print preview window.');return}w.opener=null;w.document.open();w.document.write(quotationPrintHtml(q));w.document.close()}
+ function print(q:Quotation){const w=window.open('','_blank');if(!w){setMessage('Please allow the print preview window.');return}w.opener=null;w.document.open();w.document.write(quotationPrintHtml(q,window.location.origin));w.document.close()}
  async function save(){
   const parsed=quotationInput.safeParse(input);if(!parsed.success){setMessage('Please fill in customer name, a valid date, and item description, quantity and unit price.');return}
   setBusy(true);setMessage('');if(!requestId.current)requestId.current=crypto.randomUUID();
