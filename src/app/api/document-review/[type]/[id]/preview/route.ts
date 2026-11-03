@@ -7,6 +7,7 @@ import {documentVerification} from '@/lib/document-review';
 import {buildBillingPrintHtml} from '@/lib/billing-print-template';
 import {withBillingApproval,type BillingApproval} from '@/lib/billing-approval';
 import {gymReportPdf} from '@/lib/gym-report-pdf';
+import {renderCommitteeReport,type CommitteeReport} from '@/lib/committee-report';
 
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
@@ -23,6 +24,13 @@ export async function GET(_request:Request,{params}:{params:Promise<{type:string
   const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
   if(type==='gym'){
    const verifications=doc.approved_at?(doc.verifications||[]):await documentVerification(type,id);
+   // Committee reports already have an approved Excel-form template. Keep that
+   // original layout in the review screen instead of the generic PDF table.
+   if(doc.kind==='committee'){
+    const html=renderCommitteeReport(doc.snapshot as CommitteeReport,false)
+     .replace('<body>','<body><nav class="toolbar"><button onclick="window.print()">Print / Save PDF</button><span>Original committee report format</span></nav>');
+    return new NextResponse(html,{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+   }
    const pdf=await gymReportPdf({...doc,verifications});
    const name=(doc.kind==='committee'?'Sports-Committee-Report':'Monthly-Payment-List')+'-'+doc.month.slice(0,7)+'.pdf';
    return new NextResponse(new Uint8Array(pdf),{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':'inline; filename="'+name+'"'}});
