@@ -43,9 +43,10 @@ async function advance(form:FormData){
    await dispatchBillingMail(id);
  }else{
    const db=createAdminClient();
-   const sig=await db.from('user_e_signatures').select('signature').eq('user_id',user.id).single();
-   if(sig.error)throw Error('Save your personal E-signature first.');
-   const saved=await db.from('gym_monthly_approvals').update({approved_at:new Date().toISOString(),approver:user.id,signature:signatureSchema.parse(sig.data.signature)}).eq('id',id).is('approved_at',null);
+   const sig=await session.from('user_e_signatures').select('signature').eq('user_id',user.id).maybeSingle();
+   if(sig.error)throw Error('Unable to read your personal E-signature. Please contact the administrator.');
+   if(!sig.data)throw Error('Save your personal E-signature first.');
+   const saved=await db.from('gym_monthly_approvals').update({approved_at:new Date().toISOString(),approver:user.id,signature:signatureSchema.parse(sig.data.signature),verifications:entries}).eq('id',id).is('approved_at',null);
    if(saved.error)throw Error(saved.error.message);
    await deliverGymReport(id);
  }
