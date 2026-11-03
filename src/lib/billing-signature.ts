@@ -41,5 +41,5 @@ export function utilitySignatureOverlay(id:string,snapshot:BillingSnapshot,verif
  if(original){const [x,y,width]=original;return billingSignatureSvg(snapshot,{x:x+4,y:y-43,width:width-8,height:40},verifications);}
  // The three original statement sheets have no signature block. Match the invoice block in their unused footer.
  const x=360,y=680,width=174;
- return `<g class="billing-statement-signature"><text x="${x}" y="620" font-family="Arial" font-size="8" font-weight="bold">K HOTEL SDN BHD</text><path d="M${x} ${y}H${x+width}" fill="none" stroke="black" stroke-width=".6"/><text x="${x+36}" y="692" font-family="Arial" font-size="8" font-weight="bold">(Authorised Signature)</text></g>`+billingSignatureSvg(snapshot,{x:x+4,y:y-43,width:width-8,height:40});
+ return `<g class="billing-statement-signature"><text x="${x}" y="620" font-family="Arial" font-size="8" font-weight="bold">K HOTEL SDN BHD</text><path d="M${x} ${y}H${x+width}" fill="none" stroke="black" stroke-width=".6"/><text x="${x+36}" y="692" font-family="Arial" font-size="8" font-weight="bold">(Authorised Signature)</text></g>`+billingSignatureSvg(snapshot,{x:x+4,y:y-43,width:width-8,height:40},verifications);
 }
