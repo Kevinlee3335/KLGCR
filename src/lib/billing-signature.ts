@@ -15,11 +15,11 @@ export function billingSignatureSvg(snapshot:BillingSnapshot,box?:{x:number;y:nu
    const blocks=slots.map((slot,i)=>{
      const valid=signatureSchema.safeParse(slot.signature);
      const x=i*600;
-     if(!valid.success)return `<text x="${x}" y="30" font-family="Arial" font-size="26">${esc(slot.name)}</text><text x="${x}" y="145" font-family="Arial" font-size="22">Pending</text><path d="M${x} 205H${x+565}" fill="none" stroke="#333" stroke-width="1.5"/>`;
+     if(!valid.success)return `<text x="${x}" y="30" font-family="Arial" font-size="26">${esc(slot.name)}</text><text x="${x}" y="145" font-family="Arial" font-size="22">Pending</text>${i===2&&box?'':`<path d="M${x} 205H${x+565}" fill="none" stroke="#333" stroke-width="1.5"/>`}`;
      const sig=valid.data;
      const bounds=sig.imageDataUrl?signaturePhotoBounds(sig.imageDataUrl):null;
      const ink=sig.imageDataUrl&&bounds?`<svg x="${x}" y="55" width="420" height="140" viewBox="${bounds.left} ${bounds.top} ${bounds.width} ${bounds.height}" preserveAspectRatio="xMidYMid meet"><image href="${esc(sig.imageDataUrl)}" width="${bounds.imageWidth}" height="${bounds.imageHeight}"/></svg>`:sig.strokes.map(stroke=>`<polyline points="${stroke.map(([px,py])=>`${x+px*420},${55+py*140}`).join(' ')}" fill="none" stroke="black" stroke-width="2.4"/>`).join('');
-     return `<text x="${x}" y="30" font-family="Arial" font-size="26">${esc(slot.name)}</text>${ink}<path d="M${x} 205H${x+565}" fill="none" stroke="#333" stroke-width="1.5"/><text x="${x}" y="235" font-family="Arial" font-size="22">${esc(new Date(slot.date!).toLocaleDateString('en-GB',{timeZone:'Asia/Kuala_Lumpur'}))}</text>${i===2&&approved?`<image href="${companySealDataUrl}" x="${x+430}" y="55" width="135" height="135"/>`:''}`;
+     return `<text x="${x}" y="30" font-family="Arial" font-size="26">${esc(slot.name)}</text>${ink}${i===2&&box?'':`<path d="M${x} 205H${x+565}" fill="none" stroke="#333" stroke-width="1.5"/>`}<text x="${x}" y="235" font-family="Arial" font-size="22">${esc(new Date(slot.date!).toLocaleDateString('en-GB',{timeZone:'Asia/Kuala_Lumpur'}))}</text>${i===2&&approved?`<image href="${companySealDataUrl}" x="${x+430}" y="55" width="135" height="135"/>`:''}`;
    }).join('');
    const position=box?`x="${Math.max(25,box.x-330)}" y="${box.y}" width="${box.width+330}" height="${Math.max(60,box.height)}"`:'style="display:block;width:100%;height:100%"';
    return `<svg xmlns="http://www.w3.org/2000/svg" ${position} viewBox="0 0 1800 250" role="img" aria-label="Fikri and Kevin verification, James approval">${blocks}</svg>`;
