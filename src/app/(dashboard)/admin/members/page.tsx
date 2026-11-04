@@ -19,7 +19,9 @@ export default async function MembersPage({searchParams}:{searchParams:Promise<{
  const q = (search.q || "").replace(/[^\p{L}\p{N}@.\s-]/gu,"").slice(0,100);
  const today = malaysiaDay();
  const db = createAdminClient();
- let query = db.from("memberships").select("id,full_name,email,room_no,member_type,status,created_at,starts_on,expires_on",{count:"exact"}).order("created_at",{ascending:false});
+ // Hide the three management-designated records from this list while retaining their payment history.
+ const hiddenMembers = "(570968ea-cf06-4a36-8a6d-12233f665f1e,f9e0310c-24bd-432e-8a46-adf0875565dc,1ad08093-0e28-48bf-8675-f96ff35ee589)";
+ let query = db.from("memberships").select("id,full_name,email,room_no,member_type,status,created_at,starts_on,expires_on",{count:"exact"}).not("id","in",hiddenMembers).order("created_at",{ascending:false});
  if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,room_no.ilike.%${q}%`);
  if (search.status === "block") query = query.or(`status.eq.cancelled,status.eq.suspended,and(status.eq.active,expires_on.lt.${today})`);
  else if (search.status === "active") query = query.eq("status","active").gte("expires_on",today).or(`starts_on.is.null,starts_on.lte.${today}`);
