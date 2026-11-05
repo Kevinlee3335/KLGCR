@@ -1,6 +1,7 @@
-import Link from "next/link";
 import {DocumentReviewQueue} from '@/components/document-review-queue';
 import {createAdminClient} from "@/lib/supabase/admin";
+import { DashboardActionFollowUp } from "@/components/dashboard-action-follow-up";
+import { membershipEnabled } from "@/lib/membership";
 import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
 import { SupplierMailSummary } from "@/components/supplier-mail-summary";
 import { PoApprovalQueue } from '@/components/po-approval-queue';
@@ -57,5 +58,20 @@ export default async function AdminPage() {
   const isCleanerCoordinator=profile.role==="admin"&&["mary","fikri"].includes(profile.username);
   const queueResult=isCleanerCoordinator?await supabase.rpc("checkout_housekeeping_queue"):null;
   const pendingRooms=(queueResult?.data as {rooms?:{id:string;block:string;room_no:string}[]}|null)?.rooms??[];
-  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<DocumentReviewQueue userId={profile.id}/><SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<>{isCleanerCoordinator&&queueResult?.error&&<section className="panel" role="alert">Unable to load rooms awaiting cleaner assignment. Please refresh.</section>}{pendingRooms.length>0&&<section className="panel" aria-label="Rooms awaiting cleaner assignment"><p className="eyebrow">Action required</p><h3>Cleaner Assignment · {pendingRooms.length} {pendingRooms.length===1?"room":"rooms"}</h3><p>Rooms ready and waiting for a cleaner.</p><p>{pendingRooms.map(room=>`Block ${room.block} · ${room.room_no}`).join(", ")}</p><Link className="button" href="/staff/checkouts/assign">Assign Cleaner →</Link></section>}<MonitoringFollowUp/></>}/></AppShell>;
+  const gym = profile.role === "admin" && membershipEnabled() ? await (async()=>{
+    try {
+      const db=createAdminClient();
+      const [registrations,renewalPayments,renewals]=await Promise.all([
+        db.from("membership_payments").select("id,kind,memberships(full_name,room_no)",{count:"exact"}).eq("status","pending_verification").eq("kind","registration").order("created_at").limit(50),
+        db.from("membership_payments").select("id,kind,memberships(full_name,room_no)",{count:"exact"}).eq("status","pending_verification").eq("kind","renewal").order("created_at").limit(50),
+        db.from("membership_requests").select("id,full_name,room_no",{count:"exact"}).eq("status","pending").eq("request_type","renew").order("created_at").limit(50),
+      ]);
+      if(registrations.error||renewalPayments.error||renewals.error)return {error:true,registrations:[],renewals:[],registrationCount:0,renewalCount:0};
+      type Payment={id:string;kind:string;memberships:{full_name:string;room_no:string}|null};
+      const item=(p:Payment)=>({id:p.id,name:p.memberships?.full_name||"Member",detail:p.memberships?.room_no||"Room not provided"});
+      return {error:false,registrations:((registrations.data||[]) as unknown as Payment[]).map(item),renewals:[...((renewalPayments.data||[]) as unknown as Payment[]).map(item),...(renewals.data||[]).map(p=>({id:p.id,name:p.full_name,detail:p.room_no||"Room not provided"}))],registrationCount:registrations.count||0,renewalCount:(renewalPayments.count||0)+(renewals.count||0)};
+    } catch { return {error:true,registrations:[],renewals:[],registrationCount:0,renewalCount:0}; }
+  })() : null;
+  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<DocumentReviewQueue userId={profile.id}/><SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<>{isCleanerCoordinator&&queueResult?.error&&<section className="panel" role="alert">Unable to load rooms awaiting cleaner assignment. Please refresh.</section>}<DashboardActionFollowUp title="Cleaner Assignment" subtitle="Rooms ready and waiting for a cleaner." count={pendingRooms.length} items={pendingRooms.map(room=>({id:room.id,name:`Block ${room.block} · ${room.room_no}`,detail:"Ready to assign"}))} href="/staff/checkouts/assign" action="Assign Cleaner"/>{gym?.error&&<section className="panel" role="alert">Unable to load gym applications. Please refresh.</section>}{gym&&!gym.error&&<><DashboardActionFollowUp title="New Gym Membership" subtitle="New membership applications awaiting review." count={gym.registrationCount} items={gym.registrations} href="/admin/members#payment-verification" action="Review"/><DashboardActionFollowUp title="Gym Renewal" subtitle="Renewal requests awaiting review." count={gym.renewalCount} items={gym.renewals} href="/admin/members" action="Review"/></>}<MonitoringFollowUp/></>}/></AppShell>;
 }
+
