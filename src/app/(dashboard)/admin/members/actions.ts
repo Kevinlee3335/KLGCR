@@ -74,3 +74,36 @@ export async function updateMemberStatus(form:FormData) {
  revalidatePath("/admin/members/payment-list");
  redirect(location+"&success=status");
 }
+
+export async function replaceMemberPhoto(form: FormData) {
+ const profile = await requireRole(["admin"]);
+ if (!membershipEnabled()) throw new Error("Membership is not enabled.");
+ const id = String(form.get("member") || "");
+ if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid member.");
+ const location = `/admin/members?id=${id}`;
+ const kind = String(form.get("kind") || "");
+ if (kind !== "personal" && kind !== "card") redirect(location + "&error=photo");
+ const file = form.get(kind === "card" ? "access_card" : "personal_photo");
+ if (!(file instanceof File) || !file.size || file.size > 1024 * 1024) redirect(location + "&error=photo");
+ const bytes = Buffer.from(await file.arrayBuffer());
+ if (file.type !== "image/jpeg" || bytes[0] !== 255 || bytes[1] !== 216 || bytes[2] !== 255) redirect(location + "&error=photo");
+ const db = createAdminClient();
+ const {data: member, error: loadError} = await db.from("memberships").select("photo_path,access_card_path").eq("id",id).maybeSingle();
+ if (loadError || !member) redirect(location + "&error=photo");
+ const field = kind === "card" ? "access_card_path" : "photo_path";
+ const previous = member[field];
+ const path = `${id}/${crypto.randomUUID()}.jpg`;
+ const {error: uploadError} = await db.storage.from("membership-photos").upload(path,bytes,{contentType:"image/jpeg",upsert:false});
+ if (uploadError) redirect(location + "&error=photo");
+ let update = db.from("memberships").update({[field]:path}).eq("id",id);
+ update = previous ? update.eq(field,previous) : update.is(field,null);
+ const {data: saved, error: updateError} = await update.select("id").maybeSingle();
+ if (updateError || !saved) {
+  await db.storage.from("membership-photos").remove([path]);
+  redirect(location + "&error=photo");
+ }
+ const {error: auditError} = await db.from("membership_activity").insert({member_id:id,actor_id:profile.id,event:kind === "card" ? "access_card_photo_replaced" : "personal_photo_replaced",details:{}});
+ if (auditError) console.error("Unable to record membership photo replacement",auditError);
+ revalidatePath("/admin/members");
+ redirect(location + "&success=photo");
+}
