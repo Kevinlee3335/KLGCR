@@ -11,7 +11,7 @@ export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
  useEffect(()=>{
   async function receive(event:MessageEvent){
    if(event.origin!==window.location.origin||event.source!==frame.current?.contentWindow||event.data?.type!=="klg-inspection-submit"||pending.current)return;
-   pending.current=true;setError("");setProgress("Preparing inspection…");
+   pending.current=true;setError("");setProgress(isAdmin?"Preparing inspection…":"Menyediakan pemeriksaan…");
    try{
     const record=event.data.record as ABInspection;
     const findings=inspectionFindings(record);
@@ -25,12 +25,12 @@ export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
     const uploaded=findings.map(f=>({description:f.description,photos:[] as string[]}));
     const storage=createClient().storage.from("checkout-evidence");
     for(let i=0;i<blobs.length;i++){
-     setProgress(`Uploading photo ${i+1} of ${blobs.length}…`);
+     setProgress(isAdmin?`Uploading photo ${i+1} of ${blobs.length}…`:`Memuat naik gambar ${i+1} daripada ${blobs.length}…`);
      const upload=prepared.uploads[i],result=await storage.uploadToSignedUrl(upload.path,upload.token,blobs[i]);
      if(result.error)throw new Error(`Photo ${i+1} failed: ${result.error.message}`);
      uploaded[images[i].index].photos.push(upload.path);
     }
-    setProgress("Creating check-out room defect form…");
+    setProgress(isAdmin?"Creating check-out room defect form…":"Menyediakan borang kerosakan bilik…");
     // Store the complete checklist without inline image data; evidence remains in private storage.
     const checklist=JSON.parse(JSON.stringify(record,(key,value)=>key==="photos"?undefined:value));
     const result=await submitABInspection({id:record.id,block:record.b,room:record.room.replace(/^[AB]/,""),pax:record.p,notes:`${record.date} · ${record.by} · ${record.reason}`,checklist,findings:uploaded});
@@ -41,6 +41,6 @@ export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
    finally{pending.current=false;setProgress("");frame.current?.contentWindow?.postMessage({type:"klg-inspection-unlock"},window.location.origin);}
   }
   window.addEventListener("message",receive);return()=>window.removeEventListener("message",receive);
- },[]);
- return <section>{saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{error} Your inspection is still open below.</p>}{progress&&<div className="panel" role="status">{progress}</div>}<iframe ref={frame} key={round} title="Block A and B room inspection" src={isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
+ },[isAdmin]);
+ return <section>{saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{error} {isAdmin?"Your inspection is still open below.":"Pemeriksaan masih terbuka di bawah. Sila cuba lagi atau hubungi admin."}</p>}{progress&&<div className="panel" role="status">{progress}</div>}<iframe ref={frame} key={round} title="Block A and B room inspection" src={isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
 }
