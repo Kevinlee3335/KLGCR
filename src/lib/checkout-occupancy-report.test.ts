@@ -7,3 +7,21 @@ describe('occupancy daily report',()=>{
  it('includes a block prefix exactly once',()=>{expect(occupancyRoom({room_no:'A-421',block:{code:'A'}} as OccupancyRow)).toBe('A421');expect(occupancyRoom({room_no:'421',block:{code:'B'}} as OccupancyRow)).toBe('B421');});
  it('paginates the PDF and supports an empty daily report',async()=>{const rows=Array.from({length:40},(_,i)=>({id:String(i),room_no:`A${i+101}`,ready_at:'2026-10-23T02:00:00Z',occupancy_pax:2,block:{code:'A'}}));expect((await PDFDocument.load(await occupancyPdf('2026-10-23',rows))).getPageCount()).toBe(3);expect((await PDFDocument.load(await occupancyPdf('2026-10-23',[]))).getPageCount()).toBe(1);});
 });
+
+it('applies inclusive Malaysia date ranges to the same ready-room query', async()=>{
+ const {loadOccupancyReport}=await import('./checkout-occupancy-report');
+ const calls:unknown[][]=[];
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ const chain:any={};
+ for(const method of ['select','is','eq','gte','lt','order']) chain[method]=(...args:unknown[])=>{calls.push([method,...args]);return chain;};
+ chain.range=async()=>({data:[],error:null});
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ const db:any={from:()=>chain};
+ await loadOccupancyReport(db,'2026-11-01','2026-11-05');
+ expect(calls).toContainEqual(['eq','status','ready_for_occupancy']);
+ expect(calls).toContainEqual(['gte','ready_at','2026-10-31T16:00:00.000Z']);
+ expect(calls).toContainEqual(['lt','ready_at','2026-11-05T16:00:00.000Z']);
+ calls.length=0;await loadOccupancyReport(db);
+ expect(calls.some(c=>c[0]==='gte'||c[0]==='lt')).toBe(false);
+ await expect(loadOccupancyReport(db,'2026-11-05','2026-11-01')).rejects.toThrow();
+});
