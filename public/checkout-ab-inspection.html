@@ -96,4 +96,34 @@ async function restore(file){try{let d=JSON.parse(await file.text());if(d.schema
 function render(){$('#nv').innerHTML=['sum','ins','tot','prices'].map((t,i)=>`<button class="${tab===t?'on':''}" onclick="tab='${t}';render()">${['Summary','Inspect','Furniture Totals','Cost Reference'][i]}</button>`).join('')+`<button onclick="backup()">Backup</button><label style="margin:0"><button onclick="$('#import').click()">Import</button><input id="import" hidden type="file" accept="application/json" onchange="restore(this.files[0])"></label>`;$('#m').innerHTML=tab==='sum'?summary():tab==='ins'?inspection():tab==='tot'?totals():tab==='prices'?costReport({items:NAMES.map(()=>OWNERS.map(()=>({enabled:false}))),fac:{},p:2}).replace('<details>','<details open>'):reportHtml()}
 function updateLive(){if(cur){const p=progress(cur,cur),e=document.getElementById('live-progress');if(e)e.innerHTML=p.pct+'% · '+p.done+'/'+p.total+' checks<br><b id="live-cost">'+costSummary(cur)+'</b>'}}document.addEventListener('input',updateLive);document.addEventListener('change',updateLive);
 render();
+</script>
+<script>
+if(new URLSearchParams(location.search).get('lang')==='ms'){
+ const words={
+ 'Summary':'Ringkasan','Inspect':'Periksa','Furniture Totals':'Jumlah Perabot','Cost Reference':'Rujukan Kos','Backup':'Sandaran','Import':'Import',
+ 'New inspection':'Pemeriksaan baharu','Start inspection':'Mula pemeriksaan','Type room number · e.g. A203 / B101 / 203':'Masukkan nombor bilik · contoh A203 / B101 / 203',
+ 'Date':'Tarikh','Reason':'Sebab','Inspector':'Nama pemeriksa','Handover at Vacation':'Serahan selepas keluar','Follow-up inspection':'Pemeriksaan susulan','Periodic':'Berkala','Other':'Lain-lain',
+ 'Divan':'Katil divan','Mattress':'Tilam','Chair':'Kerusi','Wardrobe':'Almari','Bookshelf':'Rak buku','Electrical Fixtures':'Peralatan elektrik','Toilet / Plumbing':'Tandas / Paip',
+ 'Room · Wall / Ceiling':'Bilik · Dinding / Siling','Bathroom · Wall / Ceiling':'Bilik air · Dinding / Siling','Window / Hardware':'Tingkap / Kelengkapan',
+ 'Fan':'Kipas','Power Socket':'Soket elektrik','1G Switch':'Suis 1 gang','2G Switch':'Suis 2 gang','A/C Switch':'Suis penghawa dingin','Toilet Switch':'Suis tandas','Study Table Light Switch':'Suis lampu meja belajar',
+ 'Toilet Basin':'Besen tandas','Two-way Tap':'Paip dua hala','Bottle Trap':'Perangkap botol','WC':'Mangkuk tandas','Sink Tap':'Paip sinki','Flexible Hose':'Hos fleksibel','Downpipe':'Paip saliran','Room Ceiling':'Siling bilik','Room Wall':'Dinding bilik','Bathroom Ceiling':'Siling bilik air','Bathroom Wall':'Dinding bilik air','Window':'Tingkap','Window Handle':'Pemegang tingkap',
+ '✅ Good':'✅ Baik','❌ Defect':'❌ Rosak','Defect':'Kerosakan','Defect qty':'Jumlah kerosakan','Broken':'Rosak','Missing':'Hilang','Leaking':'Bocor','Loose':'Longgar','Moldy':'Berp kulat'.replace(' ',''),'Water Mark':'Kesan air','Cannot Open / Close':'Tidak boleh buka / tutup','Cannot Lock':'Tidak boleh dikunci',
+ '✓ Owner confirmed':'✓ Pemilik disahkan','✓ Confirm owner':'✓ Sahkan pemilik','Check (optional)':'Periksa (pilihan)','Change owner / quantity · Photos':'Tukar pemilik / jumlah · Gambar','Actual present qty':'Jumlah sebenar','Skip UTMSPACE inspection':'Langkau pemeriksaan UTMSPACE',
+ 'Photos (optional) · Upload from gallery':'Gambar (pilihan) · Muat naik dari galeri','📷 Take photo':'📷 Ambil gambar','Remove':'Buang','+ Add defect':'+ Tambah kerosakan','Remark':'Catatan','(required)':'(wajib)','(optional)':'(pilihan)',
+ 'Save draft on this device':'Simpan draf pada telefon ini','Submit Inspection':'Hantar pemeriksaan','Room':'Bilik','Level':'Tingkat','Round':'Pusingan','Qty':'Jumlah','checks':'pemeriksaan',
+ 'Enter inspector and date.':'Masukkan nama pemeriksa dan tarikh.','Add a defect type.':'Pilih jenis kerosakan.','Please wait for photos to finish processing.':'Sila tunggu gambar selesai diproses.','Enter or select a valid room number.':'Masukkan atau pilih nombor bilik yang betul.',
+ 'Maximum 20 photos per room. Remove a photo before adding more.':'Maksimum 20 gambar bagi setiap bilik. Buang gambar sebelum menambah lagi.',
+ 'Actual qty must be a whole number, 0 or more.':'Jumlah sebenar mesti nombor bulat 0 atau lebih.','Defect qty must be at least 1. Other requires a remark.':'Jumlah kerosakan mesti sekurang-kurangnya 1. Lain-lain memerlukan catatan.',
+ 'Facility defect qty must be at least 1. Other requires a remark.':'Jumlah kerosakan mesti sekurang-kurangnya 1. Lain-lain memerlukan catatan.','Broken / Other qty cannot exceed present furniture qty.':'Jumlah rosak tidak boleh melebihi jumlah perabot sebenar.'
+ };
+ const keys=Object.keys(words).sort((a,b)=>b.length-a.length);
+ function translateText(value){let result=value;for(const key of keys)result=result.split(key).join(words[key]);return result}
+ function translate(root){
+  if(root.nodeType===1){if(root.tagName==='OPTION'&&!root.hasAttribute('value'))root.setAttribute('value',root.textContent);if(root.hasAttribute('placeholder'))root.setAttribute('placeholder',translateText(root.getAttribute('placeholder')))}
+  if(root.nodeType===3&&root.parentElement&&!['SCRIPT','STYLE','TEXTAREA'].includes(root.parentElement.tagName)){const v=translateText(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v}
+  for(const node of Array.from(root.childNodes||[]))translate(node);
+ }
+ translate(document.body);
+ new MutationObserver(records=>{for(const r of records){if(r.type==='characterData')translate(r.target);else for(const n of r.addedNodes)translate(n)}}).observe(document.body,{subtree:true,childList:true,characterData:true});
+}
 </script></html>
