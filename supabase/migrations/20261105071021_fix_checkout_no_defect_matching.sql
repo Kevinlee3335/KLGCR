@@ -1,0 +1,1 @@
+do $$ declare f record; s text; begin for f in select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('checkout_housekeeping_queue','assign_checkout_cleaner','complete_checkout_cleaning') loop s:=pg_get_functiondef(f.oid); s:=replace(s,chr(92)||chr(92)||'s','[[:space:]]'); execute s; end loop; end $$;
