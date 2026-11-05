@@ -41,6 +41,14 @@ it("atomically submits checklist defects/photos, prevents duplicate rooms and bu
  expect((await db.query("select status from checkout_rooms where id=$1",[id])).rows[0]).toEqual({status:"second_inspection"});
  await assign([id],staff,"maintenance");await assign([id2],cleaner,"cleaner");
  expect((await db.query("select status from checkout_rooms order by room_no")).rows).toEqual([{status:"rectification"},{status:"cleaning"}]);
+ const more1="00000000-0000-4000-8000-000000000030",more2="00000000-0000-4000-8000-000000000031",unfinished="00000000-0000-4000-8000-000000000032";
+ await db.query("insert into checkout_rooms(id,block_id,room_no,utmspace_defects,status) values($1,1,'301','Fan','verification'),($2,1,'302','Tap','verification'),($3,1,'303','Door','verification')",[more1,more2,unfinished]);
+ await db.query("insert into checkout_defects(checkout_room_id,description,status) values($1,'Fan','rectified'),($2,'Tap','rectified'),($3,'Door','open')",[more1,more2,unfinished]);
+ await expect(assign([more1,unfinished],cleaner,"cleaner")).rejects.toThrow("not ready");
+ expect((await db.query("select status from checkout_rooms where id=$1",[more1])).rows[0]).toEqual({status:"verification"});
+ await assign([more1,more2],cleaner,"cleaner");
+ expect((await db.query("select status,cleaner_id from checkout_rooms where id=any($1::uuid[]) order by room_no",[[more1,more2]])).rows).toEqual([{status:"cleaning",cleaner_id:cleaner},{status:"cleaning",cleaner_id:cleaner}]);
+ expect((await db.query("select checkout_room_id from checkout_history where checkout_room_id=any($1::uuid[])",[[more1,more2]])).rows).toHaveLength(2);
  await db.exec(`set app.uid='${staff}'`);
  expect((await db.query("select name from storage.objects")).rows).toHaveLength(1);
  await expect(assign([id],staff,"maintenance")).rejects.toThrow("Only administrators");
