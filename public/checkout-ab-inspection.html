@@ -117,7 +117,7 @@ if(new URLSearchParams(location.search).get('lang')==='ms'){
  'Facility defect qty must be at least 1. Other requires a remark.':'Jumlah kerosakan mesti sekurang-kurangnya 1. Lain-lain memerlukan catatan.','Broken / Other qty cannot exceed present furniture qty.':'Jumlah rosak tidak boleh melebihi jumlah perabot sebenar.'
  };
  const keys=Object.keys(words).sort((a,b)=>b.length-a.length);
- function translateText(value){let result=value;for(const key of keys)result=result.replace(new RegExp('(?<![A-Za-z])'+key.replace(/[.*+?^${}()|[\]\\]/g,'\\result=result.split(key).join(words[key])')+'(?![A-Za-z])','g'),()=>words[key]);return result}
+ function translateText(value){let result=value;for(const key of keys){let index=0;while((index=result.indexOf(key,index))!==-1){const before=result[index-1]||'',after=result[index+key.length]||'';if(/[A-Za-z]/.test(before)||/[A-Za-z]/.test(after)){index+=key.length;continue}result=result.slice(0,index)+words[key]+result.slice(index+key.length);index+=words[key].length}}return result}
  function translate(root){
   if(root.nodeType===1){if(root.tagName==='OPTION'&&!root.hasAttribute('value'))root.setAttribute('value',root.textContent);if(root.hasAttribute('placeholder'))root.setAttribute('placeholder',translateText(root.getAttribute('placeholder')))}
   if(root.nodeType===3&&root.parentElement&&!['SCRIPT','STYLE','TEXTAREA'].includes(root.parentElement.tagName)){const v=translateText(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v}
