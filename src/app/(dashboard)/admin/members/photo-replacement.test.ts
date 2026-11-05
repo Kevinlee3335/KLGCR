@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { File } from "node:buffer";
 
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), upload: vi.fn(), remove: vi.fn(), update: vi.fn(), insert: vi.fn(), selected: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireRole: mocks.authorize }));
