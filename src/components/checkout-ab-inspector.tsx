@@ -5,7 +5,7 @@ import {createClient} from "@/lib/supabase/client";
 import {inspectionFindings,type ABInspection} from "@/lib/checkout-inspection";
 import {prepareInspectionPhotos,submitABInspection} from "@/app/(dashboard)/admin/checkouts/inspection/actions";
 
-export function CheckoutABInspector(){
+export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
  const frame=useRef<HTMLIFrameElement>(null),pending=useRef(false);
  const [progress,setProgress]=useState(""),[error,setError]=useState(""),[saved,setSaved]=useState<{id:string;reference_no:string}|null>(null),[round,setRound]=useState(0);
  useEffect(()=>{
@@ -42,5 +42,5 @@ export function CheckoutABInspector(){
   }
   window.addEventListener("message",receive);return()=>window.removeEventListener("message",receive);
  },[]);
- return <section>{saved?<div className="panel"><h3>Inspection submitted successfully</h3><p>{saved.reference_no} is now in the Check-out Progress Table, ready to assign.</p><div className="checkout-page-actions"><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link><button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>Inspect another room</button></div></div>:<>{error&&<p className="error" role="alert">{error} Your inspection is still open below.</p>}{progress&&<div className="panel" role="status">{progress}</div>}<iframe ref={frame} key={round} title="Block A and B room inspection" src="/checkout-ab-inspection.html" style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
+ return <section>{saved?<div className="panel"><h3>Inspection submitted successfully</h3><p>{saved.reference_no} is now in the Check-out Progress Table, ready to assign.</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>Inspect another room</button></div></div>:<>{error&&<p className="error" role="alert">{error} Your inspection is still open below.</p>}{progress&&<div className="panel" role="status">{progress}</div>}<iframe ref={frame} key={round} title="Block A and B room inspection" src="/checkout-ab-inspection.html" style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
 }

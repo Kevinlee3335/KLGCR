@@ -7,7 +7,7 @@ import { createAppNotifications } from "@/lib/app-notifications";
 
 export async function assignCleaner(data: FormData) {
  const profile = await requireRole(["admin", "cleaner"]);
- if (!["ana", "mary"].includes(profile.username)) redirect("/");
+ if (!["fikri", "mary"].includes(profile.username)) redirect("/");
  const roomId = String(data.get("room") || "");
  const cleanerId = String(data.get("cleaner") || "");
  const db = await createClient();
