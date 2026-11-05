@@ -5,7 +5,9 @@ import {createClient} from "@/lib/supabase/client";
 import {inspectionFindings,type ABInspection} from "@/lib/checkout-inspection";
 import {prepareInspectionPhotos,submitABInspection} from "@/app/(dashboard)/admin/checkouts/inspection/actions";
 
-export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
+type SavedInspection={checklist:unknown;created_at:string};
+export function CheckoutABInspector({isAdmin=true,initialInspections=[],loadError=false}:{isAdmin?:boolean;initialInspections?:SavedInspection[];loadError?:boolean}){
+ const [inspections,setInspections]=useState(initialInspections);
  const frame=useRef<HTMLIFrameElement>(null),pending=useRef(false);
  const [progress,setProgress]=useState(""),[error,setError]=useState(""),[saved,setSaved]=useState<{id:string;reference_no:string}|null>(null),[round,setRound]=useState(0);
  useEffect(()=>{
@@ -35,6 +37,7 @@ export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
     const checklist=JSON.parse(JSON.stringify(record,(key,value)=>key==="photos"?undefined:value));
     const result=await submitABInspection({id:record.id,block:record.b,room:record.room.replace(/^[AB]/,""),pax:record.p,notes:`${record.date} · ${record.by} · ${record.reason}`,checklist,findings:uploaded});
     if("error" in result)throw new Error(result.error);
+    setInspections(previous=>[{checklist,created_at:new Date().toISOString()},...previous.filter(row=>(row.checklist as {id?:string})?.id!==record.id)]);
     setSaved(result.room);
     frame.current?.contentWindow?.postMessage({type:"klg-inspection-saved"},window.location.origin);
    }catch(cause){setError(cause instanceof Error?cause.message:"Unable to submit inspection. Please try again.");}
@@ -42,5 +45,5 @@ export function CheckoutABInspector({isAdmin=true}:{isAdmin?:boolean}){
   }
   window.addEventListener("message",receive);return()=>window.removeEventListener("message",receive);
  },[isAdmin]);
- return <section>{saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{isAdmin?error:"Pemeriksaan tidak dapat dihantar. Sila semak maklumat dan gambar, kemudian cuba lagi. Jika masih gagal, hubungi admin."} {isAdmin?"Your inspection is still open below.":"Pemeriksaan masih terbuka di bawah."}</p>}{progress&&<div className="panel" role="status">{progress}</div>}<iframe ref={frame} key={round} title="Block A and B room inspection" src={isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
+ return <section>{saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{isAdmin?error:"Pemeriksaan tidak dapat dihantar. Sila semak maklumat dan gambar, kemudian cuba lagi. Jika masih gagal, hubungi admin."} {isAdmin?"Your inspection is still open below.":"Pemeriksaan masih terbuka di bawah."}</p>}{progress&&<div className="panel" role="status">{progress}</div>}{loadError&&<p className="error" role="alert">{isAdmin?"Unable to load saved inspections. Please refresh or contact admin.":"Tidak dapat memuatkan pemeriksaan. Sila muat semula atau hubungi admin."}</p>}<iframe ref={frame} key={round} onLoad={()=>frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:inspections},window.location.origin)} title="Block A and B room inspection" src={isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
 }
