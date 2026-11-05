@@ -1,5 +1,8 @@
 export type PaintingListRoom={block:string;room:string;date:string;notes?:string|null;reasons?:string[]};
 export function generatePaintingList(rows:PaintingListRoom[],pic:string){
+ const unique=new Map<string,PaintingListRoom>();
+ for(const row of rows){const key=`${row.block.toUpperCase()}:${row.room.toUpperCase().replace(/[-\s]/g,'').replace(new RegExp(`^${row.block}`,'i'),'')}`;const old=unique.get(key);if(!old){unique.set(key,{...row});continue;}const notes=new Set([...(old.notes?.split('; ')||[old.reasons?.join(', ')||'']),row.notes?.trim()||row.reasons?.join(', ')||''].filter(Boolean));unique.set(key,{...old,date:row.date>old.date?row.date:old.date,notes:[...notes].join('; ')});}
+ rows=[...unique.values()];
  const blocks=[...new Set(rows.map(r=>r.block))].sort();
  return blocks.map(block=>{
   const blockRows=rows.filter(r=>r.block===block);

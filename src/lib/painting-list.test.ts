@@ -21,3 +21,7 @@ it('groups blocks and dates and lists a room once per date',()=>{
  const text=generatePaintingList([{block:'A',room:'A-720',date:'2026-06-22',notes:'Room paint'},{block:'A',room:'720',date:'2026-06-22',notes:'Bathroom paint'},{block:'B',room:'101',date:'2026-06-23',reasons:['Moldy']}],'Kevin');
  expect(text).toContain('1. A720 - Room paint; Bathroom paint');expect(text).not.toContain('2. A720');expect(text).toContain('🎨🔴 Room with painting work - Block B (PIC Kevin)\n\n- 23/06/2026\n1. B101 - Moldy');
 });
+it('includes every room only once even across work dates',()=>{
+ const text=generatePaintingList([{block:'A',room:'720',date:'2026-06-21',reasons:['Wall stain']},{block:'A',room:'A720',date:'2026-06-22',reasons:['Moldy']},{block:'B',room:'101',date:'2026-06-20'}],'Kevin');
+ expect(text.match(/A720/g)).toHaveLength(1);expect(text).toContain('Wall stain');expect(text).toContain('Moldy');expect(text).toContain('B101');
+});
