@@ -11,9 +11,11 @@ describe('occupancy daily report',()=>{
 it('applies inclusive Malaysia date ranges to the same ready-room query', async()=>{
  const {loadOccupancyReport}=await import('./checkout-occupancy-report');
  const calls:unknown[][]=[];
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
  const chain:any={};
  for(const method of ['select','is','eq','gte','lt','order']) chain[method]=(...args:unknown[])=>{calls.push([method,...args]);return chain;};
  chain.range=async()=>({data:[],error:null});
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
  const db:any={from:()=>chain};
  await loadOccupancyReport(db,'2026-11-01','2026-11-05');
  expect(calls).toContainEqual(['eq','status','ready_for_occupancy']);
