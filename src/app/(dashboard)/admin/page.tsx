@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {DocumentReviewQueue} from '@/components/document-review-queue';
 import {createAdminClient} from "@/lib/supabase/admin";
 import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
@@ -53,5 +54,8 @@ export default async function AdminPage() {
     tenantNoShows, jobs, complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"], tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"], inventory: stock,
   };
   const pendingPOs=await pendingPOPromise;
-  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<DocumentReviewQueue userId={profile.id}/><SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<MonitoringFollowUp/>}/></AppShell>;
+  const isCleanerCoordinator=profile.role==="admin"&&["mary","fikri"].includes(profile.username);
+  const queueResult=isCleanerCoordinator?await supabase.rpc("checkout_housekeeping_queue"):null;
+  const pendingRooms=(queueResult?.data as {rooms?:{id:string;block:string;room_no:string}[]}|null)?.rooms??[];
+  return <AppShell profile={profile} title="Dashboard">{isPoApprover&&(pendingPOs?.error?<section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>:<PoApprovalQueue orders={pendingPOs?.data||[]} total={pendingPOs?.count||0}/>)}<DocumentReviewQueue userId={profile.id}/><SupplierMailSummary/><Dashboard kind="admin" name={profile.full_name} data={data} monitoringFollowUp={<>{isCleanerCoordinator&&queueResult?.error&&<section className="panel" role="alert">Unable to load rooms awaiting cleaner assignment. Please refresh.</section>}{pendingRooms.length>0&&<section className="panel" aria-label="Rooms awaiting cleaner assignment"><p className="eyebrow">Action required</p><h3>Cleaner Assignment · {pendingRooms.length} {pendingRooms.length===1?"room":"rooms"}</h3><p>Rooms ready and waiting for a cleaner.</p><p>{pendingRooms.map(room=>`Block ${room.block} · ${room.room_no}`).join(", ")}</p><Link className="button" href="/staff/checkouts/assign">Assign Cleaner →</Link></section>}<MonitoringFollowUp/></>}/></AppShell>;
 }
