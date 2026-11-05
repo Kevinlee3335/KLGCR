@@ -10,7 +10,7 @@ function displayStatus(r:Row) {
  const p=checkoutProgress(r.defects);
  if (r.status==="ready_for_occupancy") return {label:"Ready for Occupancy",background:"#14532d",color:"#ffffff"};
  if (r.status==="cleaning") return {label:"Cleaning",background:"#ede9fe",color:"#5b21b6"};
- if (isEligible(r) && p.total===0) return {label:"No Defect · Assign Cleaner",background:"#dcfce7",color:"#166534"};
+ if (isEligible(r) && p.total===0) return {label:"No Defect · Assign Cleaner",background:"#fce7f3",color:"#9d174d"};
  if (isEligible(r) && p.total>0) return {label:"Repair Completed · Assign Cleaner",background:"#dbeafe",color:"#1e40af"};
  if (r.status==="rectification") return {label:"Rectification in Progress",background:"#ffedd5",color:"#9a3412"};
  if (r.status==="second_inspection" && p.total>0) return {label:"Awaiting Maintenance",background:"#fef3c7",color:"#92400e"};
