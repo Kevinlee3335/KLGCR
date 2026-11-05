@@ -14,7 +14,7 @@ export function generatePaintingList(rows:PaintingListRoom[],pic:string){
     const raw=r.room.trim();const code=raw.toUpperCase().startsWith(block.toUpperCase())?raw.replace(/[-\s]/g,''):`${block}${raw.replace(/[-\s]/g,'')}`;
     const notes=rooms.get(code)||new Set<string>();const note=(r.notes?.trim()||r.reasons?.join(', ')||'').replace(/\s+/g,' ');if(note)notes.add(note);rooms.set(code,notes);
    }
-   const lines=[...rooms].sort(([a],[b])=>b.localeCompare(a,undefined,{numeric:true})).map(([room,notes],i)=>`${i+1}. ${room}${notes.size?' - '+[...notes].join('; '):''}`);
+   const lines=[...rooms].sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).map(([room],i)=>`${i+1}. ${room}`);
    return `- ${day}/${month}/${year}\n${lines.join('\n')}`;
   })].join('\n\n');
  }).join('\n\n');
