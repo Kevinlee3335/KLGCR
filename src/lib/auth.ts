@@ -19,3 +19,9 @@ export async function requireRole(allowed: AppRole[]): Promise<Profile> {
   if (!allowed.includes(profile.role)) redirect(roleHome(profile.role));
   return profile;
 }
+
+export async function requireCheckoutInspector(): Promise<Profile> {
+  const profile = await requireRole(["admin", "cleaner"]);
+  if (profile.role !== "admin" && !["fadhil", "ariffin"].includes(profile.username)) redirect(roleHome(profile.role));
+  return profile;
+}
