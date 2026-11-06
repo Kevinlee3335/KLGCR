@@ -32,3 +32,17 @@ describe('checkout maintenance bulk assignment',()=>{
   await waitFor(()=>expect(mocks.assign).toHaveBeenCalledWith(['a','b'],'m1','maintenance'));
  });
 });
+
+it('filters blocks and clears selected rooms when changing blocks',()=>{
+ const data=[{...base,id:'a1',reference_no:'A1',room_no:'101',status:'second_inspection' as const,defects:[{description:'Fan',status:'open'}]},{...base,id:'b1',reference_no:'B1',room_no:'101',block:{code:'B'},status:'second_inspection' as const,defects:[{description:'Fan',status:'open'}]}];
+ render(<CheckoutProgressTable rows={data} cleaners={[]} maintenanceWorkers={[{id:'m1',full_name:'Abdullah'}]} isAdmin canAssignCleaner={false}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Block A'}));
+ fireEvent.click(screen.getByLabelText('Select maintenance room 101'));
+ expect(screen.getByRole('button',{name:'Assign 1 room(s) to maintenance'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Block B'}));
+ expect(screen.queryByText('A1')).not.toBeInTheDocument();
+ expect(screen.getByText('B1')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Assign 0 room(s) to maintenance'})).toBeDisabled();
+ fireEvent.click(screen.getByRole('button',{name:'All Blocks'}));
+ expect(screen.getByText('A1')).toBeInTheDocument();
+});
