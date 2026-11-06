@@ -14,7 +14,7 @@ it('groups by block, sorts rooms without dates, and removes duplicate room numbe
 1. A107
 2. A510
 
-🎨🔴 Room with painting work - Block B (PIC Kevin)
+🎨🩵 Room with painting work - Block B (PIC Kevin)
 
 1. B105
 2. B110`);
