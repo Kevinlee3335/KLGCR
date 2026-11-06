@@ -1,0 +1,12 @@
+.toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:14px;padding:18px 20px;margin:16px 0;border:1px solid #e8dfcf;border-radius:14px;background:linear-gradient(110deg,#fffefa,#f8f4ea)}
+.blocks{display:flex;gap:6px;padding:4px;border:1px solid #e6dbc5;border-radius:11px;background:#fffefa}
+.blocks button{border:0;border-radius:8px;padding:10px 16px;background:transparent;color:#746a55;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.blocks button[aria-pressed="true"]{background:#27251e;color:#f6d987;box-shadow:0 2px 6px #342b1c28}
+.blocks button:focus-visible,.toolbar select:focus-visible,.toolbar input:focus-visible,.toolbar button:focus-visible{outline:2px solid #b68d3d;outline-offset:2px}
+.controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;flex:1}
+.controls>div,.controls>form{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0}
+.controls label{display:flex;flex-direction:column;gap:6px;color:#716852;font-size:11px;font-weight:700;white-space:nowrap}
+.controls select,.controls input:not([type=hidden]){height:40px;min-width:190px;max-width:100%;padding:0 12px;border:1px solid #ded3be;border-radius:9px;background:#fffefa;color:#302d25;font-size:13px}
+.controls button{min-height:40px;border-radius:9px}
+.controls p{width:100%;margin:0;font-size:12px}
+@media(max-width:700px){.toolbar{padding:14px;align-items:stretch}.blocks{width:100%}.blocks button{flex:1;padding:10px 8px}.controls,.controls>div,.controls>form{width:100%}.controls label{flex:1;min-width:150px}.controls select,.controls input:not([type=hidden]){width:100%;min-width:0}.controls button{width:100%}}
