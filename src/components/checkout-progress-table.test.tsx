@@ -18,3 +18,17 @@ describe('checkout cleaner bulk assignment',()=>{
  });
  it('hides assignment controls without coordinator permission',()=>{render(<CheckoutProgressTable rows={rows} cleaners={[]} isAdmin canAssignCleaner={false}/>);expect(screen.queryByLabelText('Select room 101')).not.toBeInTheDocument()});
 });
+
+describe('checkout maintenance bulk assignment',()=>{
+ it('assigns selected unassigned rooms and blocks rooms already in progress',async()=>{
+  const awaiting=[{...base,id:'a',reference_no:'A',room_no:'204',status:'second_inspection' as const,defects:[{description:'Fan',status:'open'}]},{...base,id:'b',reference_no:'B',room_no:'205',status:'second_inspection' as const,defects:[{description:'Room Wall Moldy',status:'open'}]},rows[2]];
+  mocks.assign.mockResolvedValue({count:2});
+  render(<CheckoutProgressTable rows={awaiting} cleaners={[]} maintenanceWorkers={[{id:'m1',full_name:'Abdullah'}]} isAdmin canAssignCleaner={false}/>);
+  expect(screen.getByLabelText('Select maintenance room 103')).toBeDisabled();
+  fireEvent.click(screen.getByLabelText('Select maintenance room 204'));
+  fireEvent.click(screen.getByLabelText('Select maintenance room 205'));
+  fireEvent.change(screen.getByLabelText('Maintenance'),{target:{value:'m1'}});
+  fireEvent.click(screen.getByRole('button',{name:'Assign 2 room(s) to maintenance'}));
+  await waitFor(()=>expect(mocks.assign).toHaveBeenCalledWith(['a','b'],'m1','maintenance'));
+ });
+});
