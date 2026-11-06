@@ -10,6 +10,6 @@ export function generatePaintingList(rows:PaintingListRoom[],pic:string){
  }
  return [...blocks.entries()].sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).map(([block,rooms])=>{
   const lines=[...rooms].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map((room,i)=>`${i+1}. ${room}`);
-  return `🎨🔴 Room with painting work - Block ${block} (PIC ${pic.trim()})\n\n${lines.join('\n')}`;
+  return `🎨${block==='B'?'🩵':'🔴'} Room with painting work - Block ${block} (PIC ${pic.trim()})\n\n${lines.join('\n')}`;
  }).join('\n\n');
 }
