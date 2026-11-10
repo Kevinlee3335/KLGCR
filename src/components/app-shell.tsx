@@ -29,7 +29,7 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
   return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d={paths[kind]}/></svg>;
 }
 
-function AdminNavigation({ mobile = false, currentTitle, superAdmin = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean }) {
+function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, canVerifyPayments = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; canVerifyPayments?: boolean }) {
   const groups = [
     { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", "Waste Collection"].includes(label)) },
     { label: "Daily Tasks", Icon: ClipboardCheck, links: [
@@ -68,6 +68,7 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false }: {
     {superAdmin&&<Link href="/admin/super-admin" aria-current={active("Super Admin Control Center") ? "page" : undefined}><Settings size={18}/><span>Super Admin Control Center</span></Link>}
     <Link href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></Link>
     <Link href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></Link>
+    {canVerifyPayments&&<Link href="/admin/payment-verification" aria-current={active("Payment Verification") ? "page" : undefined}><ClipboardCheck size={18}/><span>Payment Verification</span></Link>}
     {assistantEnabled() && <Link href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></Link>}
   </nav>;
 }
@@ -81,7 +82,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
   return <div className={`shell ${isStaff ? "staff-shell" : "admin-shell"}`}>
     <aside className="sidebar">
       <Brand/>
-      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)}/>}
+      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <Link key={item} href={href}>{item}</Link>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} canVerifyPayments={profile.role === "admin"}/>}
       <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><Link className="change-password-link" href="/account">Change Password</Link><LogoutForm/></div>
     </aside>
 
@@ -98,7 +99,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
       <div className="mobile-menu-backdrop" aria-hidden="true"/>
       <aside className="mobile-drawer" aria-label="Full navigation menu">
         <div className="mobile-drawer-heading"><Brand/><span>Menu</span></div>
-        {isStaff ? <nav className="nav mobile-drawer-nav">{operationalNav.map(([item, href]) => <Link key={item} href={href} aria-current={current(item)}>{item}</Link>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)}/>}
+        {isStaff ? <nav className="nav mobile-drawer-nav">{operationalNav.map(([item, href]) => <Link key={item} href={href} aria-current={current(item)}>{item}</Link>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} canVerifyPayments={profile.role === "admin"}/>}
         <div className="mobile-drawer-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><LogoutForm/></div>
       </aside>
     </details>

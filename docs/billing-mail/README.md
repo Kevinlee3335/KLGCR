@@ -65,3 +65,15 @@ payment covering multiple monthly invoices are supported; overpayment and
 cross-company allocation are rejected transactionally. Statements include all
 approved invoices, collections and outstanding balances, independent of the
 current month filter. No Statement action consumes a Receipt number.
+
+## Customer invoice packages and incoming payments
+
+Apply the customer invoice package and payment mail migrations in their repository order before releasing the application. They create private records and do not enqueue past invoices or issue receipts.
+
+Update the existing noreply Web App using the gateway procedure above. Check that its `finance-capabilities` response includes `customerInvoicePdf` before confirming a real delivery. Reuse the existing deployment URL and shared secret.
+
+In **Rental & Utilities → Customer invoice packages**, select the month and upload the official Accounts PDF. Match its pages to the approved company invoices, enter any missing registered email, and preview the result. The customer PDF uses the selected original Rental and Utilities pages followed by the Excel-style meter photos from the approved snapshot. Confirm the company, email and PDF to send the package automatically. An uncertain delivery can be checked with the same delivery key.
+
+In **Payment Verification → Email connection**, create an installation key and download both importer files. Install the importer in a separate Apps Script project while signed in to the company inbox, `klgresidenceenquiry@gmail.com`. Follow the in-app instructions to set the two Script Properties, run `installPaymentMail()` once and authorize Gmail read-only access. Check that the application shows a successful mailbox check before relying on the Dashboard reminders.
+
+The Dashboard lists pending payment emails for Admin. Verify the bank deposit against the original email, proof and approved invoices. The application saves the allocations and official Receipt together, then uses the noreply gateway to email the registered contact. A pending delivery can be checked from the same Receipt.

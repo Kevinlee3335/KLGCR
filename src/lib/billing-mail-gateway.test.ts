@@ -37,3 +37,13 @@ it('sends Office supplier PDF once and does not copy Building recipients',()=>{
  const office={...poPayload,to:'khet_loong@yahoo.com',cc:[],subject:'Purchase Order PO-1 – Office Supplies | K HOTEL SDN BHD',text:'Dear Supplier, K HOTEL SDN BHD'};
  const receipt=post(office);expect(receipt).toMatchObject({status:'sent',to:office.to,cc:[]});expect(post(office)).toEqual(receipt);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][0]).toMatchObject({to:office.to,cc:'',attachments:[{type:'application/pdf'}]});
 });
+
+it('supports a confirmed customer invoice PDF with an independent idempotency key', () => {
+  const invoice = {...financePayload, key:'invoice_11111111-1111-4111-8111-111111111111', subject:'Customer invoices', fileName:'KLGCR-company-Invoices.pdf'};
+  expect(post({action:'finance-capabilities'})).toMatchObject({capabilities: expect.arrayContaining(['customerInvoicePdf'])});
+  const receipt = post(invoice);
+  expect(receipt).toMatchObject({status:'sent', sender:payload.from, key:invoice.key, to:invoice.to});
+  expect(post(invoice)).toEqual(receipt);
+  expect(send).toHaveBeenCalledOnce();
+  expect(send.mock.calls[0][0]).toMatchObject({to: invoice.to, attachments:[{type:'application/pdf', name:invoice.fileName}]});
+});
