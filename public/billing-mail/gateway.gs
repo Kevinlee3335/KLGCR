@@ -15,7 +15,7 @@ function doPost(e){
  var sender=Session.getEffectiveUser().getEmail().toLowerCase();
  if(request.action==='billing-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['cc','htmlAttachment','idempotency']});
  if(request.action==='po-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['poPdf','officePoPdf','cc','idempotency']});
- if(request.action==='finance-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:3,sender:sender,capabilities:['financePdf','idempotency']});
+ if(request.action==='finance-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:3,sender:sender,capabilities:['financePdf','customerInvoicePdf','idempotency']});
  if(request.action==='finance-send')return klgFinanceSend(request,props,sender);
  if(request.action==='po-send')return klgPoSend(request,props,sender);
  if(request.action==='billing-send')return klgBillingSend(request,props,sender);
@@ -61,9 +61,9 @@ function klgPoSend(request,props,sender){
  }finally{lock.releaseLock();}
 }
 
-// Shared official receipts and company statements. Existing billing / PO handlers stay unchanged.
+// Official receipts, company statements and confirmed customer invoice packages.
 function klgFinanceSend(request,props,sender){
- if(sender!==KLG_BILLING_FROM||request.from!==KLG_BILLING_FROM||!/^((receipt|membership|statement)_[0-9a-f-]{36})$/i.test(request.key||'')||!/^\S+@\S+\.\S+$/.test(request.to||'')||/[\r\n,;]/.test(request.to)||typeof request.pdfBase64!=='string'||request.pdfBase64.length>16000000||!/^JVBERi0[A-Za-z0-9+/]*={0,2}$/.test(request.pdfBase64)||!request.subject||!request.text)return klgReply({ok:false,status:'rejected'});
+ if(sender!==KLG_BILLING_FROM||request.from!==KLG_BILLING_FROM||!/^((receipt|membership|statement|invoice)_[0-9a-f-]{36})$/i.test(request.key||'')||!/^\S+@\S+\.\S+$/.test(request.to||'')||/[\r\n,;]/.test(request.to)||typeof request.pdfBase64!=='string'||request.pdfBase64.length>16000000||!/^JVBERi0[A-Za-z0-9+/]*={0,2}$/.test(request.pdfBase64)||!request.subject||!request.text)return klgReply({ok:false,status:'rejected'});
  var property='finance_delivery_'+request.key,lock=LockService.getScriptLock();
  if(!lock.tryLock(10000))return klgReply({ok:false,status:'busy'});
  try{
