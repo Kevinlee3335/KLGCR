@@ -10,3 +10,15 @@
 .controls button{min-height:40px;border-radius:9px}
 .controls p{width:100%;margin:0;font-size:12px}
 @media(max-width:700px){.toolbar{padding:14px;align-items:stretch}.blocks{width:100%}.blocks button{flex:1;padding:10px 8px}.controls,.controls>div,.controls>form{width:100%}.controls label{flex:1;min-width:150px}.controls select,.controls input:not([type=hidden]){width:100%;min-width:0}.controls button{width:100%}}
+
+/* Compact room search, consistent with the existing KLGCR cream and gold filters. */
+.controls .searchField{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:180px;max-width:220px;flex:0 1 220px}
+.controls .searchField>label{display:block;color:#716852;font-size:11px;font-weight:700;line-height:1.35}
+.searchInputWrap{position:relative;display:flex;align-items:center;width:100%}
+.searchInputWrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#a18a5a;pointer-events:none}
+.controls .searchInputWrap input{width:100%;min-width:0;height:40px;padding:0 34px 0 37px;border:1px solid #ded3be;border-radius:9px;background:#fffefa;color:#302d25;font-size:13px;transition:border-color .15s ease,box-shadow .15s ease}
+.controls .searchInputWrap input:focus{border-color:#b68d3d;box-shadow:0 0 0 3px #b68d3d20}
+.controls .searchInputWrap input::-webkit-search-cancel-button{display:none}
+.controls .searchInputWrap .clearSearch{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;min-height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:#8c8069;font-size:19px;font-weight:400;line-height:1;cursor:pointer}
+.controls .searchInputWrap .clearSearch:hover{background:#f0e9da;color:#332e24}
+@media(max-width:700px){.controls .searchField{width:100%;max-width:none;flex:1 1 100%}}

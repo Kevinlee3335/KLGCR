@@ -46,3 +46,27 @@ it('filters blocks and clears selected rooms when changing blocks',()=>{
  fireEvent.click(screen.getByRole('button',{name:'All Blocks'}));
  expect(screen.getByText('A1')).toBeInTheDocument();
 });
+
+it('searches room numbers together with block filters and clears the query',()=>{
+ const data=[
+  {...base,id:'a601',reference_no:'A601-ref',room_no:'601',block:{code:'A'},status:'second_inspection' as const,defects:[{description:'Fan',status:'open'}]},
+  {...base,id:'b601',reference_no:'B601-ref',room_no:'601',block:{code:'B'},status:'second_inspection' as const,defects:[{description:'Fan',status:'open'}]},
+  {...base,id:'b608',reference_no:'B608-ref',room_no:'608',block:{code:'B'},status:'verification' as const,defects:[{description:'Fan',status:'rectified'}]}
+ ];
+ render(<CheckoutProgressTable rows={data} cleaners={[]} isAdmin canAssignCleaner={false}/>);
+ const search=screen.getByRole('searchbox',{name:'Search room'});
+ fireEvent.change(search,{target:{value:'b-601'}});
+ expect(screen.getByText('B601-ref')).toBeInTheDocument();
+ expect(screen.queryByText('A601-ref')).not.toBeInTheDocument();
+ expect(screen.queryByText('B608-ref')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Block A'}));
+ expect(screen.getByText('No rooms match your search or filters')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'All Blocks'}));
+ fireEvent.click(screen.getByRole('button',{name:'Clear room search'}));
+ expect(screen.getByText('A601-ref')).toBeInTheDocument();
+ expect(screen.getByText('B608-ref')).toBeInTheDocument();
+ fireEvent.change(search,{target:{value:'601'}});
+ expect(screen.getByText('A601-ref')).toBeInTheDocument();
+ expect(screen.getByText('B601-ref')).toBeInTheDocument();
+ expect(screen.queryByText('B608-ref')).not.toBeInTheDocument();
+});
