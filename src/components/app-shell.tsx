@@ -6,7 +6,7 @@ import { NotificationBell } from "./notification-bell";
 import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
-import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench, type LucideIcon } from "lucide-react";
 
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
@@ -29,11 +29,17 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
   return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d={paths[kind]}/></svg>;
 }
 
+type AdminNavGroup = {
+  label: string;
+  Icon: LucideIcon;
+  links: readonly (readonly [title: string, href: string, Icon: LucideIcon, label?: string])[];
+};
+
 function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, canVerifyPayments = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; canVerifyPayments?: boolean }) {
-  const groups = [
+  const groups: AdminNavGroup[] = [
     { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", "Waste Collection"].includes(label)) },
     { label: "Daily Tasks", Icon: ClipboardCheck, links: [
-      ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck],
+      ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck, "All Daily Tasks"],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
@@ -52,10 +58,10 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, can
     { label: "System", Icon: Settings, links: adminNav.filter(([label]) => ["Notifications", "Users", "Settings"].includes(label)) },
   ];
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
-  const renderGroup = ({ label, Icon, links }: typeof groups[number]) => {
+  const renderGroup = ({ label, Icon, links }: AdminNavGroup) => {
     const groupClass = `admin-nav-group${links.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
-    const submenu = <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon]) => <Link key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{item === "Daily Tasks" ? "All Daily Tasks" : item}</span></Link>)}</div>;
+    const submenu = <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon, linkLabel]) => <Link key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></Link>)}</div>;
     return mobile
       ? <details key={label} className={groupClass}><summary>{heading}</summary>{submenu}</details>
       : <div key={label} className={groupClass}><button type="button" className="admin-nav-group-trigger" aria-label={`${label} submenu`}>{heading}</button>{submenu}</div>;
@@ -67,8 +73,14 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, can
     {groups.slice(2).map(renderGroup)}
     {superAdmin&&<Link href="/admin/super-admin" aria-current={active("Super Admin Control Center") ? "page" : undefined}><Settings size={18}/><span>Super Admin Control Center</span></Link>}
     <Link href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></Link>
-    <Link href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></Link>
-    {canVerifyPayments&&<Link href="/admin/payment-verification" aria-current={active("Payment Verification") ? "page" : undefined}><ClipboardCheck size={18}/><span>Payment Verification</span></Link>}
+    {canVerifyPayments ? renderGroup({
+      label: "Rental & Utilities",
+      Icon: FileBarChart,
+      links: [
+        ["Rental & Utilities", "/admin/billing", FileBarChart, "Billing Overview"],
+        ["Payment Verification", "/admin/payment-verification", ClipboardCheck],
+      ],
+    }) : <Link href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></Link>}
     {assistantEnabled() && <Link href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></Link>}
   </nav>;
 }
