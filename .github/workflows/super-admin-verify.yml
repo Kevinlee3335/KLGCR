@@ -19,3 +19,4 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --run src/lib/checkout-cleaner-transfer.database.test.ts
+      - run: npm run build
