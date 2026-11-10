@@ -192,7 +192,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
         <thead><tr><th>Company</th><th>Recipient</th><th>Pages</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{catalog.packages.map(pack => <tr key={pack.id}>
           <td>{pack.company_name}</td><td>{pack.recipient}</td><td>{pack.page_count}</td>
-          <td>{manuallySent && pack.status !== 'sent' ? 'Sent manually' : statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
+          <td>{manuallySent && pack.status !== 'sent' ? 'Delivery closed' : statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
           <td><button type="button" disabled={busy} onClick={() => openReview(pack.id)}>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>{' '}
             {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
         </tr>)}</tbody>

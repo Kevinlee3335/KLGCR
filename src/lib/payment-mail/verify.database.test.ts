@@ -38,8 +38,8 @@ async function setup(db: PGlite) {
     '20261029081238_unified_receipts_and_billing_payments',
     '20261030061427_official_receipt_five_digit_sequence',
     '20261102060100_receipt_signature_snapshot',
-    '20261110083218_customer_invoice_packages',
-    '20261110083219_payment_mail_admin_verification',
+    '20261110090816_customer_invoice_packages',
+    '20261110090839_payment_mail_admin_verification',
   ]) {
     await db.exec(readFileSync(`supabase/migrations/${migration}.sql`, 'utf8'));
   }
