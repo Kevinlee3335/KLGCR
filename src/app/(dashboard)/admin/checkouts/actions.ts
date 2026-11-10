@@ -65,6 +65,31 @@ export async function transferCheckoutTask(id:string,data:FormData){
  revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/admin/checkouts");revalidatePath("/staff/checkouts");revalidatePath(`/staff/checkouts/${id}`);go(id);
 }
 
+export async function transferCheckoutCleanerTask(id:string,data:FormData){
+ await requireRole(["admin"]);const db=await createClient();
+ const cleaner=String(data.get("cleaner")||"");
+ const expected=String(data.get("previousCleaner")||"");
+ const reason=String(data.get("reason")||"").trim();
+ if(!cleaner||!expected||reason.length<3||reason.length>2000)
+  go(id,"Choose a different cleaner and enter a transfer reason (3–2000 characters).");
+ const {data:room,error}=await db.rpc("transfer_checkout_cleaner_task",{
+  p_room_id:id,p_cleaner:cleaner,p_expected_cleaner:expected,p_reason:reason
+ });
+ if(error||!room)go(id,error?.message||"Unable to transfer this cleaner task.");
+ try{
+  await createAppNotifications({
+   recipientIds:[cleaner],type:"checkout_assigned",title:"Check-out cleaning task transferred to you",
+   body:`${room.reference_no} — Room ${room.room_no}. ${reason}`,
+   href:`/staff/checkouts/${id}`,entityId:id
+  });
+ }catch(error){console.error("Unable to notify new check-out cleaner",error);}
+ revalidatePath(`/admin/checkouts/${id}`);
+ revalidatePath("/admin/checkouts");
+ revalidatePath("/staff/checkouts");
+ revalidatePath(`/staff/checkouts/${id}`);
+ go(id);
+}
+
 export async function bulkAssignCheckouts(ids:string[],assignee:string,kind:"maintenance"|"cleaner"){
  const actor=await requireRole(["admin"]);if(kind==="cleaner"&&!["mary","fikri"].includes(actor.username))return {error:"Cleaner assignment is handled by Mary or Fikri."};const db=await createClient();
  const {data,error}=await db.rpc("bulk_assign_checkout_rooms",{p_ids:ids,p_assignee:assignee,p_kind:kind});
