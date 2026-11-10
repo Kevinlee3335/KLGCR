@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, Copy, Download, Mail, RefreshCw } from 'lucide-react';
+import { NOVEMBER_PAYMENT_MAIL_START } from '@/lib/payment-mail/types';
 import styles from './payment-mail.module.css';
 
 type Connection = {
@@ -78,7 +79,9 @@ export function PaymentMailConnection() {
     if (busy) return;
     setBusy(action); setError(''); setMessage('');
     try {
-      const response = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'create' ? { action, lookbackDays: Number(lookback) } : { action, id }) });
+      const start = lookback === NOVEMBER_PAYMENT_MAIL_START ? { startFrom: lookback } : { lookbackDays: Number(lookback) };
+      const payload = action === 'create' ? { action, ...start } : { action, id };
+      const response = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Unable to update the payment email connection.');
       if (action === 'create') {
@@ -116,7 +119,16 @@ export function PaymentMailConnection() {
       </div>)}
       {revokeId && <div className={`${styles.notice} ${styles.inlineNotice}`}><AlertCircle size={17} aria-hidden="true" /><div><p>Revoke this installation key? Incoming emails from this installation will stop being imported. Existing payment records remain available.</p><div className={styles.actions}><button type="button" className={`${styles.button} ${styles.danger}`} disabled={Boolean(busy)} onClick={() => void mutate('revoke', revokeId)}>{busy === 'revoke' ? 'Revoking…' : 'Revoke this key'}</button><button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => setRevokeId('')}>Keep connection</button></div></div></div>}
       {connection && !setup && <div className={styles.connectionFields}>
-        <label className={styles.field}><span>First import</span><select className={styles.select} value={lookback} disabled={Boolean(busy)} onChange={event => setLookback(event.target.value)}><option value="0">New emails from setup time</option><option value="1">Include the previous day</option><option value="3">Include the previous 3 days</option><option value="7">Include the previous 7 days</option></select></label>
+        <label className={styles.field}>
+          <span>First import</span>
+          <select className={styles.select} value={lookback} disabled={Boolean(busy)} onChange={event => setLookback(event.target.value)}>
+            <option value="0">New emails from setup time</option>
+            <option value="1">Include the previous day</option>
+            <option value="3">Include the previous 3 days</option>
+            <option value="7">Include the previous 7 days</option>
+            <option value={NOVEMBER_PAYMENT_MAIL_START}>From 1 November 2026 (MYT)</option>
+          </select>
+        </label>
         <button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => void mutate('create')}>{busy === 'create' ? 'Creating key…' : 'Create installation key'}</button>
       </div>}
       {setup && <section className={styles.setup} aria-labelledby="payment-mail-setup-title">

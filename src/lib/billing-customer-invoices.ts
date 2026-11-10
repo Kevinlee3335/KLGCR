@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {BILLING_APPROVER_ID, withBillingApproval, type BillingApproval} from './billing-approval';
 import {monthSchema, type BillingLine, type BillingSnapshot} from './billing-preview';
 import {appendCustomerMeterPages} from './billing-customer-meter-pages';
-import {BILLING_MAIL_FROM} from './billing-mail-settings';
+import {BILLING_MAIL_FROM, MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE, MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD} from './billing-mail-settings';
 import {gmailGateway} from './billing-mail';
 import {sendFinancePdf} from './finance-mail';
 import {createAdminClient} from './supabase/admin';
@@ -54,6 +54,12 @@ export const customerInvoiceDraftSchema = z.object({
 
 export class CustomerInvoiceError extends Error {
   constructor(message: string, public status = 400) { super(message); }
+}
+
+function requireCustomerInvoicePeriod(period: string) {
+  if (period === MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD) {
+    throw new CustomerInvoiceError(MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE, 409);
+  }
 }
 
 function companyIdentity(name: string) {
@@ -146,6 +152,7 @@ export async function assembleCustomerInvoicePdf(
 export async function saveCustomerInvoiceDraft(
   input: z.infer<typeof customerInvoiceDraftSchema>, primaryFile: File, utilityFile: File | null, admin: string,
 ): Promise<CustomerInvoiceRow> {
+  requireCustomerInvoicePeriod(input.period);
   if (primaryFile.size + (utilityFile?.size || 0) > maxCustomerInvoiceUpload) {
     throw new CustomerInvoiceError('Keep the Accounts PDF upload under 4 MB. Split large scans first.', 413);
   }
@@ -236,6 +243,11 @@ export async function deleteCustomerInvoiceDraft(id: string) {
 
 export async function dispatchCustomerInvoice(id: string, admin: string) {
   const db = createAdminClient();
+  const period = await db.from(packageTable).select('period').eq('id', id).maybeSingle();
+  if (period.error) throw new CustomerInvoiceError('Unable to check the package billing period.', 503);
+  if (!period.data) throw new CustomerInvoiceError('Invoice package not found.', 404);
+  requireCustomerInvoicePeriod(period.data.period);
+
   const claim = await db.rpc('claim_billing_customer_invoice_delivery', {p_id: id, p_admin: admin});
   if (claim.error) {
     if (claim.error.message.includes('Registered customer email changed')) {
@@ -249,6 +261,7 @@ export async function dispatchCustomerInvoice(id: string, admin: string) {
     if (!current.data || current.error) throw new CustomerInvoiceError('Unable to read the package status.', 503);
     return current.data as CustomerInvoiceRow;
   }
+  requireCustomerInvoicePeriod(pack.period);
   let sent = false;
   let deliveryError = 'Delivery needs checking. Retry uses the same delivery key.';
   try {

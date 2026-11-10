@@ -76,4 +76,6 @@ In **Rental & Utilities → Customer invoice packages**, select the month and up
 
 In **Payment Verification → Email connection**, create an installation key and download both importer files. Install the importer in a separate Apps Script project while signed in to the company inbox, `klgresidenceenquiry@gmail.com`. Follow the in-app instructions to set the two Script Properties, run `installPaymentMail()` once and authorize Gmail read-only access. Check that the application shows a successful mailbox check before relying on the Dashboard reminders.
 
+For the November 2026 payment catch-up, choose **From 1 November 2026 (MYT)** under **First import** when creating the key. The importer includes payment mail received from midnight Malaysia time on 1 November and continues with new mail. Admin verifies deposits and checks any existing Receipt before issuing a new one.
+
 The Dashboard lists pending payment emails for Admin. Verify the bank deposit against the original email, proof and approved invoices. The application saves the allocations and official Receipt together, then uses the noreply gateway to email the registered contact. A pending delivery can be checked from the same Receipt.

@@ -1,6 +1,8 @@
 import type {BillingDocumentKind, BillingDocumentRecord} from '@/lib/billing-documents';
 import type {OfficialReceipt} from '@/lib/official-receipt';
 
+export const NOVEMBER_PAYMENT_MAIL_START = '2026-11-01';
+
 export const paymentMailStatuses = [
   'pending_verification', 'needs_review', 'verified', 'rejected', 'duplicate', 'ignored',
 ] as const;

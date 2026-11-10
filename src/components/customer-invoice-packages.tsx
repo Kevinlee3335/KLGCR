@@ -1,7 +1,9 @@
 'use client';
 
 import {useEffect, useState, type FormEvent} from 'react';
+import Link from 'next/link';
 import type {CustomerInvoiceCatalog} from '@/lib/billing-customer-invoices';
+import {MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE, MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD} from '@/lib/billing-mail-settings';
 
 const apiPath = '/api/billing-preview/customer-invoices';
 const emptySelection = {value: '', page: '', invoiceNo: ''};
@@ -43,6 +45,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
   const [confirmed, setConfirmed] = useState(false);
   const sourceUrl = usePdfUrl(source);
   const utilityUrl = usePdfUrl(utilitySource);
+  const manuallySent = period === MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,7 +75,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!source || busy) return;
+    if (!source || busy || manuallySent) return;
     const mapping = (kind: Kind) => {
       const current = selection[kind];
       if (!current.value) return null;
@@ -100,7 +103,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
   }
 
   async function changePackage(pack: Package, action: 'send' | 'discard') {
-    if (busy) return;
+    if (busy || (action === 'send' && pack.period === MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD)) return;
     setBusy(true);
     setMessage('');
     try {
@@ -122,16 +125,18 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
 
   return <>
     <section className="panel">
-      <h3>Choose Accounts invoice pages</h3>
-      <p className="subtle">Upload the official PDF from Accounts. Choose the matching approved company invoices and their PDF page numbers. You can keep the same scan open for the next company.</p>
+      <h3>Customer invoice delivery</h3>
       <label>Billing month <input type="month" value={period} disabled={busy} onChange={event => {
         setCatalog(undefined);
         setPeriod(event.target.value);
         setSelection({rental: emptySelection, utility: emptySelection});
         setEmail('');
+        setMessage('');
         setReviewId(undefined);
       }}/></label>
-      <form onSubmit={saveDraft}>
+      {manuallySent ? <p role="status">{MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE} Continue in <Link href="/admin/payment-verification">Payment Verification</Link>.</p>
+        : <p className="subtle">Upload the official PDF from Accounts. Choose the matching approved company invoices and their PDF page numbers. You can keep the same scan open for the next company.</p>}
+      {!manuallySent && <form onSubmit={saveDraft}>
         <fieldset disabled={busy || !catalog?.accounts.length}>
           <label>Accounts PDF <input type="file" accept="application/pdf,.pdf" required onChange={event => setSource(event.target.files?.[0] || null)}/></label>
           {sourceUrl && <p><a href={sourceUrl} target="_blank" rel="noreferrer">Open Accounts PDF</a></p>}
@@ -160,9 +165,9 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
           </>}
           <button type="submit" disabled={!source || !selectedAccounts.length || registered.length > 1}>{busy ? 'Preparing…' : 'Prepare PDF draft'}</button>
         </fieldset>
-      </form>
-      {!catalog && period && <p className="subtle">Loading approved invoices…</p>}
-      {catalog && !catalog.accounts.length && <p className="subtle">No James-approved Rental or Utilities invoices are available for this month.</p>}
+      </form>}
+      {!manuallySent && !catalog && period && <p className="subtle">Loading approved invoices…</p>}
+      {!manuallySent && catalog && !catalog.accounts.length && <p className="subtle">No James-approved Rental or Utilities invoices are available for this month.</p>}
       {message && <p role="status">{message}</p>}
     </section>
     {review && <section className="panel">
@@ -175,11 +180,11 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
       <p><a href={pdfUrl(review.id)} target="_blank" rel="noreferrer">Open exact PDF in a new tab</a></p>
       <iframe title={`Invoice package for ${review.company_name}`} src={pdfUrl(review.id)} width="100%" height="680"/>
       {review.status === 'draft' && <div>
-        <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)}/> I checked the official invoice pages and amounts against the approved invoices, and verified the company and recipient.</label>
-        <p><button type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}>Confirm and send from noreply</button>{' '}
+        {!manuallySent && <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)}/> I checked the official invoice pages and amounts against the approved invoices, and verified the company and recipient.</label>}
+        <p>{!manuallySent && <><button type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}>Confirm and send from noreply</button>{' '}</>}
           <button type="button" disabled={busy} onClick={() => void changePackage(review, 'discard')}>Discard draft</button></p>
       </div>}
-      {review.status !== 'draft' && <p>{statuses[review.status]}{review.delivery_error ? ` · ${review.delivery_error}` : ''}</p>}
+      {!manuallySent && review.status !== 'draft' && <p>{statuses[review.status]}{review.delivery_error ? ` · ${review.delivery_error}` : ''}</p>}
     </section>}
     <section className="panel">
       <h3>Package history · {period}</h3>
@@ -187,9 +192,9 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
         <thead><tr><th>Company</th><th>Recipient</th><th>Pages</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{catalog.packages.map(pack => <tr key={pack.id}>
           <td>{pack.company_name}</td><td>{pack.recipient}</td><td>{pack.page_count}</td>
-          <td>{statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
+          <td>{manuallySent && pack.status !== 'sent' ? 'Sent manually' : statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
           <td><button type="button" disabled={busy} onClick={() => openReview(pack.id)}>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>{' '}
-            {(pack.status === 'delivery_pending' || pack.status === 'sending') && <button type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
+            {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
         </tr>)}</tbody>
       </table></div>}
     </section>

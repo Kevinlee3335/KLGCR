@@ -13,13 +13,13 @@ const id = 'e112233';
 const setup = {connectionId: 'installation', enabledFrom: '2026-11-10T00:00:00.000Z', senders: [sender]};
 const program = readFileSync('public/payment-mail/sync.gs', 'utf8');
 
-function script() {
+function script(settings = setup) {
   const now = Date.parse('2026-11-10T04:00:00.000Z');
   const properties = new Map([
     ['KLGCR_PAYMENT_MAIL_ORIGIN', 'https://klgcr.example.test'], ['KLGCR_PAYMENT_MAIL_TOKEN', token],
   ]);
   const endpoint = vi.fn((input: {op: string}) => {
-    if (input.op === 'config') return setup;
+    if (input.op === 'config') return settings;
     if (input.op === 'prepare') return {uploadUrl: 'https://storage.example.test/upload?token=signature'};
     if (input.op === 'message') return {done: false, finishedPartIds: [] as string[]};
     return {done: true};
@@ -117,6 +117,16 @@ describe('payment email importer script', () => {
     expect(state.upload).toHaveBeenCalledTimes(1);
     expect(state.endpoint).toHaveBeenCalledWith(expect.objectContaining({op: 'finalize', issues: []}));
     expect(state.endpoint).toHaveBeenLastCalledWith(expect.objectContaining({op: 'heartbeat', state: 'ok'}));
+  });
+
+  it('starts a November catch-up at the Malaysia-time boundary', () => {
+    const enabledFrom = '2026-10-31T16:00:00.000Z';
+    const state = script({...setup, enabledFrom});
+    state.syncPaymentMail();
+    expect(state.list).toHaveBeenCalledWith('me', expect.objectContaining({
+      q: expect.stringContaining(`after:${Date.parse(enabledFrom) / 1000 - 1} `),
+    }));
+    expect(state.endpoint).toHaveBeenCalledWith(expect.objectContaining({op: 'finalize'}));
   });
 
   it('rejects installation in another Gmail mailbox', () => {

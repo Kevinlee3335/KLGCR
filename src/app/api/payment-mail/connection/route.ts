@@ -6,14 +6,16 @@ import {createAdminClient} from '@/lib/supabase/admin';
 import {hashPaymentMailToken, loadPaymentMailSenders} from '@/lib/payment-mail/connections';
 import {PaymentMailError, requirePaymentMailAdmin} from '@/lib/payment-mail/queries';
 import {connectionReady, PAYMENT_MAILBOX} from '@/lib/payment-mail/rules';
+import {NOVEMBER_PAYMENT_MAIL_START} from '@/lib/payment-mail/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
 const fields = 'id,created_at,enabled_from,last_received_at,last_checked_at,last_error,revoked_at';
-const mutation = z.discriminatedUnion('action', [
-  z.object({action: z.literal('create'), lookbackDays: z.union([z.literal(0), z.literal(1), z.literal(3), z.literal(7)])}),
+const mutation = z.union([
+  z.object({action: z.literal('create'), lookbackDays: z.union([z.literal(0), z.literal(1), z.literal(3), z.literal(7)])}).strict(),
+  z.object({action: z.literal('create'), startFrom: z.literal(NOVEMBER_PAYMENT_MAIL_START)}).strict(),
   z.object({action: z.literal('revoke'), id: z.string().uuid()}),
 ]);
 
@@ -71,7 +73,9 @@ export async function POST(request: NextRequest) {
       return json({ok: true});
     }
     const token = randomBytes(32).toString('hex');
-    const enabledFrom = new Date(now.getTime() - input.lookbackDays * 86_400_000).toISOString();
+    const enabledFrom = 'startFrom' in input
+      ? new Date(`${input.startFrom}T00:00:00+08:00`).toISOString()
+      : new Date(now.getTime() - input.lookbackDays * 86_400_000).toISOString();
     const result = await db.from('payment_mail_connections').insert({
       token_hash: hashPaymentMailToken(token), created_by: actor.id, enabled_from: enabledFrom,
     }).select('id').single();
