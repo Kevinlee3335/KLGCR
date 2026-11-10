@@ -53,7 +53,7 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
     {profile.role === "admin" && !["completed","cancelled"].includes(job.status) && <section className="panel"><h3>Transfer task</h3><form action={transferJob.bind(null,id)} className="form-grid"><label className="field">Assign to<select name="staffId" required defaultValue=""><option value="">Choose employee</option>{staff?.filter(person => person.id !== job.assignee?.id && person.profile_blocks.some(block => block.block_id === job.block?.id)).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label className="field">Reason<input name="reason" required maxLength={1000}/></label><button className="button">Transfer task</button></form></section>}
     {profile.is_super_admin&&<section className="panel" style={{marginBottom:18}}>
       <h3>Super Admin · Update Maintenance Work</h3>
-      <p className="subtle">Update the assigned maintenance team's job on their behalf. Every change requires a reason and is recorded in History and the Super Admin Audit. Completing a job may automatically close its Complaint.</p>
+      <p className="subtle">Update the assigned maintenance team&apos;s job on their behalf. Every change requires a reason and is recorded in History and the Super Admin Audit. Completing a job may automatically close its Complaint.</p>
       <form action={superAdminUpdateJob.bind(null,id)} className="form-grid">
        <label className="field">Change status
         <select name="status" required defaultValue="">
