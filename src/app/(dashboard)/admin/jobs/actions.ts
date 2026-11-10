@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { appointmentStatuses, appointmentTimeValues } from "@/lib/appointments";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireSuperAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAppNotifications } from "@/lib/app-notifications";
 
@@ -74,4 +74,30 @@ export async function followUpMonitoringJob(jobId: string, data: FormData) {
   if (error) redirect(destination(jobId, error.message));
   for (const path of ["/admin", "/admin/jobs", `/admin/jobs/${jobId}`, "/admin/complaints", "/staff", "/staff/tasks", "/staff/monitoring", `/staff/jobs/${jobId}`]) revalidatePath(path);
   redirect(`/admin/jobs/${jobId}?followUp=1`);
+}
+
+export async function superAdminUpdateJob(jobId:string,data:FormData) {
+ await requireSuperAdmin();
+ const parsed=z.object({
+  status:z.enum(["assigned","in_progress","pending_material","under_monitoring","completed","cancelled"]),
+  reason:z.string().trim().min(3).max(2000),
+  reviewDate:z.string().optional()
+ }).safeParse({
+  status:data.get("status"),
+  reason:data.get("reason"),
+  reviewDate:data.get("reviewDate")||""
+ });
+ if(!parsed.success)redirect(`/admin/jobs/${jobId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid update")}`);
+ const {status,reason,reviewDate}=parsed.data;
+ if(status==="under_monitoring"&&(!reviewDate||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(reviewDate)))
+  redirect(`/admin/jobs/${jobId}?error=Choose%20a%20future%20review%20date`);
+ const db=await createClient();
+ const {error}=await db.rpc("super_admin_update_maintenance_job",{
+  p_job:jobId,p_status:status,p_reason:reason,
+  p_review_at:status==="under_monitoring"?`${reviewDate}T09:00:00+08:00`:null
+ });
+ if(error)redirect(`/admin/jobs/${jobId}?error=${encodeURIComponent(error.message)}`);
+ for(const path of ["/admin","/admin/jobs",`/admin/jobs/${jobId}`,"/admin/complaints","/admin/super-admin","/staff","/staff/tasks","/staff/monitoring"])
+  revalidatePath(path);
+ redirect(`/admin/jobs/${jobId}?superAdminUpdated=1`);
 }

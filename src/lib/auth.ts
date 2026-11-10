@@ -7,7 +7,7 @@ export const getSessionProfile = cache(async function getSessionProfile(): Promi
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase.from("profiles").select("id,username,full_name,role,is_active,profile_blocks(blocks(code,name))").eq("id",user.id).single();
+  const { data } = await supabase.from("profiles").select("id,username,full_name,role,is_active,is_super_admin,profile_blocks(blocks(code,name))").eq("id",user.id).single();
   if (!data || !data.is_active) return null;
   const rows = data.profile_blocks as unknown as {blocks:{code:string;name:string}|null}[];
   return {...data, blocks: rows?.flatMap((row) => row.blocks ? [row.blocks] : [])} as Profile;
@@ -24,4 +24,10 @@ export async function requireCheckoutInspector(): Promise<Profile> {
   const profile = await requireRole(["admin", "cleaner"]);
   if (profile.role !== "admin" && !["fadhil", "ariffin"].includes(profile.username)) redirect(roleHome(profile.role));
   return profile;
+}
+
+export async function requireSuperAdmin(): Promise<Profile> {
+ const profile=await requireRole(["admin"]);
+ if(!profile.is_super_admin || profile.username!=="kevinlee3335") redirect("/admin");
+ return profile;
 }

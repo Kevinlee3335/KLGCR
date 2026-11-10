@@ -120,10 +120,11 @@ export async function updateUserRole(data: FormData) {
   const admin = adminClient();
   const { data: target, error: targetError } = await admin
     .from("profiles")
-    .select("role,full_name,daily_task_category")
+    .select("role,full_name,daily_task_category,is_super_admin")
     .eq("id", id)
     .single();
   if (targetError) throw new Error(targetError.message);
+  if(target.is_super_admin&&!actor.is_super_admin) throw new Error("Only Super Admin may change the Super Admin account.");
 
   const { error } = await admin
     .from("profiles")
@@ -143,6 +144,9 @@ export async function setUserActive(data: FormData) {
   const id = String(data.get("id"));
   const active = data.get("active") === "true";
   const admin = adminClient();
+  const {data:target,error:readError}=await admin.from("profiles").select("is_super_admin").eq("id",id).single();
+  if(readError)throw new Error(readError.message);
+  if(target.is_super_admin&&!actor.is_super_admin)throw new Error("Only Super Admin may change the Super Admin account.");
   const { error: profileError } = await admin
     .from("profiles")
     .update({ is_active: active })
@@ -162,10 +166,11 @@ export async function sendReset(data: FormData) {
   const admin = adminClient();
   const { data: target, error: targetError } = await admin
     .from("profiles")
-    .select("id")
+    .select("id,is_super_admin")
     .eq("email", email)
     .single();
   if (targetError) throw new Error(targetError.message);
+  if(target.is_super_admin&&!actor.is_super_admin)throw new Error("Only Super Admin may reset the Super Admin account.");
   const { error: resetError } = await admin.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
   });
@@ -185,6 +190,9 @@ export async function setUserPassword(data: FormData): Promise<UserActionState> 
     if (id === actor.id) return { error: "Use Change Password in your own account to change your password." };
 
     const admin = adminClient();
+    const {data:target,error:targetError}=await admin.from("profiles").select("is_super_admin").eq("id",id).single();
+    if(targetError)return {error:targetError.message};
+    if(target.is_super_admin&&!actor.is_super_admin)return {error:"Only Super Admin may change the Super Admin account password."};
     const { error } = await admin.auth.admin.updateUserById(id, { password: password.data });
     if (error) return { error: error.message };
     await recordAccessAudit(admin, actor.id, id, "password_changed_by_admin");
@@ -203,6 +211,9 @@ export async function deleteUser(data: FormData): Promise<UserActionState> {
     if (id === actor.id) return { error: "You cannot delete your own account." };
 
     const admin = adminClient();
+    const {data:target,error:targetError}=await admin.from("profiles").select("is_super_admin").eq("id",id).single();
+    if(targetError)return {error:targetError.message};
+    if(target.is_super_admin)return {error:"The Super Admin account cannot be deleted."};
     const { error: profileError } = await admin
       .from("profiles")
       .update({ is_active: false, deleted_at: new Date().toISOString() })
