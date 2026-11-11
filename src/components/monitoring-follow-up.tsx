@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clock3, CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, Clock3 } from "lucide-react";
 import styles from "./monitoring-follow-up.module.css";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -22,6 +22,7 @@ export async function MonitoringFollowUp() {
     .or(`monitoring_review_at.lt.${tomorrow.toISOString()},monitoring_review_at.is.null`)
     .order("monitoring_review_at", { ascending: true, nullsFirst: true });
   const jobs = (data ?? []) as unknown as MonitoringJob[];
+  if (!error && jobs.length === 0) return null;
   const dueToday = jobs.filter(job => job.monitoring_review_at && malaysiaDate(job.monitoring_review_at) === today).length;
   const overdue = jobs.filter(job => job.monitoring_review_at && malaysiaDate(job.monitoring_review_at) < today).length;
   return <section className={styles.panel} aria-labelledby="monitoring-follow-up-title">
@@ -41,7 +42,7 @@ export async function MonitoringFollowUp() {
           <td><Link className={styles.action} href={`/admin/jobs/${job.id}#monitoring-follow-up`}>Follow up <ArrowUpRight size={15}/></Link></td>
         </tr>;
       })}</tbody></table>
-    </div> : <div className={styles.empty}><CheckCircle2 size={19}/><span>All caught up. No follow-ups due today.</span></div>}
+    </div> : null}
     {!error && jobs.length > 0 && <footer className={styles.footer}><span>Open items stay here until followed up.</span><Link href="/admin/jobs?status=under_monitoring">All monitoring jobs <ArrowUpRight size={14}/></Link></footer>}
   </section>;
 }
