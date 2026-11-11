@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import {createClient} from "@/lib/supabase/client";
 import {inspectionFindings,type ABInspection} from "@/lib/checkout-inspection";
+import {CHECKOUT_PHOTO_UPLOAD_CONCURRENCY,mapCheckoutPhotos} from "@/lib/checkout-photo-uploads";
 import {prepareInspectionPhotos,submitABInspection} from "@/app/(dashboard)/admin/checkouts/inspection/actions";
 
 type SavedInspection={checklist:unknown;created_at:string};
@@ -26,12 +27,18 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=[],loadErro
     if("error" in prepared)throw new Error(prepared.error);
     const uploaded=findings.map(f=>({description:f.description,photos:[] as string[]}));
     const storage=createClient().storage.from("checkout-evidence");
-    for(let i=0;i<blobs.length;i++){
-     setProgress(isAdmin?`Uploading photo ${i+1} of ${blobs.length}…`:`Memuat naik gambar ${i+1} daripada ${blobs.length}…`);
-     const upload=prepared.uploads[i],result=await storage.uploadToSignedUrl(upload.path,upload.token,blobs[i]);
-     if(result.error)throw new Error(`Photo ${i+1} failed: ${result.error.message}`);
-     uploaded[images[i].index].photos.push(upload.path);
-    }
+    let count=0;
+    const showUploadProgress=()=>setProgress(isAdmin?`Uploaded ${count} of ${blobs.length} photos…`:`${count} daripada ${blobs.length} gambar dimuat naik…`);
+    if(blobs.length)showUploadProgress();
+    const paths=await mapCheckoutPhotos(blobs,CHECKOUT_PHOTO_UPLOAD_CONCURRENCY,async(blob,index)=>{
+     const {path,token}=prepared.uploads[index];
+     const {error}=await storage.uploadToSignedUrl(path,token,blob);
+     if(error)throw new Error(`Photo ${index+1} failed: ${error.message}`);
+     count+=1;
+     showUploadProgress();
+     return path;
+    });
+    paths.forEach((path,index)=>uploaded[images[index].index].photos.push(path));
     setProgress(isAdmin?"Creating check-out room defect form…":"Menyediakan borang kerosakan bilik…");
     // Store the complete checklist without inline image data; evidence remains in private storage.
     const checklist=JSON.parse(JSON.stringify(record,(key,value)=>key==="photos"?undefined:value));

@@ -3,7 +3,8 @@ import {beforeEach,describe,it,expect,vi} from "vitest";
 import {NextRequest} from "next/server";
 import {defaultBillingConfig,type BillingConfig} from "@/lib/billing-preview";
 import {UTILITY_PHOTO_STAFF_ID} from "@/lib/utility-photo-access";
-const mocks=vi.hoisted(()=>({profile:vi.fn(),admin:vi.fn(),ocr:vi.fn()}));
+const mocks=vi.hoisted(()=>({profile:vi.fn(),admin:vi.fn(),ocr:vi.fn(),after:vi.fn()}));
+vi.mock("next/server",async importOriginal=>({...await importOriginal<typeof import("next/server")>(),after:mocks.after}));
 vi.mock("@/lib/auth",()=>({getSessionProfile:mocks.profile}));
 vi.mock("@/lib/supabase/admin",()=>({createAdminClient:mocks.admin}));
 vi.mock("@/lib/meter-ocr-server",()=>({readMeterPhoto:mocks.ocr}));
@@ -11,7 +12,7 @@ import {GET,POST} from "./route";
 const meter:BillingConfig['utilityAccounts'][number]['meters'][number]={id:"electric",label:"Electric",serial:"E1",unit:"kWh",role:"charge",rate:.6,prev:10,curr:20,confirmed:true};
 let history:Map<number,BillingConfig>;let concurrentWrite:boolean;
 let stored:{config:BillingConfig;revision:number;updated_by?:string};
-beforeEach(()=>{mocks.ocr.mockReset();mocks.ocr.mockResolvedValue({reading:null,confidence:"low",note:"Unclear"});stored={config:{...defaultBillingConfig,utilityAccounts:[{id:"a",seq:1,name:"Account",addr:[],title:"",subsidy:0,cap:null,kind:"invoice",meters:[{...meter}]}]},revision:2};history=new Map([[2,structuredClone(stored.config)]]);concurrentWrite=false;mocks.profile.mockResolvedValue({id:UTILITY_PHOTO_STAFF_ID,username:"faiz",full_name:"Faiz",role:"maintenance_staff",is_active:true});mocks.admin.mockImplementation(()=>{
+beforeEach(()=>{mocks.after.mockReset();mocks.ocr.mockReset();mocks.ocr.mockResolvedValue({reading:null,confidence:"low",note:"Unclear"});stored={config:{...defaultBillingConfig,utilityAccounts:[{id:"a",seq:1,name:"Account",addr:[],title:"",subsidy:0,cap:null,kind:"invoice",meters:[{...meter}]}]},revision:2};history=new Map([[2,structuredClone(stored.config)]]);concurrentWrite=false;mocks.profile.mockResolvedValue({id:UTILITY_PHOTO_STAFF_ID,username:"faiz",full_name:"Faiz",role:"maintenance_staff",is_active:true});mocks.admin.mockImplementation(()=>{
  return {from:(table:string)=>{
   let patch:Partial<typeof stored>={};let expected:number|undefined;
   const chain={
@@ -26,6 +27,29 @@ beforeEach(()=>{mocks.ocr.mockReset();mocks.ocr.mockResolvedValue({reading:null,
 });});
 function post(patch={}){return new NextRequest("https://example.com/api/utility-photos",{method:"POST",headers:{origin:"https://example.com","content-type":"application/json"},body:JSON.stringify({period:stored.config.utilityPeriod,revision:stored.revision,accountId:"a",meterId:"electric",photo:"data:image/jpeg;base64,YQ==",...patch})})}
 describe("Utilities photo API",()=>{
+ it("acknowledges persisted evidence before starting OCR and saves the reading independently of the response",async()=>{
+  const request=post();request.headers.set("prefer","respond-async");
+  mocks.ocr.mockResolvedValue({reading:155,confidence:"high",note:"Clear"});
+  const response=await POST(request);
+  expect(response.status).toBe(202);
+  expect(await response.json()).toMatchObject({readingPending:true,revision:3});
+  expect(stored.config.utilityAccounts[0].meters[0]).toMatchObject({photo:"data:image/jpeg;base64,YQ==",curr:null,confirmed:false});
+  expect(mocks.ocr).not.toHaveBeenCalled();
+  const [read]=mocks.after.mock.calls[0] as [()=>Promise<void>];
+  await read();
+  expect(mocks.ocr).toHaveBeenCalledWith(expect.objectContaining({meterId:"electric"}),UTILITY_PHOTO_STAFF_ID,{reservationRetries:2});
+  expect(stored.config.utilityAccounts[0].meters[0]).toMatchObject({photo:"data:image/jpeg;base64,YQ==",curr:155,confirmed:false});
+  expect(stored.revision).toBe(4);
+ });
+ it("keeps a background photo when scheduling fails and offers manual recovery",async()=>{
+  const request=post();request.headers.set("prefer","respond-async");
+  mocks.after.mockImplementation(()=>{throw Error("Scheduler unavailable")});
+  const response=await POST(request);
+  expect(response.status).toBe(200);
+  expect((await response.json()).message).toContain("Admin can use Read photo again");
+  expect(stored.config.utilityAccounts[0].meters[0].photo).toBe("data:image/jpeg;base64,YQ==");
+  expect(mocks.ocr).not.toHaveBeenCalled();
+ });
  it("merges an old-revision upload while preserving unrelated Admin changes",async()=>{stored.config.utilityAccounts[0].name="Admin changed account name";stored.revision=3;const response=await POST(post({revision:2}));expect(response.status).toBe(200);expect(stored.config.utilityAccounts[0].name).toBe("Admin changed account name");expect(stored.config.utilityAccounts[0].meters[0].photo).toBe("data:image/jpeg;base64,YQ==");expect(stored.revision).toBe(4)});
  it("rejects stale uploads when Admin changed the target meter reading",async()=>{stored.config.utilityAccounts[0].meters[0].curr=25;stored.revision=3;expect((await POST(post({revision:2}))).status).toBe(409);expect(stored.config.utilityAccounts[0].meters[0].curr).toBe(25);expect(stored.revision).toBe(3)});
  it("retries a compare-and-swap race while preserving the concurrent edit",async()=>{concurrentWrite=true;expect((await POST(post())).status).toBe(200);expect(stored.config.utilityAccounts[0].title).toBe("Concurrent admin title");expect(stored.revision).toBe(4)});
@@ -37,7 +61,7 @@ describe("Utilities photo API",()=>{
    mocks.ocr.mockImplementationOnce(async()=>{expect(stored.config.utilityAccounts[0].meters[0].photo).toBe("data:image/jpeg;base64,YQ==");return {reading:2028100,confidence:"high",note:"converted"}});
    const result=await(await POST(post({accountId,meterId}))).json();
    expect(result.message).toContain("2028100");expect(result.accounts[0].meters[0].curr).toBe(2028100);expect(result.accounts[0].meters[0].confirmed).toBe(false);
-   expect(mocks.ocr).toHaveBeenLastCalledWith(expect.objectContaining({meterId,unit:"kWh"}),UTILITY_PHOTO_STAFF_ID);
+   expect(mocks.ocr).toHaveBeenLastCalledWith(expect.objectContaining({meterId,unit:"kWh"}),UTILITY_PHOTO_STAFF_ID,undefined);
    const reopened=await(await GET(new NextRequest("https://example.com/api/utility-photos?account="+accountId))).json();expect(reopened.accounts[0].meters[0].curr).toBe(2028100);
   }
  });

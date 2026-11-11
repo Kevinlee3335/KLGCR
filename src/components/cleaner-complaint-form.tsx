@@ -49,6 +49,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
   const [photoSource, setPhotoSource] = useState<"camera" | "upload" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState("");
   const [locationType, setLocationType] = useState<"room" | "bathroom" | "common" | "external">("common");
   const [area, setArea] = useState("Corridor");
   const [defectType, setDefectType] = useState("Lighting");
@@ -65,28 +66,32 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     if (!photo) {
       setError("Take a photo or upload one before sending.");
       return;
     }
     setBusy(true);
     setError("");
+    setProgress("Preparing photo…");
     let prepared: Awaited<ReturnType<typeof prepareCleanerComplaint>> | null = null;
     try {
       const formData = new FormData(event.currentTarget);
-      prepared = await prepareCleanerComplaint(formData);
+      const [draft, compressed] = await Promise.allSettled([prepareCleanerComplaint(formData), compressPhoto(photo)]);
+      if (draft.status === "rejected") throw draft.reason;
+      prepared = draft.value;
       if ("error" in prepared) {
         setError(prepared.error ?? "Unable to prepare the complaint.");
         return;
       }
-      const compressed = await compressPhoto(photo);
+      if (compressed.status === "rejected") throw compressed.reason;
+      setProgress("Uploading photo…");
       const supabase = createClient();
-      const { error: uploadError } = await supabase.storage.from("checkout-evidence").uploadToSignedUrl(prepared.path, prepared.token, compressed);
+      const { error: uploadError } = await supabase.storage.from("checkout-evidence").uploadToSignedUrl(prepared.path, prepared.token, compressed.value);
       if (uploadError) {
-        await cancelCleanerComplaint(prepared.complaintId, prepared.path);
-        setError(`Photo upload failed: ${uploadError.message}`);
-        return;
+        throw new Error(`Photo upload failed: ${uploadError.message}`);
       }
+      setProgress("Saving complaint…");
       const finalized = await finalizeCleanerComplaint(prepared.complaintId, prepared.path);
       if ("error" in finalized) {
         setError(finalized.error ?? "Unable to finish sending the complaint.");
@@ -95,10 +100,11 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       router.replace(`/staff/complaints/new?created=${encodeURIComponent(finalized.complaintNo)}`);
       router.refresh();
     } catch (cause) {
-      if (prepared && !("error" in prepared)) await cancelCleanerComplaint(prepared.complaintId, prepared.path);
+      if (prepared && !("error" in prepared)) await cancelCleanerComplaint(prepared.complaintId, prepared.path).catch(() => {});
       setError(cause instanceof Error ? cause.message : "Unable to send the complaint.");
     } finally {
       setBusy(false);
+      setProgress("");
     }
   }
 
@@ -107,7 +113,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
       <div><span>Reported by</span><strong>{reporterName}</strong></div>
       <p>The complaint will be sent directly to Admin for checking and assignment.</p>
     </section>
-    {error && <p className="error cleaner-report-error">{error}</p>}
+    {error && <p className="error cleaner-report-error" role="alert">{error}</p>}
     <div className="cleaner-report-grid">
       <label className="field"><span>Location Type *</span><select name="locationType" value={locationType} onChange={(event) => { const next = event.target.value as "room" | "bathroom" | "common" | "external"; setLocationType(next); setArea(next === "common" ? "Corridor" : next === "external" ? externalAreas[0] : next === "room" ? "Room" : "Bathroom"); setDefectType(defectItems[next][0]); }}><option value="room">Room</option><option value="bathroom">Bathroom</option><option value="common">Common Area</option><option value="external">External Area</option></select></label>
       {locationType !== "external" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue=""><option value="" disabled>Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
@@ -126,6 +132,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
         <label className={`cleaner-photo-button${photoSource === "upload" ? " selected" : ""}`}><ImageUp size={22}/><span>Upload Photo</span><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0], "upload")}/></label>
       </div>
       {photo && <p className="cleaner-photo-selected">✓ {photoSource === "camera" ? "Photo taken" : "Photo selected"} · {photo.name}</p>}
+      {progress && <p role="status">{progress}</p>}
     </section>
     <button className="button cleaner-report-submit" type="submit" disabled={busy}><Send size={18}/>{busy ? "Sending..." : "Send to Admin"}</button>
   </form>;

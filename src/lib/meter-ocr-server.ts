@@ -3,13 +3,16 @@ import {createAdminClient} from "./supabase/admin";
 export class MeterOcrError extends Error {constructor(message:string,public status=502){super(message)}}
 type Input={photo:string;unit:"kWh"|"m³";serial:string;meterId?:string;readingDigits?:number|null};
 // Server-only callers authorize the user and choose the meter before invoking AI.
-export async function readMeterPhoto(j:Input,userId:string){
+export async function readMeterPhoto(j:Input,userId:string,{reservationRetries=1}:{reservationRetries?:number}={}){
  const key=process.env.GEMINI_API_KEY;
  if(!key)throw new MeterOcrError("AI photo reading is not configured. Enter the reading manually.",503);
  const ledger=createAdminClient();let reserve=await ledger.rpc('klgcr_ai_reserve',{p_user_id:userId});
- // The shared ledger spaces requests by ten seconds. Wait once for a quick
- // second upload instead of silently leaving its photo without a reading.
- if(reserve.error?.message?.includes('Please wait 10 seconds')){await new Promise(resolve=>setTimeout(resolve,10000));reserve=await ledger.rpc('klgcr_ai_reserve',{p_user_id:userId})}
+ // The shared ledger spaces requests by ten seconds. Allow background
+ // captures a bounded wait without spending extra AI credits.
+ for (let retry = 0; retry < reservationRetries && reserve.error?.message?.includes("Please wait 10 seconds"); retry++) {
+  await new Promise(resolve => setTimeout(resolve, 10_000));
+  reserve = await ledger.rpc("klgcr_ai_reserve", {p_user_id: userId});
+ }
  if(reserve.error||!reserve.data)throw new MeterOcrError("AI usage limit reached or accounting unavailable. Enter the reading manually.",429);
  const id=reserve.data.id;let state="failed",prompt=0,output=0,total=0;
  try{

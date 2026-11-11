@@ -1,21 +1,21 @@
 "use client";
 
 import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
+import { mapPhotoBatches } from "@/lib/operational-photo-batch";
 import { validateEvidenceFiles } from "@/lib/photo-limits";
-import { useRef, useState } from "react";
-import { completeJob, prepareCompletionUpload } from "@/app/(dashboard)/staff/jobs/actions";
+import { useState, type FormEvent } from "react";
+import { completeJob, prepareCompletionUploads } from "@/app/(dashboard)/staff/jobs/actions";
 import { createClient } from "@/lib/supabase/client";
-
-const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxBytes = 10 * 1024 * 1024;
 
 export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: string }) {
   const [photos, setPhotos] = useState<File[]>([]);
-  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [progress, setProgress] = useState("");
 
-  async function submit(formData: FormData) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
     const files = photos;
     const invalid = validateEvidenceFiles(files);
     if (invalid) {
@@ -23,33 +23,39 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
       return;
     }
 
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     setError("");
     setPending(true);
+    setProgress("Preparing photo uploads…");
     formData.delete("completionPhotoPaths");
     try {
-      const storage = createClient().storage.from("maintenance-evidence");
-      for (const file of files) {
-        if (!acceptedTypes.has(file.type) || file.size > maxBytes) {
-          throw new Error("Completion photos must be JPG, PNG, or WEBP files up to 10 MB.");
-        }
-        const prepared = await prepareCompletionUpload(jobId, { name: file.name, type: file.type, size: file.size });
-        if (prepared.error || !prepared.path || !prepared.token) {
-          throw new Error(prepared.error || "Unable to prepare the completion photo upload.");
-        }
-        const { error: uploadError } = await storage.uploadToSignedUrl(prepared.path, prepared.token, file);
-        if (uploadError) throw new Error(`Unable to upload completion photo: ${uploadError.message}`);
-        formData.append("completionPhotoPaths", prepared.path);
+      const prepared = await prepareCompletionUploads(jobId, files.map(({ type, size }) => ({ type, size })));
+      if (!prepared.uploads || prepared.uploads.length !== files.length) {
+        throw new Error(prepared.error || "Unable to prepare the completion photo upload.");
       }
+      const storage = createClient().storage.from("maintenance-evidence");
+      let uploaded = 0;
+      setProgress(`Uploaded 0 of ${files.length} photos…`);
+      const paths = await mapPhotoBatches(prepared.uploads, async ({ path, token }, index) => {
+        const { error: uploadError } = await storage.uploadToSignedUrl(path, token, files[index]);
+        if (uploadError) throw new Error(`Photo ${index + 1} could not upload: ${uploadError.message}`);
+        uploaded += 1;
+        setProgress(`Uploaded ${uploaded} of ${files.length} photos…`);
+        return path;
+      });
+      for (const path of paths) formData.append("completionPhotoPaths", path);
 
       // Photos were sent directly to Storage. Do not send the original camera
       // files through the Server Action, where large uploads can fail mid-submit.
       formData.delete("completionPhotos");
+      setProgress("Saving completion…");
       const result = await completeJob(jobId, formData);
       if (result?.error) {
         setError(result.error);
         return;
       }
-      formRef.current?.reset();
+      form.reset();
       // A full navigation avoids leaving the mobile app on an invalid Router
       // state after a large camera upload has just completed.
       window.location.assign(result?.returnTo || returnTo);
@@ -57,14 +63,16 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
       setError(submissionError instanceof Error ? submissionError.message : "Unable to complete this job. Please try again.");
     } finally {
       setPending(false);
+      setProgress("");
     }
   }
 
-  return <form ref={formRef} action={submit}>
+  return <form method="post" onSubmit={submit}>
     <input type="hidden" name="returnTo" value={returnTo}/>
-    <label className="field"><span>Action Taken / Work Done *</span><textarea name="actionTaken" rows={5} required placeholder="Describe the repair or work completed"/></label>
+    <label className="field"><span>Action Taken / Work Done *</span><textarea disabled={pending} name="actionTaken" rows={5} required placeholder="Describe the repair or work completed"/></label>
     <EvidencePhotoPicker photos={photos} onChange={setPhotos} disabled={pending}/>
     {error && <p className="error" role="alert">{error}</p>}
+    {progress && <p role="status">{progress}</p>}
     <button className="button" type="submit" disabled={pending} aria-disabled={pending}>{pending ? "Completing…" : "Confirm completion"}</button>
   </form>;
 }

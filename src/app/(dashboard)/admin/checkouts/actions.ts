@@ -1,5 +1,6 @@
 "use server";
 import { EVIDENCE_TYPES, MAX_EVIDENCE_BYTES } from "@/lib/photo-limits";
+import { signCheckoutPhotoUploads } from "@/lib/checkout-photo-uploads";
 import { checkoutProgress,isRepairDefect } from "@/lib/checkouts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -106,12 +107,5 @@ export async function prepareAdminInspectionEvidence(id:string,files:{type:strin
  const db=await createClient();
  const {data:room,error:roomError}=await db.from("checkout_rooms").select("id").eq("id",id).is("deleted_at",null).eq("status","second_inspection").maybeSingle();
  if(roomError||!room)return {error:"This room is no longer awaiting inspection."};
- const uploads=[];
- for(const f of files){
-  const path=id+"/inspection/"+crypto.randomUUID()+"."+(f.type==="image/png"?"png":f.type==="image/webp"?"webp":"jpg");
-  const {data,error}=await db.storage.from("checkout-evidence").createSignedUploadUrl(path);
-  if(error||!data)return {error:error?.message||"Unable to prepare inspection photo."};
-  uploads.push({path,token:data.token});
- }
- return {uploads};
+ return signCheckoutPhotoUploads(db.storage.from("checkout-evidence"), `${id}/inspection`, files, "Unable to prepare inspection photo.");
 }

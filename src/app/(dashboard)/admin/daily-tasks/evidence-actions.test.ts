@@ -21,6 +21,19 @@ describe("Admin completion evidence", () => {
     await expect(prepareAdminDailyTaskEvidence(42, 1)).rejects.toThrow("denied");
     expect(mocks.signed).not.toHaveBeenCalled();
   });
+  it("signs a bounded batch in parallel and keeps returned photo order", async () => {
+    const release: Array<(result: { data: { token: string } }) => void> = [];
+    mocks.signed.mockImplementation(() => new Promise(resolve => release.push(resolve)));
+    const preparing = prepareAdminDailyTaskEvidence(42, 4);
+    await vi.waitFor(() => expect(mocks.signed).toHaveBeenCalledTimes(3));
+    release[2]({ data: { token: "three" } });
+    release[0]({ data: { token: "one" } });
+    expect(mocks.signed).toHaveBeenCalledTimes(3);
+    release[1]({ data: { token: "two" } });
+    await vi.waitFor(() => expect(mocks.signed).toHaveBeenCalledTimes(4));
+    release[3]({ data: { token: "four" } });
+    expect((await preparing).uploads?.map(({ token }) => token)).toEqual(["one", "two", "three", "four"]);
+  });
   it("rejects another task's photo path", async () => {
     expect(await completeAdminDailyTask(42, "", [path.replace("/42/", "/43/")])).toHaveProperty("error");
     expect(mocks.insert).not.toHaveBeenCalled();
@@ -30,6 +43,21 @@ describe("Admin completion evidence", () => {
     mocks.list.mockResolvedValue({ data: [] });
     expect(await completeAdminDailyTask(42, "", [path])).toHaveProperty("error");
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("checks multiple photos together and waits for every checked object before saving", async () => {
+    const otherPath = "daily-tasks/42/bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee.jpg";
+    let finishList!: (value: { data: Array<{ name: string | undefined; metadata: { size: number } }> }) => void;
+    mocks.list.mockImplementationOnce(() => new Promise(resolve => { finishList = resolve; }));
+    mocks.list.mockResolvedValueOnce({ data: [{ name: otherPath.split("/").pop(), metadata: { size: 100 } }] });
+    const saving = completeAdminDailyTask(42, "Done", [path, otherPath]);
+    await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(2));
+    expect(mocks.insert).not.toHaveBeenCalled();
+    finishList({ data: [{ name: path.split("/").pop(), metadata: { size: 100 } }] });
+    expect(await saving).toEqual({ ok: true });
+    expect(mocks.insert).toHaveBeenCalledWith([
+      { task_id: 42, storage_path: path, uploaded_by: "admin-id" },
+      { task_id: 42, storage_path: otherPath, uploaded_by: "admin-id" },
+    ]);
   });
   it("does not complete a task when its evidence record fails", async () => {
     mocks.insert.mockReturnValue({ select: async () => ({ error: { message: "save failed" } }) });

@@ -20,6 +20,34 @@ describe('deferred meter photos',()=>{
  async function setup(){vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('VERCEL_GIT_COMMIT_REF','feature/rental-utility-billing-test');mocks.profile={id:'test',role:'admin',full_name:'Test'};const {configSchema,defaultBillingConfig}=await import('@/lib/billing-preview');const fixture=(await import('@/lib/billing-preview-fixture.json')).default;const config=configSchema.parse({...defaultBillingConfig,...fixture});config.utilityAccounts[0].meters[0].photo='data:image/jpeg;base64,YQ==';config.utilityAccounts[0].meters[0].previousPhoto='data:image/jpeg;base64,Yg==';return config}
  it('omits photo bytes initially and returns them only when requested',async()=>{const config=await setup();mocks.db.mockResolvedValue({from:()=>({select(){return this},eq(){return this},order(){return this},single:async()=>({data:{config,revision:1},error:null}),limit:async()=>({data:[],error:null})})});const first=await(await GET(new NextRequest('https://example.test/api/billing-preview'))).json();expect(first.photosLoaded).toBe(false);expect(first.config.utilityAccounts[0].meters[0].photo).toBeUndefined();const full=await(await GET(new NextRequest('https://example.test/api/billing-preview?photos=1'))).json();expect(full.photosLoaded).toBe(true);expect(full.config.utilityAccounts[0].meters[0].photo).toBe('data:image/jpeg;base64,YQ==')});
  it('preserves both photos when saving metadata before loading photos',async()=>{const original=await setup();const incoming=structuredClone(original);delete incoming.utilityAccounts[0].meters[0].photo;delete incoming.utilityAccounts[0].meters[0].previousPhoto;incoming.tenants[0].rent=900;let written:{config:import("@/lib/billing-preview").BillingConfig}|undefined;mocks.db.mockResolvedValue({from:()=>({select(){return this},eq(){return this},single:async()=>({data:{config:original},error:null}),update(v:unknown){written=v as {config:import("@/lib/billing-preview").BillingConfig};return this},maybeSingle:async()=>({data:{revision:2},error:null})})});const response=await POST(new NextRequest('https://example.test/api/billing-preview',{method:'POST',headers:{origin:'https://example.test'},body:JSON.stringify({action:'save',config:incoming,preservePhotos:true,revision:1})}));expect(response.status).toBe(200);expect(written!.config.tenants[0].rent).toBe(900);expect(written!.config.utilityAccounts[0].meters[0].photo).toBe('data:image/jpeg;base64,YQ==');expect(written!.config.utilityAccounts[0].meters[0].previousPhoto).toBe('data:image/jpeg;base64,Yg==')});
+ it('replaces only the selected meter photo and keeps the other evidence by account',async()=>{
+  const original=await setup();
+  const first=original.utilityAccounts[0], second=original.utilityAccounts[1];
+  second.meters[0].id=first.meters[0].id;
+  second.meters[0].photo='data:image/jpeg;base64,Yw==';
+  const {stripBillingMeterPhotos}=await import('@/lib/billing-meter-photo');
+  const incoming=stripBillingMeterPhotos(original);
+  incoming.utilityAccounts[0].meters[0].previousPhoto='data:image/jpeg;base64,ZA==';
+  incoming.utilityAccounts[1].meters[0].photo='data:image/jpeg;base64,ZQ==';
+  let written:typeof original|undefined;
+  mocks.db.mockResolvedValue({from:()=>({
+   select(){return this},eq(){return this},
+   single:async()=>({data:{config:original},error:null}),
+   update(value:{config:typeof original}){written=value.config;return this},
+   maybeSingle:async()=>({data:{revision:2},error:null}),
+  })});
+  const response=await POST(new NextRequest('https://example.test/api/billing-preview',{
+   method:'POST',headers:{origin:'https://example.test'},body:JSON.stringify({
+    action:'save_meter_photo',config:incoming,revision:1,
+    target:{accountId:first.id,meterId:first.meters[0].id,side:'previousPhoto'},
+   }),
+  }));
+  expect(response.status).toBe(200);
+  expect(written?.utilityAccounts[0].meters[0]).toMatchObject({
+   photo:'data:image/jpeg;base64,YQ==',previousPhoto:'data:image/jpeg;base64,ZA==',
+  });
+  expect(written?.utilityAccounts[1].meters[0].photo).toBe('data:image/jpeg;base64,Yw==');
+ });
 });
 
 describe('confirmed utilities submission',()=>{
