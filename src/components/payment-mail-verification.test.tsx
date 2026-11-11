@@ -40,6 +40,9 @@ function mockApi(selectedDetail = detail) {
       const body = JSON.parse(String(options.body)); actions.push(body); verified = true;
       return new Response(JSON.stringify({ ok: true, item: { ...selectedDetail.item, status: 'verified', verified_at: '2026-11-10T04:00:00Z' }, receipt, mail: 'sent' }));
     }
+    if (url.startsWith('/api/payment-mail/receipts?')) {
+      return new Response(JSON.stringify({ items: [{ ...receipt, verifier_name: 'Example Admin' }], total: 1 }));
+    }
     if (url.includes('?id=')) return new Response(JSON.stringify(selectedDetail));
     return new Response(JSON.stringify({ items: verified ? [] : [selectedDetail.item], total: verified ? 0 : 1 }));
   });
@@ -100,4 +103,24 @@ it('shows a duplicate warning and the original payment without allowing another 
   await screen.findByText('Duplicate payment proof');
   expect(screen.getByRole('button', { name: 'View original payment' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Verify & Email Receipt' })).not.toBeInTheDocument();
+});
+
+it('opens the receipt list on demand and preserves payment review input when returning to the inbox', async () => {
+  const { fetcher } = mockApi();
+  await preparePayment();
+  expect(fetcher.mock.calls.some(([url]) => url.startsWith('/api/payment-mail/receipts?'))).toBe(false);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Receipt List' }));
+  const pdf = await screen.findByRole('link', { name: 'View Receipt KLGCR/260123' });
+  expect(pdf).toHaveAttribute('href', `/api/finance?receipt=${receipt.id}`);
+  expect(screen.getByText('Example Admin')).toBeInTheDocument();
+  expect(screen.getByText('Rental Sep and Utilities Oct')).toBeInTheDocument();
+
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Receipt number or customer' }), { target: { value: 'KLGCR/260123' } });
+  fireEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/payment-mail/receipts?page=1&q=KLGCR%2F260123', expect.anything()));
+  await screen.findByRole('link', { name: 'View Receipt KLGCR/260123' });
+
+  fireEvent.click(screen.getByRole('button', { name: /^Payment inbox$/ }));
+  expect(screen.getByRole('spinbutton', { name: 'Actual amount received (RM)' })).toHaveValue(150);
 });

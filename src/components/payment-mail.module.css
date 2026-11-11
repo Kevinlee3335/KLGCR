@@ -48,6 +48,7 @@
 .table .number { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .table input[type=checkbox] { width: 18px; height: 18px; accent-color: #987532; }
 .table .input { width: 115px; }
+.receiptPurpose { min-width: 200px; max-width: 440px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .empty { padding: 36px 22px; text-align: center; color: #918574; font-size: 13px; line-height: 1.7; }
 .empty svg { display: block; margin: 0 auto 12px; color: #b6a47e; }
 .footer { padding: 12px 22px; background: #fbf9f3; border-top: 1px solid #eae3d5; font-size: 11px; line-height: 1.6; color: #93866f; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -178,4 +179,11 @@
   .connectionFields .field { max-width: none; flex: 1 1 100%; }
   .footer { padding: 12px 16px; }
   .reviewHeading h2 { font-size: 18px; }
+  .receiptTable,.receiptTable tbody { display: block; min-width: 0; }
+  .receiptTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .receiptTable tbody tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 16px; border-bottom: 1px solid #eee8dd; }
+  .receiptTable tbody tr:last-child { border-bottom: 0; }
+  .receiptTable td,.receiptTable td:first-child,.receiptTable td:last-child { padding: 0; min-width: 0; border: 0; overflow-wrap: anywhere; }
+  .receiptTable td[data-label]::before { display: block; margin-bottom: 4px; color: #8d816a; font-size: 10px; font-weight: 650; content: attr(data-label); }
+  .receiptTable .receiptPurpose,.receiptTable td:last-child { grid-column: 1/-1; max-width: none; }
 }
