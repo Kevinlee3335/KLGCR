@@ -283,7 +283,7 @@ export function CheckoutProgressTable({
   return (
     <section className={followUp.panel} aria-labelledby="checkout-progress-title">
       <header className={followUp.header}>
-        <div className={followUp.heading}>
+        <div className={`${followUp.heading} ${styles.heading}`}>
           <span className={followUp.icon}><ClipboardList size={20} aria-hidden="true" /></span>
           <div>
             <span className={followUp.eyebrow}>CHECK-OUT ROOMS</span>
@@ -517,9 +517,9 @@ export function CheckoutProgressTable({
                     </td>
                   )}
                   <td>
-                    <span className={followUp.block}>BLOCK {row.block?.code || "—"}</span>
+                    <span className={`${followUp.block} ${styles.block}`}>BLOCK {row.block?.code || "—"}</span>
                     <strong className={followUp.room}>{row.room_no}</strong>
-                    <Link className={`${followUp.jobNo} ${styles.textLink}`} href={`/admin/checkouts/${row.id}`}>{row.reference_no}</Link>
+                    <Link className={`${styles.textLink} ${styles.reference}`} href={`/admin/checkouts/${row.id}`}>{row.reference_no}</Link>
                   </td>
                   <td>
                     <span className={`${followUp.status} ${styles.badge} ${styles[display.tone]}`}><i aria-hidden="true" />{display.label}</span>
