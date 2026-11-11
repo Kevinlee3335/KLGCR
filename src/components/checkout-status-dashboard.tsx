@@ -47,12 +47,71 @@ export function CheckoutStatusDashboard({report,details=false,defectRoomCount,so
   </div>
   <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="maintenance-status-title">
    <header className={followUp.header}><div className={followUp.heading}><span className={followUp.icon}><ClipboardList size={20}/></span><div><span className={followUp.eyebrow}>CHECK-OUT ROOMS</span><h2 id="maintenance-status-title">Maintenance Status Table</h2><p>Room repair progress by maintenance staff.</p></div></div></header>
-   <div className={followUp.scroll}><table className={`${followUp.table} ${statusTable.table}`}><thead><tr><th scope="col">Maintenance</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th><th scope="col">Pending material</th></tr></thead><tbody>{[...counts.maintenance].map(([id,r])=><tr key={id}><th scope="row" className={statusTable.name}>{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td><td>{r.pending}</td></tr>)}</tbody></table></div>{!counts.maintenance.size&&<p className={followUp.empty}>No rooms with maintenance defects yet.</p>}
+   <div className={`${followUp.scroll} ${statusTable.scroll}`} role="region" aria-labelledby="maintenance-status-title" tabIndex={0}><table className={`${followUp.table} ${statusTable.table}`} aria-labelledby="maintenance-status-title"><thead><tr><th scope="col">Maintenance</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th><th scope="col">Pending material</th></tr></thead><tbody>{[...counts.maintenance].map(([id,r])=><tr key={id}><th scope="row">{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td><td>{r.pending}</td></tr>)}</tbody></table></div>{!counts.maintenance.size&&<p className={followUp.empty}>No rooms with maintenance defects yet.</p>}
   </section>
   <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="cleaner-status-title">
    <header className={followUp.header}><div className={followUp.heading}><span className={followUp.icon}><Sparkles size={20}/></span><div><span className={followUp.eyebrow}>CHECK-OUT ROOMS</span><h2 id="cleaner-status-title">Cleaner Status Table</h2><p>Room cleaning progress by cleaner.</p></div></div></header>
-   <div className={followUp.scroll}><table className={`${followUp.table} ${statusTable.table}`}><thead><tr><th scope="col">Cleaner</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th></tr></thead><tbody>{[...counts.cleaners].map(([id,r])=><tr key={id}><th scope="row" className={statusTable.name}>{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td></tr>)}{counts.awaitingCleaning>0&&<tr><th scope="row" className={statusTable.name}>Awaiting assign</th><td>{counts.awaitingCleaning}</td><td>0</td><td>0</td><td>0</td></tr>}</tbody></table></div>{!counts.cleaningTotal&&!counts.awaitingCleaning&&<p className={followUp.empty}>No rooms handed to cleaning yet.</p>}
+   <div className={`${followUp.scroll} ${statusTable.scroll}`} role="region" aria-labelledby="cleaner-status-title" tabIndex={0}><table className={`${followUp.table} ${statusTable.table}`} aria-labelledby="cleaner-status-title"><thead><tr><th scope="col">Cleaner</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th></tr></thead><tbody>{[...counts.cleaners].map(([id,r])=><tr key={id}><th scope="row">{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td></tr>)}{counts.awaitingCleaning>0&&<tr><th scope="row">Awaiting assign</th><td>{counts.awaitingCleaning}</td><td>0</td><td>0</td><td>0</td></tr>}</tbody></table></div>{!counts.cleaningTotal&&!counts.awaitingCleaning&&<p className={followUp.empty}>No rooms handed to cleaning yet.</p>}
   </section>
-  {details&&<section className="panel list-panel"><h3>Maintenance &amp; Cleaner Room Report</h3><div className="table-wrap"><table className="table"><thead><tr><th>Room</th><th>Maintenance</th><th>Repair status</th><th>Cleaner</th><th>Cleaning status</th><th>Completed today</th></tr></thead><tbody>{report.rooms.map(r=><tr key={r.id}><td><Link className="text-link" href={`/admin/checkouts/${r.id}`}>Block {r.block} · {r.room_no}</Link></td><td>{r.maintenance}</td><td>{r.repair_percent===100?'Completed':!r.assigned_to?'Awaiting assign':r.maintenance_status==='Awaiting inspection'?'In Progress':r.maintenance_status} · {r.repair_percent}%</td><td>{r.cleaner}</td><td>{counts.awaitingCleaningIds.has(r.id)?'Awaiting assign':r.cleaner_status==='Awaiting assignment'?'Awaiting assign':r.cleaner_status}</td><td>{[r.maintenance_today&&'Maintenance',r.cleaner_today&&'Cleaner'].filter(Boolean).join(', ')||'—'}</td></tr>)}</tbody></table></div></section>}
+  {details && (
+    <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="checkout-room-report-title">
+      <header className={followUp.header}>
+        <div className={followUp.heading}>
+          <span className={followUp.icon}><ClipboardList size={20} aria-hidden="true" /></span>
+          <div>
+            <span className={followUp.eyebrow}>CHECK-OUT ROOMS</span>
+            <h2 id="checkout-room-report-title">Maintenance &amp; Cleaner Room Report</h2>
+          </div>
+        </div>
+      </header>
+      {report.rooms.length ? (
+        <div className={`${followUp.scroll} ${statusTable.scroll}`} role="region" aria-labelledby="checkout-room-report-title" tabIndex={0}>
+          <table className={`${followUp.table} ${statusTable.table}`} aria-labelledby="checkout-room-report-title">
+            <thead>
+              <tr>
+                <th scope="col">Room</th>
+                <th scope="col">Maintenance</th>
+                <th scope="col">Repair status</th>
+                <th scope="col">Cleaner</th>
+                <th scope="col">Cleaning status</th>
+                <th scope="col">Completed today</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.rooms.map((room) => {
+                const repairStatus = room.repair_percent === 100
+                  ? 'Completed'
+                  : !room.assigned_to
+                    ? 'Awaiting assign'
+                    : room.maintenance_status === 'Awaiting inspection' ? 'In Progress' : room.maintenance_status;
+                const awaitingCleaner = counts.awaitingCleaningIds.has(room.id) || room.cleaner_status === 'Awaiting assignment';
+                const completedToday = [
+                  room.maintenance_today && 'Maintenance',
+                  room.cleaner_today && 'Cleaner',
+                ].filter(Boolean).join(', ');
+
+                return (
+                  <tr key={room.id}>
+                    <th scope="row">
+                      <Link className={statusTable.roomLink} href={`/admin/checkouts/${room.id}`}>
+                        Block {room.block} · {room.room_no}
+                      </Link>
+                    </th>
+                    <td>{room.maintenance}</td>
+                    <td>{repairStatus} · {room.repair_percent}%</td>
+                    <td>{room.cleaner}</td>
+                    <td>{awaitingCleaner ? 'Awaiting assign' : room.cleaner_status}</td>
+                    <td>{completedToday || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className={followUp.empty}>No check-out rooms yet.</p>
+      )}
+    </section>
+  )}
  </section>;
 }

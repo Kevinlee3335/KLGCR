@@ -18,6 +18,14 @@ type AppNotification = {
 // account and browser subscription does not need another server request.
 let lastPushSave: { userId: string; endpoint: string; at: number } | null = null;
 
+async function getPhoneAlertRegistration() {
+  const serviceWorker = navigator.serviceWorker;
+  const existing = await serviceWorker.getRegistration("/");
+  const worker = existing?.installing ?? existing?.waiting ?? existing?.active;
+  if (existing && worker?.scriptURL === new URL("/sw.js", window.location.origin).href) return existing;
+  return serviceWorker.register("/sw.js");
+}
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
@@ -48,11 +56,18 @@ export function NotificationBell({ userId }: { userId: string }) {
     setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
     const supabase = createClient();
     let active = true;
+    let loading = false;
     const load = async () => {
-      const { data } = await supabase.from("app_notifications")
-        .select("id,title,body,href,created_at,read_at")
-        .eq("recipient_id", userId).order("created_at", { ascending: false }).limit(30);
-      if (active && data) setItems(data);
+      if (loading) return;
+      loading = true;
+      try {
+        const { data } = await supabase.from("app_notifications")
+          .select("id,title,body,href,created_at,read_at")
+          .eq("recipient_id", userId).order("created_at", { ascending: false }).limit(30);
+        if (active && data) setItems(data);
+      } finally {
+        loading = false;
+      }
     };
     void load();
 
@@ -67,7 +82,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       }
       restoring = true;
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js");
+        const registration = await getPhoneAlertRegistration();
         if (!("Notification" in window) || Notification.permission !== "granted") {
           if (active) setPhoneAlerts("inactive");
           return;
@@ -121,7 +136,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
       setNotificationPermission(permission);
       if (permission !== "granted") { setEnableError("Notification permission was not allowed."); setPhoneAlerts("inactive"); return; }
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      const registration = await getPhoneAlertRegistration();
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });

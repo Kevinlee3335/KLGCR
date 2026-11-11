@@ -825,7 +825,7 @@ p {
 }
 .loading-bar {
   height: 34px;
-  width: 240px;
+  width: min(240px, 100%);
   border-radius: 10px;
   margin-bottom: 28px;
 }
@@ -852,6 +852,12 @@ p {
 @keyframes loading-shimmer {
   to {
     background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar,
+  .loading-card {
+    animation: none;
   }
 }
 @media (max-width: 850px) {

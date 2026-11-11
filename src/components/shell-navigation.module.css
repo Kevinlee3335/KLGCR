@@ -1,0 +1,41 @@
+.link {
+  position: relative;
+}
+
+.pending {
+  position: absolute;
+  inset-block-start: .35rem;
+  inset-inline-end: .35rem;
+  width: .65rem;
+  height: .65rem;
+  border: 1px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: show-pending 0s .15s forwards, spin-pending .7s .15s linear infinite;
+}
+
+.backdrop {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+@keyframes show-pending {
+  to { opacity: 1; }
+}
+
+@keyframes spin-pending {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending {
+    animation: show-pending 0s .15s forwards;
+    border-inline-end-color: currentColor;
+    background: currentColor;
+  }
+}
