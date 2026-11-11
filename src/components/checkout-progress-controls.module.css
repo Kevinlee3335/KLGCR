@@ -1,24 +1,289 @@
-.toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:14px;padding:18px 20px;margin:16px 0;border:1px solid #e8dfcf;border-radius:14px;background:linear-gradient(110deg,#fffefa,#f8f4ea)}
-.blocks{display:flex;gap:6px;padding:4px;border:1px solid #e6dbc5;border-radius:11px;background:#fffefa}
-.blocks button{border:0;border-radius:8px;padding:10px 16px;background:transparent;color:#746a55;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
-.blocks button[aria-pressed="true"]{background:#27251e;color:#f6d987;box-shadow:0 2px 6px #342b1c28}
-.blocks button:focus-visible,.toolbar select:focus-visible,.toolbar input:focus-visible,.toolbar button:focus-visible{outline:2px solid #b68d3d;outline-offset:2px}
-.controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;flex:1}
-.controls>div,.controls>form{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0}
-.controls label{display:flex;flex-direction:column;gap:6px;color:#716852;font-size:11px;font-weight:700;white-space:nowrap}
-.controls select,.controls input:not([type=hidden]){height:40px;min-width:190px;max-width:100%;padding:0 12px;border:1px solid #ded3be;border-radius:9px;background:#fffefa;color:#302d25;font-size:13px}
-.controls button{min-height:40px;border-radius:9px}
-.controls p{width:100%;margin:0;font-size:12px}
-@media(max-width:700px){.toolbar{padding:14px;align-items:stretch}.blocks{width:100%}.blocks button{flex:1;padding:10px 8px}.controls,.controls>div,.controls>form{width:100%}.controls label{flex:1;min-width:150px}.controls select,.controls input:not([type=hidden]){width:100%;min-width:0}.controls button{width:100%}}
+.toolbar {
+  display: grid;
+  gap: 16px;
+  padding: 18px 26px;
+  border-bottom: 1px solid #eae3d5;
+  background: var(--follow-up-surface, #fffefa);
+}
 
-/* Compact room search, consistent with the existing KLGCR cream and gold filters. */
-.controls .searchField{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:180px;max-width:220px;flex:0 1 220px}
-.controls .searchField>label{display:block;color:#716852;font-size:11px;font-weight:700;line-height:1.35}
-.searchInputWrap{position:relative;display:flex;align-items:center;width:100%}
-.searchInputWrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#a18a5a;pointer-events:none}
-.controls .searchInputWrap input{width:100%;min-width:0;height:40px;padding:0 34px 0 37px;border:1px solid #ded3be;border-radius:9px;background:#fffefa;color:#302d25;font-size:13px;transition:border-color .15s ease,box-shadow .15s ease}
-.controls .searchInputWrap input:focus{border-color:#b68d3d;box-shadow:0 0 0 3px #b68d3d20}
-.controls .searchInputWrap input::-webkit-search-cancel-button{display:none}
-.controls .searchInputWrap .clearSearch{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;min-height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:#8c8069;font-size:19px;font-weight:400;line-height:1;cursor:pointer}
-.controls .searchInputWrap .clearSearch:hover{background:#f0e9da;color:#332e24}
-@media(max-width:700px){.controls .searchField{width:100%;max-width:none;flex:1 1 100%}}
+.filters,
+.assignments,
+.assignment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.assignments {
+  align-items: flex-start;
+  gap: 16px 24px;
+}
+
+.assignment p {
+  width: 100%;
+  margin: 0;
+  color: var(--follow-up-muted, #625846);
+  font-size: 12px;
+}
+
+.blocks {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #e6dbc5;
+  border-radius: 10px;
+  background: var(--follow-up-header, #faf8f2);
+}
+
+.blocks button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 14px;
+  background: transparent;
+  color: #746a55;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.blocks button:hover:not([aria-pressed="true"]) {
+  background: var(--follow-up-control-hover, #f0e6cd);
+}
+
+.blocks button[aria-pressed="true"] {
+  background: #27251e;
+  color: #f6d987;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--follow-up-muted, #625846);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field select,
+.field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--follow-up-control-line, #d9c9a0);
+  border-radius: 8px;
+  background: var(--follow-up-surface, #fffefa);
+  color: #302d25;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.filters > .field {
+  flex: 0 1 230px;
+}
+
+.assignment .field {
+  flex: 1 1 155px;
+}
+
+.toolbar :is(button, select, input):focus-visible,
+.scroll:focus-visible,
+.table :is(a, input):focus-visible {
+  outline: 2px solid var(--follow-up-focus, #8a671e);
+  outline-offset: -2px;
+}
+
+.toolbar .assignButton {
+  min-height: 44px;
+  cursor: pointer;
+  white-space: normal;
+  text-align: center;
+}
+
+.toolbar .assignButton:disabled {
+  border-color: #e5dece;
+  background: #f4f1e8;
+  color: #706957;
+  cursor: default;
+}
+
+.searchInputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchInputWrap > svg {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+  color: #8f7849;
+}
+
+.searchInputWrap input {
+  padding-inline: 36px 44px;
+}
+
+.searchInputWrap input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.clearSearch {
+  position: absolute;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #736647;
+  cursor: pointer;
+}
+
+.clearSearch:hover {
+  background: var(--follow-up-control-hover, #f0e6cd);
+}
+
+.scroll .table {
+  table-layout: auto;
+  min-width: 820px;
+}
+
+.table thead th:nth-child(n) {
+  width: auto;
+  white-space: nowrap;
+}
+
+.table td {
+  color: #4c493f;
+  font-size: 12px;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.table td:nth-child(n) {
+  padding-block: 16px;
+}
+
+.table .selection {
+  padding-inline: 9px;
+  text-align: center;
+}
+
+.selection label {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.selection input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #997529;
+  vertical-align: middle;
+}
+
+.progressValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressValue progress {
+  width: 66px;
+  height: 7px;
+  accent-color: #997529;
+}
+
+.table small {
+  display: block;
+  margin-top: 3px;
+  color: var(--follow-up-muted, #625846);
+}
+
+.textLink {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--follow-up-gold, #866629);
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.table .badge {
+  white-space: normal;
+}
+
+.badge i {
+  flex: none;
+}
+
+.table .paintingLink {
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ready { background: #14532d; color: #fff; }
+.noDefect { background: #dcf3e5; color: #14532d; }
+.painting { background: #ede9fe; color: #5b21b6; }
+.repairComplete { background: #dbeafe; color: #1e40af; }
+.repairing { background: #ffedd5; color: #9a3412; }
+.awaiting { background: #fef3c7; color: #92400e; }
+.neutral { background: #f3f4f6; color: #374151; }
+
+@media (max-width: 900px) {
+  .toolbar {
+    padding-inline: 20px;
+  }
+
+  .table :is(th, td):nth-child(n) {
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    padding: 14px 16px;
+  }
+
+  .blocks,
+  .assignments,
+  .assignment {
+    width: 100%;
+  }
+
+  .blocks button {
+    flex: 1;
+    min-height: 44px;
+    padding-inline: 6px;
+  }
+
+  .filters > .field {
+    flex: 1 1 130px;
+  }
+
+  .assignment .field,
+  .toolbar .assignButton {
+    flex: 1 1 150px;
+  }
+
+  .field select,
+  .field input {
+    font-size: 16px;
+  }
+}

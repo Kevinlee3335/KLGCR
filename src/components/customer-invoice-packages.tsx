@@ -163,7 +163,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
             <label>Company email <input type="email" maxLength={254} required readOnly={Boolean(registered[0])} value={registered[0] || email} onChange={event => setEmail(event.target.value)}/></label>
             {selectedAccounts.some(account => !account.email) && <p className="subtle">Confirming the package registers this email for the selected company accounts that do not have an address yet.</p>}
           </>}
-          <button type="submit" disabled={!source || !selectedAccounts.length || registered.length > 1}>{busy ? 'Preparing…' : 'Prepare PDF draft'}</button>
+          <button className="button" type="submit" disabled={!source || !selectedAccounts.length || registered.length > 1}>{busy ? 'Preparing…' : 'Prepare PDF draft'}</button>
         </fieldset>
       </form>}
       {!manuallySent && !catalog && period && <p className="subtle">Loading approved invoices…</p>}
@@ -181,20 +181,20 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
       <iframe title={`Invoice package for ${review.company_name}`} src={pdfUrl(review.id)} width="100%" height="680"/>
       {review.status === 'draft' && <div>
         {!manuallySent && <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)}/> I checked the official invoice pages and amounts against the approved invoices, and verified the company and recipient.</label>}
-        <p>{!manuallySent && <><button type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}>Confirm and send from noreply</button>{' '}</>}
-          <button type="button" disabled={busy} onClick={() => void changePackage(review, 'discard')}>Discard draft</button></p>
+        <p>{!manuallySent && <><button className="button" type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}>Confirm and send from noreply</button>{' '}</>}
+          <button className="button danger" type="button" disabled={busy} onClick={() => void changePackage(review, 'discard')}>Discard draft</button></p>
       </div>}
       {!manuallySent && review.status !== 'draft' && <p>{statuses[review.status]}{review.delivery_error ? ` · ${review.delivery_error}` : ''}</p>}
     </section>}
     <section className="panel">
       <h3>Package history · {period}</h3>
-      {!catalog?.packages.length ? <p className="subtle">No invoice packages saved for this month.</p> : <div className="table-wrap"><table className="table">
-        <thead><tr><th>Company</th><th>Recipient</th><th>Pages</th><th>Status</th><th>Actions</th></tr></thead>
+      {!catalog?.packages.length ? <p className="subtle">No invoice packages saved for this month.</p> : <div className="table-wrap" role="region" aria-label="Customer invoice package history" tabIndex={0}><table className="table">
+        <thead><tr><th scope="col">Company</th><th scope="col">Recipient</th><th scope="col">Pages</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>{catalog.packages.map(pack => <tr key={pack.id}>
           <td>{pack.company_name}</td><td>{pack.recipient}</td><td>{pack.page_count}</td>
           <td>{manuallySent && pack.status !== 'sent' ? 'Delivery closed' : statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
-          <td><button type="button" disabled={busy} onClick={() => openReview(pack.id)}>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>{' '}
-            {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
+          <td><button className="button secondary" type="button" disabled={busy} onClick={() => openReview(pack.id)}>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>{' '}
+            {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button className="button secondary" type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
         </tr>)}</tbody>
       </table></div>}
     </section>

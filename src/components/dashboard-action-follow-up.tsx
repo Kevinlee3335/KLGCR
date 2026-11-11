@@ -41,8 +41,8 @@ export function DashboardActionFollowUp({
         </div>
         <div className={styles.counts}><span><b>{count}</b> Awaiting action</span></div>
       </header>
-      <div className={styles.scroll}>
-        <table className={styles.table}>
+      <div className={styles.scroll} role="group" aria-label="Pending items" tabIndex={0}>
+        <table className={`${styles.table} ${styles.mobileRows}`}>
           <thead>
             <tr>
               <th scope="col">{nameColumn}</th>
@@ -57,8 +57,8 @@ export function DashboardActionFollowUp({
               <tr key={item.id}>
                 <td><strong className={styles.room}>{item.name}</strong></td>
                 <td><p className={styles.defect}>{item.detail}</p></td>
-                <td><span className={`${styles.status} ${styles.today}`}><i />Pending</span></td>
-                <td>{item.meta && <span className={styles.staff}>{item.meta}</span>}</td>
+                <td data-label="Status"><span className={`${styles.status} ${styles.today}`}><i />Pending</span></td>
+                <td data-label={metaColumn} className={item.meta ? undefined : styles.emptyCell}>{item.meta && <span className={styles.staff}>{item.meta}</span>}</td>
                 <td>
                   <Link href={item.href || href} className={styles.action}>
                     {action} <ArrowUpRight size={15} aria-hidden="true" />

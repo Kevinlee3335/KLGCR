@@ -142,8 +142,8 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
         <input className={styles.search} type="search" aria-label="Search shown emails" placeholder="Search shown emails…" value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       {error && <div className={styles.cardBody}><p className={`${styles.notice} ${styles.error}`} role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span></p></div>}
-      {loading && !data ? <p className={styles.loading}>Loading payment emails…</p> : shown.length > 0 ? <div className={styles.tableWrap}>
-        <table className={styles.table}>
+      {loading && !data ? <p className={styles.loading}>Loading payment emails…</p> : shown.length > 0 ? <div className={styles.tableWrap} role="region" aria-label="Payment emails" tabIndex={0}>
+        <table className={`${styles.table} ${styles.inboxTable}`}>
           <thead><tr><th scope="col">Company / email</th><th scope="col">Suggested amount</th><th scope="col">Received · MYT</th><th scope="col">Status</th><th scope="col">Review</th></tr></thead>
           <tbody>{shown.map(item => <tr key={item.id} data-selected={selectedId === item.id}>
             <td><strong>{item.suggested_company_name || 'Company needs matching'}</strong><small>{item.subject || '(No subject)'}</small><small>{item.sender_email}</small></td>
@@ -338,7 +338,7 @@ function PaymentReview({ id, onChanged, onOpen }: { id: string; onChanged: () =>
             </div>
           </div>
           <div className={styles.invoiceHead}><div><h3>Unpaid invoices</h3><p>Select Rental and Utilities across the months covered. Adjust the allocation for a partial payment.</p></div>{selected.length > 0 && <span className={styles.subtle}>{selected.length} selected</span>}</div>
-          {invoiceLoading ? <p className={styles.loading}>Loading unpaid invoices…</p> : invoices.length ? <div className={styles.tableWrap}><table className={`${styles.table} ${styles.invoiceTable}`}><thead><tr><th scope="col"><span className={styles.hidden}>Pay invoice</span></th><th scope="col">Company / invoice</th><th scope="col">Unpaid balance</th><th scope="col">Allocate (RM)</th></tr></thead><tbody>{invoices.map(invoice => {
+          {invoiceLoading ? <p className={styles.loading}>Loading unpaid invoices…</p> : invoices.length ? <div className={styles.tableWrap} role="region" aria-label="Unpaid invoice allocations" tabIndex={0}><table className={`${styles.table} ${styles.invoiceTable}`}><thead><tr><th scope="col"><span className={styles.hidden}>Pay invoice</span></th><th scope="col">Company / invoice</th><th scope="col">Unpaid balance</th><th scope="col">Allocate (RM)</th></tr></thead><tbody>{invoices.map(invoice => {
             const key = invoiceKey(invoice);
             const checked = allocations[key] !== undefined;
             const eligible = Boolean(invoice.approved_at) && Number(invoice.balance) > 0;

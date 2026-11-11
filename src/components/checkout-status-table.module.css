@@ -1,7 +1,85 @@
-.panel{margin:0 0 16px}
-.table{table-layout:auto;min-width:650px}
-.table thead th,.table thead th:first-child,.table thead th:nth-child(2),.table thead th:nth-child(3),.table thead th:nth-child(4),.table thead th:last-child{width:auto;white-space:nowrap}
-.table tbody th,.table tbody td{padding:18px 20px;text-align:left;vertical-align:middle;border-bottom:1px solid #efeae0;font-size:13px;font-variant-numeric:tabular-nums;color:#4c493f}
-.table tbody th{padding-left:26px;min-width:175px;color:#29271f;font-weight:700;overflow-wrap:anywhere}
-.table tbody tr:last-child th,.table tbody tr:last-child td{border-bottom:0}
-@media(max-width:900px){.table tbody th{padding-left:20px}}
+.panel {
+  margin: 0 0 16px;
+}
+
+.scroll:focus-visible,
+.roomLink:focus-visible {
+  outline: 2px solid var(--follow-up-focus, #8a671e);
+  outline-offset: -2px;
+}
+
+.scroll .table {
+  table-layout: auto;
+  min-width: 540px;
+}
+
+.table thead th:nth-child(n) {
+  width: auto;
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+.table tbody th,
+.table tbody td {
+  padding: 16px 20px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--follow-up-row-line, #efeae0);
+  color: var(--follow-up-muted, #625846);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table tbody th {
+  padding-left: 26px;
+  min-width: 120px;
+  color: var(--follow-up-ink, #29271f);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.roomLink {
+  color: var(--follow-up-gold, #866629);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .table thead th:nth-child(n),
+  .table tbody th,
+  .table tbody td {
+    padding-inline: 12px;
+  }
+
+  .table tbody th {
+    min-width: 98px;
+  }
+}
+
+@media print {
+  .panel,
+  .scroll {
+    overflow: visible;
+    box-shadow: none;
+  }
+
+  .scroll .table {
+    min-width: 0;
+  }
+
+  .table thead {
+    display: table-header-group;
+  }
+
+  .table thead th:nth-child(n),
+  .table tbody th,
+  .table tbody td {
+    min-width: 0;
+    padding: 7px;
+  }
+}

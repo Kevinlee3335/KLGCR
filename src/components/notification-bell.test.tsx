@@ -1,16 +1,20 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NotificationBell } from "./notification-bell";
 
 const removeChannel = vi.fn().mockResolvedValue(undefined);
 const state = vi.hoisted(() => ({
   items: [] as Array<{id:string;title:string;body:string;href:string;created_at:string;read_at:null}>,
+  load: vi.fn(),
   update: vi.fn(),
 }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: () => ({
-      select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: state.items }) }) }) }),
+      select: () => ({ eq: () => ({ order: () => ({ limit: async () => {
+        state.load();
+        return { data: state.items };
+      } }) }) }),
       update: () => ({ in: () => ({ eq: (...args: unknown[]) => state.update(...args) }) }),
     }),
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
@@ -21,7 +25,9 @@ vi.mock("@/lib/supabase/client", () => ({
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   state.items = [];
+  Reflect.deleteProperty(navigator, "serviceWorker");
 });
 
 describe("notification read persistence", () => {
@@ -41,6 +47,19 @@ describe("notification read persistence", () => {
     expect(screen.getByText("Task assigned").closest("a")).not.toHaveClass("unread");
     expect(state.update).toHaveBeenCalledWith("recipient_id","staff-read-test");
   });
+
+  it("shares an in-progress load when focus and visibility change together", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    await act(async () => {
+      render(<NotificationBell userId="staff-refresh-test"/>);
+    });
+    expect(state.load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent(document, new Event("visibilitychange"));
+      fireEvent(window, new Event("focus"));
+    });
+    expect(state.load).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("phone alert restoration", () => {
@@ -48,11 +67,13 @@ describe("phone alert restoration", () => {
     const subscription = { endpoint: "https://push.example/device", keys: { p256dh: "key", auth: "auth" } };
     const getSubscription = vi.fn().mockResolvedValue(subscription);
     const requestPermission = vi.fn();
-    const register = vi.fn().mockResolvedValue({ pushManager: { getSubscription } });
+    const registration = { active: { scriptURL: new URL("/sw.js", window.location.origin).href }, pushManager: { getSubscription } };
+    const register = vi.fn().mockResolvedValue(registration);
+    const getRegistration = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValue(registration);
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("Notification", { permission: "granted", requestPermission });
     vi.stubGlobal("fetch", fetchMock);
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register } });
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration, register } });
 
     const view = render(<NotificationBell userId="staff-1"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
@@ -67,6 +88,7 @@ describe("phone alert restoration", () => {
     render(<NotificationBell userId="staff-1"/>);
     await waitFor(() => expect(getSubscription).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledTimes(1);
   });
 
   it("automatically recreates a missing subscription when permission is already granted", async () => {
@@ -77,7 +99,7 @@ describe("phone alert restoration", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "YWJj" }) }).mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
     Object.defineProperty(navigator, "serviceWorker", {
-      configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe } }) },
+      configurable: true, value: { getRegistration: vi.fn().mockResolvedValue(undefined), register: vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe } }) },
     });
     render(<NotificationBell userId="staff-2"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
@@ -92,7 +114,7 @@ describe("phone alert restoration", () => {
     const getSubscription = vi.fn();
     vi.stubGlobal("Notification", { permission: "default", requestPermission });
     vi.stubGlobal("fetch", vi.fn());
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register: vi.fn().mockResolvedValue({ pushManager: { getSubscription } }) } });
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration: vi.fn().mockResolvedValue(undefined), register: vi.fn().mockResolvedValue({ pushManager: { getSubscription } }) } });
     render(<NotificationBell userId="staff-3"/>);
     fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Enable phone alerts" })).toBeInTheDocument());
