@@ -50,7 +50,7 @@ function DeletedComplaintList({ rows, blocks }: { rows: DeletedComplaint[]; bloc
     const block = blocks.find((item) => item.id === row.block_id);
     return block ? `Block ${block.code} · ${row.room_no || "—"}` : row.room_no || "External Area";
   };
-  return <><div className="desktop-table"><table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Category / description</th><th>Source</th><th>Priority</th><th>Submitted</th><th>Status</th><th>Deleted by</th><th>Deleted</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.complaint_no}</td><td>{location(row)}</td><td><strong>{row.category || "—"}</strong><br /><span className="truncate">{row.description || "—"}</span></td><td>Archived</td><td><PriorityBadge value={row.priority} /></td><td>{row.submitted_at ? formatDate(row.submitted_at) : "—"}</td><td><StatusBadge value="deleted" /></td><td>{row.deleted_by_name || "—"}</td><td>{formatDate(row.deleted_at)}</td></tr>)}</tbody></table></div><div className="mobile-cards">{rows.map((row) => <article className="panel record-card" key={row.id}><div className="record-head"><strong>{row.complaint_no}</strong><StatusBadge value="deleted" /></div><h3>{location(row)}</h3><p>{row.category || "—"} — {row.description || "—"}</p><div className="record-meta"><PriorityBadge value={row.priority} /><span>Deleted by {row.deleted_by_name || "—"} · {formatDate(row.deleted_at)}</span></div></article>)}</div></>;
+  return <><div className="desktop-table table-wrap" role="region" aria-label="Deleted complaints table" tabIndex={0}><table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Category / description</th><th>Source</th><th>Priority</th><th>Submitted</th><th>Status</th><th>Deleted by</th><th>Deleted</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.complaint_no}</td><td>{location(row)}</td><td><strong>{row.category || "—"}</strong><br /><span className="truncate">{row.description || "—"}</span></td><td>Archived</td><td><PriorityBadge value={row.priority} /></td><td>{row.submitted_at ? formatDate(row.submitted_at) : "—"}</td><td><StatusBadge value="deleted" /></td><td>{row.deleted_by_name || "—"}</td><td>{formatDate(row.deleted_at)}</td></tr>)}</tbody></table></div><div className="mobile-cards">{rows.map((row) => <article className="panel record-card" key={row.id}><div className="record-head"><strong>{row.complaint_no}</strong><StatusBadge value="deleted" /></div><h3>{location(row)}</h3><p>{row.category || "—"} — {row.description || "—"}</p><div className="record-meta"><PriorityBadge value={row.priority} /><span>Deleted by {row.deleted_by_name || "—"} · {formatDate(row.deleted_at)}</span></div></article>)}</div></>;
 }
 
 export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -155,7 +155,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       <div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>
       {profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}
     </div>
-    <section className="metrics compact">
+    <section className="metrics compact complaint-intake-metrics">
       {[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => (
         <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>
       ))}
@@ -187,7 +187,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       <button className="button">Filter</button>
     </form>
     {q.deleted && <p className="success">Complaint deleted.</p>}
-    <section className="panel list-panel">
+    <section className="panel list-panel complaints-list-panel">
       {resultError ? <p className="error">{resultError.message}</p> : isDeleted
         ? <DeletedComplaintList rows={(deletedRows || []).slice(0, PAGE_SIZE) as DeletedComplaint[]} blocks={blocks || []} />
         : <ComplaintList rows={(data || []).slice(0, PAGE_SIZE) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} statusFilter={statusFilter} columnFilters={columnFilters} />}

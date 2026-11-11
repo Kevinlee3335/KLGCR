@@ -32,17 +32,17 @@ export default async function ReceiptsPage({searchParams}:{searchParams:Promise<
     {[...folders].sort(([a],[b])=>a.localeCompare(b)).map(([payer,items])=><details key={payer} open={!!search}>
      <summary><strong>{payer}</strong> · {items.length} receipts</summary>
      <div className="business-document-table-wrap" role="region" aria-label={`Receipts for ${payer}`} tabIndex={0}>
-      <table className="table receipt-document-table">
-       <thead><tr><th scope="col">Receipt no.</th><th scope="col">Paid on</th><th scope="col">Type</th><th scope="col">Amount</th><th scope="col">Email</th><th scope="col">Documents</th></tr></thead>
-       <tbody>{items.map(r=>{
+      <table className="table receipt-document-table" role="table">
+       <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Receipt no.</th><th scope="col" role="columnheader">Paid on</th><th scope="col" role="columnheader">Type</th><th scope="col" role="columnheader">Amount</th><th scope="col" role="columnheader">Email</th><th scope="col" role="columnheader">Documents</th></tr></thead>
+       <tbody role="rowgroup">{items.map(r=>{
         const receiptUrl = `/api/finance?receipt=${encodeURIComponent(r.id)}`;
-        return <tr key={r.id}>
-         <td><a className="text-link" href={receiptUrl} target="_blank" rel="noreferrer">{r.receipt_no}</a><small>{r.description}</small></td>
-         <td>{r.paid_on}</td>
-         <td>{r.kind==='gym'?'Gym':r.kind==='utility'?'Utilities':r.kind==='billing'?'Rental & Utilities':'Rental'}</td>
-         <td>RM {Number(r.amount).toFixed(2)}</td>
-         <td>{r.emailed_at?'Sent':'Pending'}</td>
-         <td><div className="receipt-document-actions"><a className="button secondary" href={receiptUrl} target="_blank" rel="noreferrer">View Receipt PDF</a>{r.proof_path && <a className="button secondary" href={`${receiptUrl}&proof=1`} target="_blank" rel="noreferrer">Payment proof</a>}</div></td>
+        return <tr key={r.id} role="row">
+         <td role="cell" data-label="Receipt no."><a className="text-link" href={receiptUrl} target="_blank" rel="noreferrer">{r.receipt_no}</a><small>{r.description}</small></td>
+         <td role="cell" data-label="Paid on">{r.paid_on}</td>
+         <td role="cell" data-label="Type">{r.kind==='gym'?'Gym':r.kind==='utility'?'Utilities':r.kind==='billing'?'Rental & Utilities':'Rental'}</td>
+         <td role="cell" data-label="Amount">RM {Number(r.amount).toFixed(2)}</td>
+         <td role="cell" data-label="Email">{r.emailed_at?'Sent':'Pending'}</td>
+         <td role="cell"><div className="receipt-document-actions"><a className="button secondary" href={receiptUrl} target="_blank" rel="noreferrer">View Receipt PDF</a>{r.proof_path && <a className="button secondary" href={`${receiptUrl}&proof=1`} target="_blank" rel="noreferrer">Payment proof</a>}</div></td>
         </tr>;
        })}</tbody>
       </table>
