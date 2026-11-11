@@ -8,3 +8,7 @@ export function documentReviewStatus(verifiedCount=0,approved=false){
  if(approved)return 'Approved by James';
  return ['Pending Fikri Verification','Pending Kevin Verification','Pending James Approval'][Math.min(2,Math.max(0,verifiedCount))];
 }
+
+export function isDocumentReviewTarget(type: string, id: string): type is 'billing' | 'gym' {
+ return (type === 'billing' || type === 'gym') && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
+}

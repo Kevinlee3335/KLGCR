@@ -2,6 +2,7 @@ import {billingMailSummary} from './billing-mail-summary';
 import {renderEmailBody} from './email-layout';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {after} from 'next/server';
 import {createAdminClient} from './supabase/admin';
 import {withBillingApproval,type BillingApproval} from './billing-approval';
 import {buildBillingPrintHtml} from './billing-print-template';
@@ -47,7 +48,8 @@ export async function dispatchBillingMail(runId:string){
  if(event.status==='sending'){if(!event.attempted_at||Date.now()-Date.parse(event.attempted_at)<120000)return {status:'sending' as BillingMailStatus};const stale=await db.from('billing_mail_dispatch').update({status:'uncertain',error:'Previous delivery needs checking.'}).eq('run_id',runId).eq('status','sending').eq('attempted_at',event.attempted_at);if(stale.error)throw Error('Unable to review previous delivery.');}
  const check=await billingMailConnection();
  if(!check.ready){await db.from('billing_mail_dispatch').update({status:'blocked',error:check.error}).eq('run_id',runId).in('status',['pending','blocked','failed','uncertain']);return {status:'blocked' as BillingMailStatus,error:check.error};}
- const claim=await db.from('billing_mail_dispatch').update({status:'sending',error:null,attempted_at:new Date().toISOString()}).eq('run_id',runId).in('status',['pending','blocked','failed','uncertain']).select('*').maybeSingle();
+ const attemptedAt=new Date().toISOString();
+ const claim=await db.from('billing_mail_dispatch').update({status:'sending',error:null,attempted_at:attemptedAt}).eq('run_id',runId).in('status',['pending','blocked','failed','uncertain']).select('*').maybeSingle();
  if(claim.error)throw Error('Unable to claim invoice email.');
  if(!claim.data)return {status:'sending' as BillingMailStatus};
  let status:BillingMailStatus='failed',error:string|null=null,sentAt:string|null=null,started=false;
@@ -60,7 +62,42 @@ export async function dispatchBillingMail(runId:string){
   if(result.ok===true&&result.status==='sent'&&result.key===event.delivery_key&&result.sender===BILLING_MAIL_FROM&&result.to===BILLING_MAIL_TO&&JSON.stringify(result.cc)===JSON.stringify([...BILLING_MAIL_CC])&&Number.isFinite(Date.parse(result.sentAt))){status='sent';sentAt=result.sentAt;}
   else{status=result.status==='rejected'?'failed':'uncertain';error=result.status==='rejected'?'Gateway rejected the message; check the mail connection.':'Delivery needs review. Retry checks the same delivery key and does not send another copy.';}
  }catch{status=started?'uncertain':'failed';error=started?'Gateway response was interrupted. Retry checks the same delivery key.':'Unable to prepare the signed invoice email.';}
- const saved=await db.from('billing_mail_dispatch').update({status,sent_at:sentAt,error}).eq('run_id',runId).eq('status','sending');
+ const saved=await db.from('billing_mail_dispatch').update({status,sent_at:sentAt,error}).eq('run_id',runId).eq('status','sending').eq('attempted_at',attemptedAt);
  if(saved.error)throw Error('Email status needs review before any retry.');
  return {status,error};
+}
+
+export function scheduleBillingMail(runId:string):void {
+ try {
+  after(async()=>{
+   const started=Date.now();
+   try {
+    const {status}=await dispatchBillingMail(runId);
+    console.info('Approved billing email attempt',{runId,status,durationMs:Date.now()-started});
+   } catch {
+    console.error('Approved billing email remains queued',{runId,durationMs:Date.now()-started});
+   }
+  });
+ } catch {
+  console.error('Unable to schedule approved billing email',{runId});
+ }
+}
+
+export async function retryQueuedBillingMail() {
+ const db=createAdminClient();
+ const summary={claimed:0,sent:0};
+ // Four attempts fit within the worker duration even when the gateway times out.
+ for(let attempt=0;attempt<4;attempt++){
+  const {data:runId,error}=await db.rpc('claim_due_billing_mail_retry');
+  if(error)throw Error('Unable to claim pending billing email retries');
+  if(!runId)break;
+  summary.claimed++;
+  try {
+   const result=await dispatchBillingMail(runId);
+   if(result.status==='sent')summary.sent++;
+  } catch {
+   console.error('Approved billing email retry failed',{runId});
+  }
+ }
+ return summary;
 }
