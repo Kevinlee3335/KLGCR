@@ -25,7 +25,7 @@ it('automatically claims only new approvals, caps retries and recovers stale sen
   `);
   await db.exec(readFileSync('supabase/migrations/20261028074833_billing_approved_mail_dispatch.sql','utf8'));
   await db.query('insert into public.billing_run_approvals values($1,clock_timestamp())',[oldPending]);
-  await db.exec(readFileSync('supabase/migrations/20261111050006_billing_approval_mail_retry.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261111064949_billing_approval_mail_retry.sql','utf8'));
   await db.query('insert into public.billing_mail_dispatch(run_id) values($1)',[oldManual]);
   await db.query('insert into public.billing_run_approvals values($1,clock_timestamp()),($2,clock_timestamp())',[newPending,newSending]);
 
