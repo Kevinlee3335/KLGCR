@@ -2,6 +2,7 @@ import { afterEach,beforeEach,describe,it,expect,vi } from "vitest";
 import { render,screen,fireEvent,waitFor,cleanup,within } from "@testing-library/react";
 import { BillingPanel } from "./billing-panel";
 import { configSchema,defaultBillingConfig } from "@/lib/billing-preview";
+import { stripBillingMeterPhotos } from "@/lib/billing-meter-photo";
 import fixture from "@/lib/billing-preview-fixture.json";
 
 describe('camera upload and automatic meter reading',()=>{
@@ -13,7 +14,11 @@ describe('camera upload and automatic meter reading',()=>{
    vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({drawImage:vi.fn()} as unknown as CanvasRenderingContext2D);
    vi.spyOn(HTMLCanvasElement.prototype,'toDataURL').mockReturnValue('data:image/jpeg;base64,YWJj');
    vi.stubGlobal('fetch',vi.fn(async(url:string,options?:RequestInit)=>{
-     if(!options?.body)return new Response(JSON.stringify({config:configSchema.parse({...defaultBillingConfig,...fixture}),revision:0,runs:[],clock:{date:'2026-10-13',time:'09:00'}}));
+     if(!options?.body){
+      const view=new URL(url,"https://example.test").searchParams.get("view");
+      if(view==="pack")return new Response(JSON.stringify({pack:null}));
+      return new Response(JSON.stringify({config:configSchema.parse({...defaultBillingConfig,...fixture}),revision:0,pendingPackCount:0,clock:{date:'2026-10-13',time:'09:00'}}));
+     }
      const body=JSON.parse(options.body as string);requests.push({url,body});
      if(url.endsWith('/ocr'))return new Response(JSON.stringify(failOcr?{error:'AI unavailable; enter manually.'}:{reading:71000,confidence:'high',note:'Clear digits'}),{status:failOcr?503:200});
      return new Response(JSON.stringify({ok:true,revision:Number(body.revision)+1}));
@@ -21,7 +26,31 @@ describe('camera upload and automatic meter reading',()=>{
  });
  afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
  async function open(){render(<BillingPanel/>);await screen.findByRole('button',{name:'Utility readings'});fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));return screen.getAllByLabelText('Camera photo for Meter 1')[0] as HTMLInputElement}
- it('shows server-provided billing data without a second initial request',()=>{render(<BillingPanel initialData={{config:configSchema.parse({...defaultBillingConfig,...fixture}),photosLoaded:false,revision:0,runs:[],clock:{date:'2026-10-13',time:'09:00'}}}/>);expect(screen.getByRole('button',{name:'Utility readings'})).toBeInTheDocument();expect(fetch).not.toHaveBeenCalled()});
+ it('shows server-provided billing data without a second initial request',()=>{render(<BillingPanel initialData={{config:configSchema.parse({...defaultBillingConfig,...fixture}),photosLoaded:false,revision:0,pendingPackCount:0,clock:{date:'2026-10-13',time:'09:00'}}}/>);expect(screen.getByRole('button',{name:'Utility readings'})).toBeInTheDocument();expect(fetch).not.toHaveBeenCalled()});
+ it('loads the meter photos only for the account that is open',async()=>{
+   const config=configSchema.parse({...defaultBillingConfig,...fixture});
+   const [first,second]=config.utilityAccounts;
+   first.meters[0].photo='data:image/jpeg;base64,YQ==';
+   second.meters[0].previousPhoto='data:image/jpeg;base64,Yg==';
+   const fetcher=vi.fn(async(url:string)=>{
+     const accountId=new URL(url,"https://example.test").searchParams.get("account");
+     return new Response(JSON.stringify({
+       accounts:config.utilityAccounts.filter(account=>account.id===accountId),
+       period:config.utilityPeriod,revision:4,
+     }));
+   });
+   vi.stubGlobal("fetch",fetcher);
+   render(<BillingPanel initialData={{config:stripBillingMeterPhotos(config),photosLoaded:false,revision:4,pendingPackCount:0,clock:{date:'2026-11-02',time:'09:00'}}}/>);
+   expect(fetcher).not.toHaveBeenCalled();
+   fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));
+   await screen.findByRole('button',{name:'Open current photo for Meter 1'});
+   expect(fetcher).toHaveBeenCalledTimes(1);
+   expect(fetcher).toHaveBeenCalledWith('/api/billing-preview?'+new URLSearchParams({view:'photos',account:first.id}),expect.anything());
+   fireEvent.click(within(screen.getAllByRole('article')[1]).getByRole('button',{name:'Open readings'}));
+   await screen.findByRole('button',{name:'Open previous photo for Meter 1'});
+   expect(fetcher).toHaveBeenCalledTimes(2);
+   expect(fetcher).toHaveBeenLastCalledWith('/api/billing-preview?'+new URLSearchParams({view:'photos',account:second.id}),expect.anything());
+ });
  it('offers rear camera separately from gallery and saves photo before OCR, then saves unconfirmed reading',async()=>{
    const camera=await open();expect(camera.getAttribute('capture')).toBe('environment');expect(screen.getAllByLabelText('Photo file for Meter 1')[0]).not.toHaveAttribute('capture');
    fireEvent.change(camera,{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
@@ -34,7 +63,7 @@ describe('camera upload and automatic meter reading',()=>{
    const config=configSchema.parse({...defaultBillingConfig,...fixture});
    config.utilityAccounts[0].meters[0].previousPhoto='data:image/jpeg;base64,YQ==';
    config.utilityAccounts[1].meters[0].photo='data:image/jpeg;base64,Yg==';
-   render(<BillingPanel initialData={{config,revision:0,runs:[],clock:{date:'2026-11-02',time:'09:00'}}}/>);
+   render(<BillingPanel initialData={{config,revision:0,pendingPackCount:0,clock:{date:'2026-11-02',time:'09:00'}}}/>);
    fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));
    fireEvent.change(screen.getAllByLabelText('Camera photo for Meter 1')[0],{target:{files:[new File(['image'],'meter.jpg',{type:'image/jpeg'})]}});
    await screen.findByText(/suggested reading 71000 saved/);
@@ -57,7 +86,7 @@ describe('camera upload and automatic meter reading',()=>{
    config.utilityAccounts[0].meters[0].id='shared';config.utilityAccounts[1].meters[0].id='shared';
    const before=structuredClone(config.utilityAccounts[0].meters[0]);
    config.utilityAccounts[1].meters[0].serial='SECOND-ACCOUNT';
-   render(<BillingPanel initialData={{config,revision:0,runs:[],clock:{date:'2026-11-02',time:'09:00'}}}/>);
+   render(<BillingPanel initialData={{config,revision:0,pendingPackCount:0,clock:{date:'2026-11-02',time:'09:00'}}}/>);
    fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));
    const account=screen.getAllByRole('article')[1];fireEvent.click(within(account).getByRole('button',{name:'Open readings'}));
    const input=within(account).getAllByLabelText('Current (whole digits only)')[0];fireEvent.change(input,{target:{value:String((config.utilityAccounts[1].meters[0].prev??0)+1)}});fireEvent.click(within(account).getAllByRole('button',{name:'Save & confirm reading'})[0]);
