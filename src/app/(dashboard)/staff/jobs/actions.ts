@@ -1,6 +1,7 @@
 "use server";
 
-import { MAX_EVIDENCE_PHOTOS } from "@/lib/photo-limits";
+import { EVIDENCE_TYPES, MAX_EVIDENCE_BYTES, MAX_EVIDENCE_PHOTOS } from "@/lib/photo-limits";
+import { mapPhotoBatches } from "@/lib/operational-photo-batch";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -12,10 +13,7 @@ import { notifyActiveAdmins } from "@/lib/app-notifications";
 import { staffJobReturnTo } from "@/lib/staff-job-return";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
-const completionPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxCompletionPhotoBytes = 10 * 1024 * 1024;
-
-type CompletionUpload = { name: string; type: string; size: number };
+type CompletionUpload = { type: string; size: number };
 type CompletionResult = { error?: string; returnTo?: string };
 
 function completionPhotoPath(jobId: string, value: FormDataEntryValue) {
@@ -29,9 +27,13 @@ function completionPhotoPath(jobId: string, value: FormDataEntryValue) {
  * signed URL. This avoids sending multi-megabyte camera photos through the
  * Server Action request, which can make Vercel return a blank client error.
  */
-export async function prepareCompletionUpload(jobId: string, file: CompletionUpload): Promise<{ error?: string; path?: string; token?: string }> {
+export async function prepareCompletionUploads(jobId: string, files: CompletionUpload[]) {
   const staff = await requireRole(["maintenance_staff"]);
-  if (!completionPhotoTypes.has(file.type) || file.size <= 0 || file.size > maxCompletionPhotoBytes) {
+  if (!Array.isArray(files) || !files.length || files.length > MAX_EVIDENCE_PHOTOS) {
+    return { error: "Attach between 1 and 20 photos." };
+  }
+  if (files.some((file) => !file || !EVIDENCE_TYPES.has(file.type) ||
+    !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_EVIDENCE_BYTES)) {
     return { error: "Completion photos must be JPG, PNG, or WEBP files up to 10 MB." };
   }
 
@@ -44,11 +46,19 @@ export async function prepareCompletionUpload(jobId: string, file: CompletionUpl
     .maybeSingle();
   if (jobError || !job) return { error: "This assigned job could not be verified." };
 
-  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const path = `${jobId}/completion/${crypto.randomUUID()}.${extension}`;
-  const { data, error } = await supabase.storage.from("maintenance-evidence").createSignedUploadUrl(path);
-  if (error || !data?.token) return { error: error?.message || "Unable to prepare the completion photo upload." };
-  return { path, token: data.token };
+  const storage = supabase.storage.from("maintenance-evidence");
+  try {
+    const uploads = await mapPhotoBatches(files, async (file) => {
+      const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      const path = `${jobId}/completion/${crypto.randomUUID()}.${extension}`;
+      const { data, error } = await storage.createSignedUploadUrl(path);
+      if (error || !data?.token) throw new Error(error?.message || "Unable to prepare the completion photo upload.");
+      return { path, token: data.token };
+    });
+    return { uploads };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to prepare the completion photo upload." };
+  }
 }
 
 async function saveCompletionPhotoRecords(supabase: Awaited<ReturnType<typeof createClient>>, jobId: string, staffId: string, data: FormData) {

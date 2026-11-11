@@ -12,7 +12,7 @@ beforeEach(()=>{
 });
 afterEach(cleanup);
 function seven(){fireEvent.change(screen.getByLabelText("Upload Photos"),{target:{files:Array.from({length:7},(_,i)=>new File(["photo"],"photo"+i+".jpg",{type:"image/jpeg"}))}})}
-it("uploads maintenance photos in bounded batches and submits paths in selection order", async () => {
+it("starts the next maintenance photo when a slot opens and submits paths in selection order", async () => {
   let finishFirst!: (result: { error: null }) => void;
   const first = new Promise<{ error: null }>(resolve => { finishFirst = resolve; });
   state.upload.mockImplementation((path: string) => path.endsWith("0") ? first : Promise.resolve({ error: null }));
@@ -20,8 +20,8 @@ it("uploads maintenance photos in bounded batches and submits paths in selection
   render(<CheckoutCompletionForm roomId="room" kind="completion" action={action} buttonLabel="Update this defect"><input name="rectifiedDefects" defaultValue="fan"/></CheckoutCompletionForm>);
   seven();
   fireEvent.submit(screen.getByRole("button", { name: "Update this defect" }).closest("form")!);
-  await screen.findByText("Uploaded 2 of 7 photos…");
-  expect(state.upload).toHaveBeenCalledTimes(3);
+  await screen.findByText("Uploaded 6 of 7 photos…");
+  expect(state.upload).toHaveBeenCalledTimes(7);
   expect(action).not.toHaveBeenCalled();
   await act(async () => { finishFirst({ error: null }); });
   await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
@@ -29,7 +29,7 @@ it("uploads maintenance photos in bounded batches and submits paths in selection
   expect(action.mock.calls[0][0].getAll("photoPaths")).toEqual(Array.from({ length: 7 }, (_, i) => `room/completion/photo${i}`));
   expect(action.mock.calls[0][0].get("rectifiedDefects")).toBe("fan");
 });
-it("waits for in-flight photos before enabling a retry and skips the next batch after a failure", async () => {
+it("waits for in-flight photos before enabling a retry and starts no more after a failure", async () => {
   let finishFirst!: (result: { error: null }) => void;
   const first = new Promise<{ error: null }>(resolve => { finishFirst = resolve; });
   state.upload.mockImplementation((path: string) => {

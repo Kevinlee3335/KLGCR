@@ -6,8 +6,7 @@ import { prepareAdminInspectionEvidence } from "@/app/(dashboard)/admin/checkout
 import { prepareCheckoutEvidence } from "@/app/(dashboard)/staff/checkouts/actions";
 import { createClient } from "@/lib/supabase/client";
 import { validateEvidenceFiles } from "@/lib/photo-limits";
-
-const PHOTO_UPLOAD_BATCH_SIZE = 3;
+import { CHECKOUT_PHOTO_UPLOAD_CONCURRENCY, mapCheckoutPhotos } from "@/lib/checkout-photo-uploads";
 
 export function CheckoutCompletionForm({ roomId, kind, action, children, buttonLabel }: { roomId: string; kind: "inspection" | "completion" | "cleaning"; action: (data: FormData) => Promise<void>; children: ReactNode; buttonLabel: string }) {
   const [photos, setPhotos] = useState<File[]>([]);
@@ -37,21 +36,15 @@ export function CheckoutCompletionForm({ roomId, kind, action, children, buttonL
       const storage = createClient().storage.from("checkout-evidence");
       let uploaded = 0;
       if (photos.length) setProgress(`Uploaded ${uploaded} of ${photos.length} photos…`);
-      for (let start = 0; start < photos.length; start += PHOTO_UPLOAD_BATCH_SIZE) {
-        const batch = photos.slice(start, start + PHOTO_UPLOAD_BATCH_SIZE);
-        // Wait for the whole batch before allowing a retry, even if one upload fails.
-        const results = await Promise.allSettled(batch.map(async (photo, offset) => {
-          const index = start + offset;
-          const { path, token } = prepared.uploads[index];
-          const { error: uploadError } = await storage.uploadToSignedUrl(path, token, photo);
-          if (uploadError) throw new Error(`Photo ${index + 1} could not upload: ${uploadError.message}`);
-          uploaded += 1;
-          setProgress(`Uploaded ${uploaded} of ${photos.length} photos…`);
-        }));
-        const failure = results.find(result => result.status === "rejected");
-        if (failure) throw failure.reason;
-      }
-      for (const { path } of prepared.uploads.slice(0, photos.length)) data.append("photoPaths", path);
+      const paths = await mapCheckoutPhotos(photos, CHECKOUT_PHOTO_UPLOAD_CONCURRENCY, async (photo, index) => {
+        const { path, token } = prepared.uploads[index];
+        const { error: uploadError } = await storage.uploadToSignedUrl(path, token, photo);
+        if (uploadError) throw new Error(`Photo ${index + 1} could not upload: ${uploadError.message}`);
+        uploaded += 1;
+        setProgress(`Uploaded ${uploaded} of ${photos.length} photos…`);
+        return path;
+      });
+      for (const path of paths) data.append("photoPaths", path);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to upload photos. Please try again.");
       setBusy(false);

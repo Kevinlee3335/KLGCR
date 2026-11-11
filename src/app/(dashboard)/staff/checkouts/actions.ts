@@ -1,5 +1,6 @@
 "use server";
 import { MAX_EVIDENCE_PHOTOS, EVIDENCE_TYPES, MAX_EVIDENCE_BYTES, validateEvidenceFiles } from "@/lib/photo-limits";
+import { signCheckoutPhotoUploads } from "@/lib/checkout-photo-uploads";
 import { checkoutProgress,isRepairDefect } from "@/lib/checkouts";
 import { revalidatePath } from "next/cache";import { redirect } from "next/navigation";import { requireRole } from "@/lib/auth";import { createAppNotifications, notifyActiveAdmins } from "@/lib/app-notifications";import { createClient } from "@/lib/supabase/server";
 function go(id:string,e?:string):never {return redirect(`/staff/checkouts/${id}${e?`?error=${encodeURIComponent(e)}`:""}`)}
@@ -40,15 +41,7 @@ export async function prepareCheckoutEvidence(id:string,kind:"completion"|"clean
  const db=await createClient();
  const {data:room}=await db.from("checkout_rooms").select("id").eq("id",id).is("deleted_at",null).eq(kind==="completion"?"assigned_to":"cleaner_id",actor.id).eq("status",kind==="completion"?"rectification":"cleaning").maybeSingle();
  if(!room||(kind==="completion"?actor.role!=="maintenance_staff":actor.role!=="cleaner")) return {error:"This room is not assigned to you for this stage."};
- const uploads=[];
- for(const file of files){
-  const extension=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
-  const path=`${id}/${kind}/${crypto.randomUUID()}.${extension}`;
-  const {data,error}=await db.storage.from("checkout-evidence").createSignedUploadUrl(path);
-  if(error||!data?.token)return {error:error?.message||"Unable to prepare photo upload."};
-  uploads.push({path,token:data.token});
- }
- return {uploads};
+ return signCheckoutPhotoUploads(db.storage.from("checkout-evidence"), `${id}/${kind}`, files, "Unable to prepare photo upload.");
 }
 
 async function saveCheckoutEvidence(db:Awaited<ReturnType<typeof createClient>>,id:string,user:string,data:FormData,kind:"completion"|"cleaning",defectId?:string){

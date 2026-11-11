@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mapPhotoBatches } from "@/lib/operational-photo-batch";
 
 export async function prepareAdminDailyTaskEvidence(taskId: number, photoCount: number) {
   await requireRole(["admin"]);
@@ -15,14 +16,17 @@ export async function prepareAdminDailyTaskEvidence(taskId: number, photoCount: 
   // Admin uploads are authorized above; existing storage policy permits only
   // staff assignees. Keep the privileged client exclusively on the server.
   const storage = createAdminClient().storage.from("checkout-evidence");
-  const uploads = [];
-  for (let index = 0; index < photoCount; index += 1) {
-    const path = `daily-tasks/${taskId}/${crypto.randomUUID()}.jpg`;
-    const { data, error: uploadError } = await storage.createSignedUploadUrl(path);
-    if (uploadError || !data) return { error: uploadError?.message || "Unable to prepare photo upload." };
-    uploads.push({ path, token: data.token });
+  try {
+    const uploads = await mapPhotoBatches(Array.from({ length: photoCount }), async () => {
+      const path = `daily-tasks/${taskId}/${crypto.randomUUID()}.jpg`;
+      const { data, error: uploadError } = await storage.createSignedUploadUrl(path);
+      if (uploadError || !data?.token) throw new Error(uploadError?.message || "Unable to prepare photo upload.");
+      return { path, token: data.token };
+    });
+    return { uploads };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to prepare photo upload." };
   }
-  return { uploads };
 }
 
 export async function completeAdminDailyTask(taskId: number, comment: string, paths: string[]) {
@@ -32,9 +36,17 @@ export async function completeAdminDailyTask(taskId: number, comment: string, pa
   const { data: task, error: taskError } = await db.from("admin_daily_tasks").select("id,title,status,task_date,task_category").eq("id", taskId).maybeSingle();
   if (taskError || !task) return { error: taskError?.message || "Daily task not found." };
   const adminDb = createAdminClient();
-  for (const path of paths) {
-    const { data, error } = await adminDb.storage.from("checkout-evidence").list(`daily-tasks/${taskId}`, { search: path.split("/").pop()!, limit: 2 });
-    if (error || !data?.some((file) => file.name === path.split("/").pop() && Number(file.metadata?.size) > 0)) return { error: "Completion photo upload is incomplete. Try again." };
+  const storage = adminDb.storage.from("checkout-evidence");
+  try {
+    await mapPhotoBatches(paths, async (path) => {
+      const name = path.slice(path.lastIndexOf("/") + 1);
+      const { data, error } = await storage.list(`daily-tasks/${taskId}`, { search: name, limit: 2 });
+      if (error || !data?.some((file) => file.name === name && Number(file.metadata?.size) > 0)) {
+        throw new Error("Completion photo upload is incomplete.");
+      }
+    });
+  } catch {
+    return { error: "Completion photo upload is incomplete. Try again." };
   }
   const { data: photos, error: photoError } = await adminDb.from("daily_task_photos").insert(paths.map((path) => ({ task_id: taskId, storage_path: path, uploaded_by: profile.id }))).select("id");
   if (photoError) return { error: photoError.message };

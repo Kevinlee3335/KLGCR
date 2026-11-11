@@ -13,12 +13,18 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.unstubAllGlobals()});
 function send(record:unknown){const iframe=screen.getByTitle("Block A and B room inspection") as HTMLIFrameElement;window.dispatchEvent(new MessageEvent("message",{origin:window.location.origin,source:iframe.contentWindow,data:{type:"klg-inspection-submit",record}}))}
-it("uploads seven photos, submits one defect form with all paths and prevents duplicate concurrent submits",async()=>{
+it("uploads photos in parallel and submits one defect form with all paths in order",async()=>{
+ let finishFirst!: (result:{error:null})=>void;
+ const first=new Promise<{error:null}>(resolve=>{finishFirst=resolve});
+ state.upload.mockImplementation((path:string)=>path.endsWith("0")?first:Promise.resolve({error:null}));
  render(<CheckoutABInspector/>);
  act(()=>{send(record());send(record())});
+ await screen.findByText("Uploaded 6 of 7 photos…");
+ expect(state.submit).not.toHaveBeenCalled();
+ await act(async()=>{finishFirst({error:null})});
  await screen.findByText("Inspection submitted successfully");
  expect(state.prepare).toHaveBeenCalledTimes(1);expect(state.upload).toHaveBeenCalledTimes(7);expect(state.submit).toHaveBeenCalledTimes(1);
- const payload=state.submit.mock.calls[0][0];expect(payload.room).toBe("203");expect(payload.findings).toHaveLength(1);expect(payload.findings[0].photos).toHaveLength(7);expect(payload.findings[0].description).toContain("Fan · Broken");expect(JSON.stringify(payload.checklist)).not.toContain("base64");
+ const payload=state.submit.mock.calls[0][0];expect(payload.room).toBe("203");expect(payload.findings).toHaveLength(1);expect(payload.findings[0].photos).toEqual(Array.from({length:7},(_,i)=>"inspection/photo"+i));expect(payload.findings[0].description).toContain("Fan · Broken");expect(JSON.stringify(payload.checklist)).not.toContain("base64");
 });
 it("keeps the inspection open and does not create a form if photo seven fails",async()=>{
  state.upload.mockImplementation(async(path:string)=>({error:path.endsWith("6")?{message:"Connection lost"}:null}));
