@@ -1,3 +1,7 @@
+.heading > div > p {
+  font-size: 1rem;
+}
+
 .toolbar {
   display: grid;
   gap: 16px;
@@ -102,6 +106,7 @@
 
 .toolbar .assignButton {
   min-height: 44px;
+  font-size: 1rem;
   cursor: pointer;
   white-space: normal;
   text-align: center;
@@ -161,12 +166,13 @@
 
 .table thead th:nth-child(n) {
   width: auto;
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 
 .table td {
   color: #4c493f;
-  font-size: 12px;
+  font-size: 1rem;
   line-height: 1.5;
   vertical-align: middle;
 }
@@ -213,18 +219,27 @@
   color: var(--follow-up-muted, #625846);
 }
 
+.table .block {
+  font-size: 0.75rem;
+}
+
 .textLink {
   display: block;
   width: fit-content;
   margin-top: 4px;
   color: var(--follow-up-gold, #866629);
-  font-size: 11px;
+  font-size: 0.833em;
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
+.table .reference {
+  font-size: 1rem;
+}
+
 .table .badge {
+  font-size: 0.72rem;
   white-space: normal;
 }
 
