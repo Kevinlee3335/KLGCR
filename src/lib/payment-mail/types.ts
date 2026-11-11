@@ -1,6 +1,20 @@
 import type {BillingDocumentKind, BillingDocumentRecord} from '@/lib/billing-documents';
 import type {OfficialReceipt} from '@/lib/official-receipt';
 
+export const receiptListPageSize = 25;
+
+export type ReceiptListItem = {
+  id: string;
+  receipt_no: string;
+  payer: string;
+  verifier_name: string | null;
+  amount: number;
+  description: string;
+  paid_on: string;
+};
+
+export type ReceiptListResult = {items: ReceiptListItem[]; total: number};
+
 export const NOVEMBER_PAYMENT_MAIL_START = '2026-11-01';
 
 export const paymentMailStatuses = [

@@ -1977,6 +1977,7 @@ p {
     padding: 0 15px 30px;
     border-radius: 34px 34px 0 0;
     overflow: visible;
+    overflow-x: clip;
   }
   .login-access:before {
     display: none;

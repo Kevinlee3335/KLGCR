@@ -41,7 +41,7 @@ export function DashboardActionFollowUp({
         </div>
         <div className={styles.counts}><span><b>{count}</b> Awaiting action</span></div>
       </header>
-      <div className={styles.scroll} role="region" aria-label={title} tabIndex={0}>
+      <div className={styles.scroll} role="group" aria-label="Pending items" tabIndex={0}>
         <table className={`${styles.table} ${styles.mobileRows}`}>
           <thead>
             <tr>

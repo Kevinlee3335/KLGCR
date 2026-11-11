@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, ArrowUpRight, CheckCircle2, FileText, Inbox, Ma
 import type { OfficialReceipt } from '@/lib/official-receipt';
 import type { PaymentMailDetail, PaymentMailItem, PaymentMailList } from '@/lib/payment-mail/types';
 import { PaymentMailConnection } from './payment-mail-connection';
+import { PaymentReceiptList } from './payment-receipt-list';
 import styles from './payment-mail.module.css';
 
 const money = new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' });
@@ -53,6 +54,7 @@ function pending(item: Pick<PaymentMailItem, 'status'>) { return ['pending_verif
 function attachmentSize(bytes: number) { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.ceil(bytes / 1024))} KB`; }
 
 export function PaymentMailVerification({ initialId }: { initialId?: string }) {
+  const [view, setView] = useState<'inbox' | 'receipts'>('inbox');
   const [filter, setFilter] = useState<MailFilter>('pending');
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
@@ -74,6 +76,7 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
   }, [selectedId]);
 
   useEffect(() => {
+    if (view !== 'inbox') return;
     let stopped = false;
     let running = false;
     let controller: AbortController | null = null;
@@ -102,7 +105,7 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [filter, page, refreshVersion]);
+  }, [filter, page, refreshVersion, view]);
 
   function select(id: string) {
     setSelectedId(id);
@@ -124,7 +127,12 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
       <Link className={styles.button} href="/admin/billing"><ArrowLeft size={15} aria-hidden="true" />Rental & Utilities</Link>
     </div>
     <PaymentMailConnection />
-    <section className={styles.card} aria-labelledby="payment-inbox-title">
+    <div className={styles.tabs} role="group" aria-label="Payment records">
+      <button type="button" className={styles.tab} aria-pressed={view === 'inbox'} onClick={() => setView('inbox')}>Payment inbox</button>
+      <button type="button" className={styles.tab} aria-pressed={view === 'receipts'} onClick={() => setView('receipts')}>Receipt List</button>
+    </div>
+    {view === 'receipts' && <PaymentReceiptList refreshVersion={refreshVersion} />}
+    <section hidden={view !== 'inbox'} className={styles.card} aria-labelledby="payment-inbox-title">
       <header className={styles.cardHead}>
         <div><h2 id="payment-inbox-title">Payment inbox{data && <span className={styles.count}>{data.total}</span>}</h2><p>Pending emails stay here until verified or rejected, including those received on previous days.</p></div>
         <button type="button" className={styles.button} disabled={loading} onClick={() => { setLoading(true); setRefreshVersion(value => value + 1); }}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Refreshing…' : 'Refresh'}</button>
@@ -151,7 +159,7 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
         <div className={styles.actions}><button type="button" className={styles.button} disabled={loading || page === 0} onClick={() => { setPage(value => value - 1); setData(null); setLoading(true); }}>Previous</button><button type="button" className={styles.button} disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => { setPage(value => value + 1); setData(null); setLoading(true); }}>Next</button></div>
       </footer>
     </section>
-    {selectedId && <div className={styles.review} ref={reviewRef} tabIndex={-1} role="region" aria-label="Selected payment email"><PaymentReview key={selectedId} id={selectedId} onChanged={() => setRefreshVersion(value => value + 1)} onOpen={select} /></div>}
+    {selectedId && <div hidden={view !== 'inbox'} className={styles.review} ref={reviewRef} tabIndex={-1} role="region" aria-label="Selected payment email"><PaymentReview key={selectedId} id={selectedId} onChanged={() => setRefreshVersion(value => value + 1)} onOpen={select} /></div>}
   </div>;
 }
 
