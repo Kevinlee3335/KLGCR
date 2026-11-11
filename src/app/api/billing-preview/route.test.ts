@@ -74,3 +74,183 @@ describe('confirmed utilities submission',()=>{
   expect(response.status).toBe(400);expect((await response.json()).error).toMatch(/confirm every meter/);expect(insert).not.toHaveBeenCalled();
  });
 });
+
+describe("on-demand billing views", () => {
+ const packId = "8bd6ec77-c15c-4c2a-9b09-e4ba8295d0bf";
+ const otherPackId = "ea7c45ca-4d9f-4fe2-8947-d8a05336cf57";
+ const photo = "data:image/jpeg;base64,YQ==";
+ const previousPhoto = "data:image/jpeg;base64,Yg==";
+ const otherPhoto = "data:image/jpeg;base64,Yw==";
+ const signature = { strokes: [[[0.2, 0.2], [0.5, 0.7]]] };
+ const fields = { id: packId, kind: "utility", period: "2026-11", issue_date: "2026-11-11", total: 38 };
+ const mail = { run_id: packId, status: "sent", sent_at: "2026-11-11T01:30:00Z", error: null };
+
+ function request(query: string) {
+  return new NextRequest(`https://example.test/api/billing-preview?${query}`);
+ }
+
+ async function setup() {
+  vi.stubEnv("BILLING_DISABLED", "false");
+  mocks.profile = { id: "another-admin", role: "admin", full_name: "Kevin" };
+  const { configSchema, defaultBillingConfig } = await import("@/lib/billing-preview");
+  const fixture = (await import("@/lib/billing-preview-fixture.json")).default;
+  const config = configSchema.parse({ ...defaultBillingConfig, ...fixture, utilityPeriod: "2026-11" });
+  const [first, second] = config.utilityAccounts;
+  Object.assign(first.meters[0], { photo, previousPhoto });
+  second.meters[0].photo = otherPhoto;
+  return { config, first, second };
+ }
+
+ it("loads only settings on overview and omits meter evidence", async () => {
+  const { config } = await setup();
+  const from = vi.fn((table: string) => {
+   expect(table).toBe("billing_preview_settings");
+   return {
+    select() { return this; },
+    eq() { return this; },
+    single: async () => ({ data: { config, revision: 17 }, error: null }),
+   };
+  });
+  mocks.db.mockResolvedValue({ from });
+
+  const response = await GET(request("view=overview"));
+  expect(response.status).toBe(200);
+  const overview = await response.json();
+  expect(from.mock.calls).toEqual([["billing_preview_settings"]]);
+  expect(overview).toMatchObject({ revision: 17, photosLoaded: false, pendingPackCount: 0 });
+  expect(overview.config.utilityAccounts[0].meters[0].photo).toBeUndefined();
+  expect(overview.config.utilityAccounts[0].meters[0].previousPhoto).toBeUndefined();
+  expect(overview).not.toHaveProperty("runs");
+ });
+
+ it("adds a metadata-only pending count for the billing approver", async () => {
+  const { config } = await setup();
+  const { BILLING_APPROVER_ID } = await import("@/lib/billing-approval");
+  mocks.profile = { id: BILLING_APPROVER_ID, role: "admin", full_name: "James" };
+  const count = vi.fn(() => ({ is: async () => ({ count: 3, error: null }) }));
+  mocks.db.mockResolvedValue({ from: (table: string) => table === "billing_preview_runs" ? { select: count } : {
+   select() { return this; },
+   eq() { return this; },
+   single: async () => ({ data: { config, revision: 18 }, error: null }),
+  } });
+
+  const response = await GET(request("view=overview"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ pendingPackCount: 3 });
+  expect(count).toHaveBeenCalledWith("id,billing_run_approvals!left(run_id)", { head: true, count: "exact" });
+ });
+
+ it("reads metadata and workflow state for history without selecting snapshots", async () => {
+  await setup();
+  const { BILLING_APPROVER_ID } = await import("@/lib/billing-approval");
+  const selectRuns = vi.fn((columns: string) => {
+   expect(columns).not.toContain("snapshot");
+   return {
+    order() { return this; },
+    limit: async () => ({ data: [fields, { ...fields, id: otherPackId }], error: null }),
+   };
+  });
+  const related: Record<string, unknown[]> = {
+   billing_run_approvals: [
+    { run_id: packId, approved_by_user: BILLING_APPROVER_ID, approved_at: "2026-11-11T01:20:00Z", signature },
+    { run_id: otherPackId, approved_by_user: "another-user", approved_at: "2026-11-11T01:20:00Z", signature },
+   ],
+   billing_mail_dispatch: [mail],
+   document_verifications: [{ document_id: packId, entries: [{}, {}] }],
+  };
+  mocks.db.mockResolvedValue({ from: (table: string) => table === "billing_preview_runs" ? { select: selectRuns } : {
+   select() { return this; },
+   eq() { return this; },
+   in: async () => ({ data: related[table], error: null }),
+  } });
+
+  const response = await GET(request("view=history"));
+  expect(response.status).toBe(200);
+  expect(selectRuns.mock.calls[0][0]).not.toContain("snapshot");
+  const { runs } = await response.json();
+  expect(runs).toEqual([
+   { ...fields, verifiedCount: 2, approved: true, mail },
+   { ...fields, id: otherPackId, verifiedCount: 0, approved: false, mail: null },
+  ]);
+ });
+
+ it.each([
+  [`id=${packId}`, [["id", packId]]],
+  ["kind=utility&period=2026-11", [["kind", "utility"], ["period", "2026-11"]]],
+ ])("loads the selected frozen pack and its recorded signature via %s", async (selector, expectedFilters) => {
+  await setup();
+  const { BILLING_APPROVER_ID } = await import("@/lib/billing-approval");
+  const verifications = [{ user_id: "fikri" }, { user_id: "kevin" }];
+  const approval = {
+   run_id: packId, approved_by_user: BILLING_APPROVER_ID, approved_by: "James",
+   approved_at: "2026-11-11T01:20:00Z", signature, verifications,
+  };
+  const snapshot = {
+   lines: [{ details: [{ photo, previousPhoto, currentDate: "2026-11-10" }] }],
+   issueDate: fields.issue_date,
+   approval: { approved_by: "untrusted snapshot" },
+  };
+  const filtered: string[][] = [];
+  mocks.db.mockResolvedValue({ from: (table: string) => table === "billing_preview_runs" ? {
+   select() { return this; },
+   eq(key: string, value: string) { filtered.push([key, value]); return this; },
+   maybeSingle: async () => ({ data: { ...fields, snapshot }, error: null }),
+  } : {
+   select() { return this; },
+   eq() { return this; },
+   in: async () => ({
+    data: table === "billing_run_approvals" ? [approval]
+     : table === "document_verifications" ? [{ document_id: packId, entries: verifications }] : [mail],
+    error: null,
+   }),
+  } });
+
+  const response = await GET(request(`view=pack&${selector}`));
+  expect(response.status).toBe(200);
+  expect(filtered).toEqual(expectedFilters);
+  expect(await response.json()).toEqual({
+   pack: { ...fields, verifiedCount: 2, approved: true, mail, snapshot: { ...snapshot, approval } },
+  });
+ });
+
+ it("returns a missing pack as null and rejects an invalid selector before database access", async () => {
+  await setup();
+  mocks.db.mockClear().mockResolvedValue({ from: () => ({
+   select() { return this; },
+   eq() { return this; },
+   maybeSingle: async () => ({ data: null, error: null }),
+  }) });
+  expect((await GET(request("view=pack&id=invalid"))).status).toBe(400);
+  expect((await GET(request("view=pack&kind=utility&period=2026-13"))).status).toBe(400);
+  expect(mocks.db).not.toHaveBeenCalled();
+  const response = await GET(request(`view=pack&id=${packId}`));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ pack: null });
+ });
+
+ it("returns only the selected account photos with the settings revision", async () => {
+  const { config, first, second } = await setup();
+  const from = vi.fn((table: string) => {
+   expect(table).toBe("billing_preview_settings");
+   return {
+    select() { return this; },
+    eq() { return this; },
+    single: async () => ({ data: { config, revision: 19 }, error: null }),
+   };
+  });
+  mocks.db.mockResolvedValue({ from });
+
+  const response = await GET(request(`view=photos&account=${encodeURIComponent(first.id)}`));
+  expect(response.status).toBe(200);
+  const selected = await response.json();
+  expect(selected).toMatchObject({ period: "2026-11", revision: 19 });
+  expect(selected.accounts).toHaveLength(1);
+  expect(selected.accounts[0].meters[0]).toEqual({ id: first.meters[0].id, photo, previousPhoto });
+  expect(selected).not.toHaveProperty("config");
+
+  const all = await (await GET(request("view=photos"))).json();
+  expect(all.accounts.find((account: {id: string}) => account.id === second.id).meters[0].photo).toBe(otherPhoto);
+  expect((await GET(request("view=photos&account=missing"))).status).toBe(404);
+  expect(from.mock.calls.every(([table]) => table === "billing_preview_settings")).toBe(true);
+ });
+});

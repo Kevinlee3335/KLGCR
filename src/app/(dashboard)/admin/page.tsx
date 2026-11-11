@@ -7,6 +7,7 @@ import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
 import { PaymentMailFollowUp } from "@/components/payment-mail-follow-up";
 import { PoApprovalQueue } from "@/components/po-approval-queue";
 import { SupplierMailSummary } from "@/components/supplier-mail-summary";
+import { loadAdminDashboardWorkload } from "@/lib/admin-dashboard-workload";
 import { unresolvedTenantNoShows, type TenantNoShowNotification } from "@/lib/admin-notifications";
 import { requireRole } from "@/lib/auth";
 import { membershipEnabled } from "@/lib/membership";
@@ -36,15 +37,14 @@ async function loadTenantNoShows(supabase: DashboardClient) {
 
 async function loadDashboardData(supabase: DashboardClient, today: string): Promise<AdminDashboardData> {
   const [
-    { data: countRows, error: countError }, { data: statusRows }, { data: complaints },
-    { data: tasks }, { data: inventory }, { count: todayAppointments },
+    { data: countRows, error: countError }, { jobs, inventory }, { data: complaints },
+    { data: tasks }, { count: todayAppointments },
     { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError },
   ] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
-    supabase.from("maintenance_jobs").select("status").in("status", ["assigned", "in_progress", "pending_material", "under_monitoring", "completed"]),
+    loadAdminDashboardWorkload(supabase),
     supabase.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,block:blocks!block_id(code)").order("submitted_at", { ascending: false }).limit(5),
     supabase.from("maintenance_jobs").select("id,job_no,room_no,description,status,scheduled_for,assigned_at,complaint:complaints!inner(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").eq("scheduled_for", today).neq("complaints.room_access_permission", "no").not("status", "in", '("completed","cancelled")').order("assigned_at", { ascending: true }).limit(5),
-    supabase.from("inventory_items").select("balance_qty,reorder_level").eq("is_active", true),
     supabase.from("appointments").select("*", { count: "exact", head: true }).eq("appointment_date", today).not("status", "in", '("cancelled","no_show")'),
     supabase.from("maintenance_jobs").select("*", { count: "exact", head: true }).eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00"),
     loadTenantNoShows(supabase),
@@ -54,15 +54,6 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
   if (countError) console.error("admin_dashboard_counts failed", countError.message);
 
   const counts = countRows?.[0];
-  const jobs = { assigned: 0, in_progress: 0, pending_material: 0, under_monitoring: 0, completed: 0 };
-  for (const row of statusRows ?? []) if (row.status in jobs) jobs[row.status as keyof typeof jobs]++;
-  const stock = (inventory ?? []).reduce((summary, item) => {
-    const balance = Number(item.balance_qty);
-    const reorder = Number(item.reorder_level);
-    if (balance <= 0) summary.outOfStock++;
-    else if (balance <= reorder) summary.nearReorder++;
-    return summary;
-  }, { outOfStock: 0, nearReorder: 0 });
 
   return {
     kpis: {
@@ -81,7 +72,7 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
     jobs,
     complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"],
     tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"],
-    inventory: stock,
+    inventory,
   };
 }
 

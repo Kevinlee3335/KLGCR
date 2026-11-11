@@ -1,5 +1,8 @@
 import {dispatchDocumentReviewPushes} from '@/lib/document-review-notifications';
-import {loadBillingPreviewData} from "@/lib/billing-preview-data";
+import { BILLING_APPROVER_ID } from "@/lib/billing-approval";
+import {
+  loadBillingHistory, loadBillingMeterPhotos, loadBillingOverview, loadBillingPack, loadBillingPreviewData,
+} from "@/lib/billing-preview-data";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -10,7 +13,41 @@ export const preferredRegion="sin1";
 const photoTargetSchema=z.object({accountId:z.string().max(100),meterId:z.string().max(100),side:z.enum(["photo","previousPhoto"])});
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
 async function auth(){if(!billingPreviewEnabled())return null;const profile=await getSessionProfile();return profile&&["admin","management_viewer"].includes(profile.role)?profile:null}
-export async function GET(req:NextRequest){try{if(!await auth())return reply({error:"Access denied"},403);return reply(await loadBillingPreviewData(req.nextUrl.searchParams.get("photos")==="1"))}catch(e){const message=e instanceof Error&&["Billing preview storage is unavailable","Billing meter data needs repair. No records were changed."].includes(e.message)?e.message:"Unable to load billing data. Please reload or contact the administrator.";return reply({error:message},message.includes("needs repair")?422:503)}}
+export async function GET(req: NextRequest) {
+  try {
+    const profile = await auth();
+    if (!profile) return reply({ error: "Access denied" }, 403);
+    const params = req.nextUrl.searchParams;
+    const view = params.get("view");
+    switch (view) {
+      case null:
+        return reply(await loadBillingPreviewData(params.get("photos") === "1"));
+      case "overview":
+        return reply(await loadBillingOverview(profile.role === "admin" && profile.id === BILLING_APPROVER_ID));
+      case "history":
+        return reply({ runs: await loadBillingHistory() });
+      case "pack": {
+        const id = params.get("id");
+        const selector = id !== null
+          ? { id: z.string().uuid().parse(id) }
+          : { kind: z.enum(["rental", "utility"]).parse(params.get("kind")), period: monthSchema.parse(params.get("period")) };
+        return reply({ pack: await loadBillingPack(selector) });
+      }
+      case "photos": {
+        const account = params.has("account") ? z.string().min(1).max(100).parse(params.get("account")) : undefined;
+        const photos = await loadBillingMeterPhotos(account);
+        return photos ? reply(photos) : reply({ error: "Meter account not found" }, 404);
+      }
+      default:
+        return reply({ error: "Unknown billing view" }, 400);
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply({ error: "Invalid billing request" }, 400);
+    const message = error instanceof Error && ["Billing preview storage is unavailable", "Billing meter data needs repair. No records were changed."].includes(error.message)
+      ? error.message : "Unable to load billing data. Please reload or contact the administrator.";
+    return reply({ error: message }, message.includes("needs repair") ? 422 : 503);
+  }
+}
 export async function POST(req:NextRequest){const profile=await auth();if(!profile)return reply({error:"Access denied"},403);if(req.headers.get("origin")!==req.nextUrl.origin)return reply({error:"Invalid origin"},403);const raw=await req.text();if(Buffer.byteLength(raw)>4000000)return reply({error:"Photo/configuration too large"},413);try{const j=JSON.parse(raw);const db=await createClient();if(j.action==="save" || j.action==="save_meter_photo") {
   let config=configSchema.parse(j.config);
   const revision=z.number().int().nonnegative().parse(j.revision);
