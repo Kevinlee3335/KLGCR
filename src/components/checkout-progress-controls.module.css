@@ -261,6 +261,10 @@
 .awaiting { background: #fef3c7; color: #92400e; }
 .neutral { background: #f3f4f6; color: #374151; }
 
+.pagination {
+  padding: 0 16px 16px;
+}
+
 @media (max-width: 900px) {
   .toolbar {
     padding-inline: 20px;
@@ -286,6 +290,10 @@
     flex: 1;
     min-height: 44px;
     padding-inline: 6px;
+  }
+
+  .blocks {
+    flex-wrap: wrap;
   }
 
   .filters > .field {

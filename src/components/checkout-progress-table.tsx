@@ -1,36 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClipboardList, Search, X } from "lucide-react";
 import { bulkAssignCheckouts } from "@/app/(dashboard)/admin/checkouts/actions";
 import { assignPainting } from "@/app/(dashboard)/admin/checkouts/painting/actions";
-import { checkoutProgress, checkoutStatusLabel, isRepairDefect, type CheckoutRoom } from "@/lib/checkouts";
+import { checkoutProgress, checkoutStatusLabel, isRepairDefect } from "@/lib/checkouts";
+import { checkoutProgressHref, checkoutProgressStatuses, type CheckoutProgressFilters, type CheckoutProgressPagination, type CheckoutProgressRow, type LegacyCheckoutProgressRow } from "@/lib/checkout-progress";
 import { isPaintingDefect } from "@/lib/painting-eligibility";
 import styles from "./checkout-progress-controls.module.css";
 import followUp from "./monitoring-follow-up.module.css";
 
-type Row = CheckoutRoom & {
-  defects: { description: string; status: string }[];
-  painting: { status: string }[];
-};
-
+type Row = CheckoutProgressRow | LegacyCheckoutProgressRow;
 type Worker = { id: string; full_name: string };
-type BlockFilter = "all" | "A" | "B";
 
-const blocks: BlockFilter[] = ["all", "A", "B"];
-const paintingStatus = "Awaiting Maintenance · Painting Work Only";
-const statusOrder = [
-  paintingStatus,
-  "Awaiting Maintenance",
-  "Rectification in Progress",
-  "No Defect · Assign Cleaner",
-  "Repair Completed · Assign Cleaner",
-  "Cleaning",
-  "Admin verification",
-];
+const fallbackBlocks = ["all", "A", "B"];
+const defaultFilters = { block: "all", status: "", room: "" };
+const paintingStatus = checkoutProgressStatuses.painting_only.label;
+const statusOptions = Object.entries(checkoutProgressStatuses).map(([value, { label }]) => ({ value, label }));
+const statusOrder = statusOptions.map(({ label }) => label);
 const compareText = new Intl.Collator("en-MY", { numeric: true, sensitivity: "base" }).compare;
 const createdDateFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 const workDateFormat = new Intl.DateTimeFormat("en-CA", {
@@ -45,6 +35,29 @@ function normalizeRoom(value: string) {
 }
 
 function prepareRoom(row: Row) {
+  if ("progress_status" in row) {
+    const completed = row.defect_count - row.remaining_count;
+    return {
+      row: {
+        ...row,
+        block: { code: row.block_code },
+        assignee: row.maintenance_name ? { full_name: row.maintenance_name } : null,
+        cleaner: row.cleaner_name ? { full_name: row.cleaner_name } : null,
+      },
+      progress: { total: row.defect_count, completed, percent: row.defect_count ? Math.round(completed * 100 / row.defect_count) : 100 },
+      canAssignCleaner: row.can_assign_cleaner,
+      canAssignMaintenance: row.can_assign_maintenance,
+      canAssignPainting: row.can_assign_painting,
+      blockCode: row.block_code,
+      roomNumber: "",
+      fullRoom: "",
+      display: checkoutProgressStatuses[row.progress_status],
+      rank: 0,
+      painting: paintingBadge(row.painting_status),
+      createdDate: createdDateFormat.format(new Date(row.created_at)),
+    };
+  }
+
   const progress = checkoutProgress(row.defects);
   const canAssignCleaner =
     !row.cleaner_id &&
@@ -63,14 +76,12 @@ function prepareRoom(row: Row) {
   const roomNumber = normalizeRoom(row.room_no);
   const fullRoom = roomNumber.startsWith(blockCode) ? roomNumber : `${blockCode}${roomNumber}`;
   const display = displayStatus(row, canAssignCleaner, progress.total, paintingOnly);
-  const rank = statusOrder.indexOf(display.label);
-  const painting = row.painting?.some((task) => task.status === "in_progress")
-    ? { label: "In Progress", tone: "painting" }
+  const rank = statusOrder.findIndex(label => label === display.label);
+  const painting = paintingBadge(row.painting?.some((task) => task.status === "in_progress")
+    ? "in_progress"
     : row.painting?.some((task) => task.status === "assigned")
-      ? { label: "Assigned", tone: "repairComplete" }
-      : row.painting?.some((task) => task.status !== "cancelled")
-        ? { label: "Completed", tone: "ready" }
-        : null;
+      ? "assigned"
+      : row.painting?.some((task) => task.status !== "cancelled") ? "completed" : null);
 
   return {
     row,
@@ -82,13 +93,19 @@ function prepareRoom(row: Row) {
     roomNumber,
     fullRoom,
     display,
-    rank: row.status === "ready_for_occupancy" ? statusOrder.length + 1 : rank < 0 ? statusOrder.length : rank,
+    rank: rank < 0 ? statusOrder.length : rank,
     painting,
     createdDate: createdDateFormat.format(new Date(row.created_at)),
   };
 }
 
-function displayStatus(row: Row, canAssignCleaner: boolean, defectCount: number, paintingOnly: boolean) {
+function paintingBadge(status: CheckoutProgressRow["painting_status"]) {
+  if (status === "in_progress") return { label: "In Progress", tone: "painting" };
+  if (status === "assigned") return { label: "Assigned", tone: "repairComplete" };
+  return status === "completed" ? { label: "Completed", tone: "ready" } : null;
+}
+
+function displayStatus(row: LegacyCheckoutProgressRow, canAssignCleaner: boolean, defectCount: number, paintingOnly: boolean) {
   if (row.status === "ready_for_occupancy") return { label: "Ready for Occupancy", tone: "ready" };
   if (row.status === "cleaning") return { label: "Cleaning", tone: "painting" };
   if (canAssignCleaner && defectCount === 0) return { label: "No Defect · Assign Cleaner", tone: "noDefect" };
@@ -99,11 +116,16 @@ function displayStatus(row: Row, canAssignCleaner: boolean, defectCount: number,
   return { label: checkoutStatusLabel[row.status], tone: "neutral" };
 }
 
-function AssignPaintingButton({ count }: { count: number }) {
+function selectVisible(previous: string[], available: string[], checked: boolean) {
+  const visible = new Set(available);
+  return checked ? [...new Set([...previous, ...available])] : previous.filter(id => !visible.has(id));
+}
+
+function AssignPaintingButton({ count, loading }: { count: number; loading: boolean }) {
   const { pending } = useFormStatus();
 
   return (
-    <button className={`${followUp.action} ${styles.assignButton}`} disabled={pending || !count || count > 100}>
+    <button className={`${followUp.action} ${styles.assignButton}`} disabled={loading || pending || !count || count > 100}>
       {pending ? "Assigning…" : `Assign ${count} room(s)`}
     </button>
   );
@@ -116,6 +138,7 @@ export function CheckoutProgressTable({
   isAdmin,
   canAssignCleaner,
   error,
+  pagination,
 }: {
   rows: Row[];
   cleaners: Worker[];
@@ -123,24 +146,45 @@ export function CheckoutProgressTable({
   isAdmin: boolean;
   canAssignCleaner: boolean;
   error?: string;
+  pagination?: CheckoutProgressPagination;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [cleaner, setCleaner] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [blockFilter, setBlockFilter] = useState<BlockFilter>("all");
-  const [roomQuery, setRoomQuery] = useState("");
+  const appliedFilters = pagination?.filters ?? defaultFilters;
+  const [filterInput, setFilterInput] = useState({ applied: appliedFilters, draft: appliedFilters });
+  const { block: blockFilter, status: statusFilter, room: roomQuery } = filterInput.draft;
   const [maintenanceSelected, setMaintenanceSelected] = useState<string[]>([]);
   const [maintenanceWorker, setMaintenanceWorker] = useState("");
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [paintingSelected, setPaintingSelected] = useState<string[]>([]);
-  const paintingMode = isAdmin && statusFilter === paintingStatus;
+  if (filterInput.applied.block !== appliedFilters.block || filterInput.applied.status !== appliedFilters.status || filterInput.applied.room !== appliedFilters.room) {
+    setFilterInput({
+      applied: appliedFilters,
+      draft: {
+        block: blockFilter === filterInput.applied.block ? appliedFilters.block : blockFilter,
+        status: statusFilter === filterInput.applied.status ? appliedFilters.status : statusFilter,
+        room: roomQuery === filterInput.applied.room ? appliedFilters.room : roomQuery,
+      },
+    });
+    clearSelections();
+  }
+  const paintingMode = isAdmin && statusFilter === (pagination ? "painting_only" : paintingStatus);
   const router = useRouter();
+  const [navigating, startNavigation] = useTransition();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(searchTimer.current), []);
+  const loading = navigating || Boolean(pagination && (
+    blockFilter !== appliedFilters.block || statusFilter !== appliedFilters.status || roomQuery !== appliedFilters.room
+  ));
+  const isPaginated = Boolean(pagination);
 
-  const { sortedRooms, statusOptions } = useMemo(() => {
-    const sortedRooms = rows.map(prepareRoom).sort((a, b) => (
+  const { sortedRooms, filterStatuses } = useMemo(() => {
+    const prepared = rows.map(prepareRoom);
+    if (isPaginated) return { sortedRooms: prepared, filterStatuses: statusOptions };
+    const sortedRooms = prepared.sort((a, b) => (
       a.rank - b.rank ||
       compareText(a.display.label, b.display.label) ||
       compareText(a.row.block?.code ?? "", b.row.block?.code ?? "") ||
@@ -148,13 +192,13 @@ export function CheckoutProgressTable({
       compareText(a.row.reference_no, b.row.reference_no)
     ));
 
-    return { sortedRooms, statusOptions: [...new Set(sortedRooms.map(({ display }) => display.label))] };
-  }, [rows]);
+    return { sortedRooms, filterStatuses: [...new Set(sortedRooms.map(({ display }) => display.label))].map(label => ({ value: label, label })) };
+  }, [isPaginated, rows]);
 
   const normalizedRoomQuery = normalizeRoom(roomQuery);
   const { visibleRooms, eligible, maintenanceAvailable, paintingAvailable } = useMemo(() => {
     const blockInQuery = /^[A-D]/.test(normalizedRoomQuery);
-    const visibleRooms = sortedRooms.filter(({ blockCode, display, fullRoom, roomNumber }) => (
+    const visibleRooms = isPaginated ? sortedRooms : sortedRooms.filter(({ blockCode, display, fullRoom, roomNumber }) => (
       (blockFilter === "all" || blockCode === blockFilter) &&
       (!statusFilter || display.label === statusFilter) &&
       (!normalizedRoomQuery || fullRoom.includes(normalizedRoomQuery) ||
@@ -167,7 +211,7 @@ export function CheckoutProgressTable({
       maintenanceAvailable: visibleRooms.filter((room) => room.canAssignMaintenance).map(({ row }) => row.id),
       paintingAvailable: visibleRooms.filter((room) => room.canAssignPainting).map(({ row }) => row.id),
     };
-  }, [blockFilter, normalizedRoomQuery, sortedRooms, statusFilter]);
+  }, [blockFilter, isPaginated, normalizedRoomQuery, sortedRooms, statusFilter]);
   const selectedIds = new Set(selected);
   const maintenanceSelectedIds = new Set(maintenanceSelected);
   const paintingSelectedIds = new Set(paintingSelected);
@@ -176,6 +220,26 @@ export function CheckoutProgressTable({
     setSelected([]);
     setPaintingSelected([]);
     setMaintenanceSelected([]);
+  }
+
+  function navigate(filters: CheckoutProgressFilters, page?: number) {
+    clearTimeout(searchTimer.current);
+    if (!pagination) return;
+    const href = checkoutProgressHref(filters, page);
+    startNavigation(() => {
+      if (page === undefined) router.replace(href, { scroll: false });
+      else router.push(href, { scroll: false });
+    });
+  }
+
+  function updateFilters(update: Partial<CheckoutProgressFilters>, delay = 0) {
+    const draft = { ...filterInput.draft, ...update };
+    setFilterInput({ applied: appliedFilters, draft });
+    clearSelections();
+    clearTimeout(searchTimer.current);
+    if (!pagination) return;
+    if (delay) searchTimer.current = setTimeout(() => navigate(draft), delay);
+    else navigate(draft);
   }
 
   async function assignMaintenance() {
@@ -234,15 +298,12 @@ export function CheckoutProgressTable({
       <div className={styles.toolbar}>
         <div className={styles.filters}>
           <div className={styles.blocks} role="group" aria-label="Filter by block">
-            {blocks.map((block) => (
+            {(pagination?.blocks.length ? ["all", ...pagination.blocks] : fallbackBlocks).map((block) => (
               <button
                 key={block}
                 type="button"
                 aria-pressed={blockFilter === block}
-                onClick={() => {
-                  setBlockFilter(block);
-                  clearSelections();
-                }}
+                onClick={() => updateFilters({ block })}
               >
                 {block === "all" ? "All Blocks" : `Block ${block}`}
               </button>
@@ -253,13 +314,10 @@ export function CheckoutProgressTable({
             <select
               id="checkout-status-filter"
               value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                clearSelections();
-              }}
+              onChange={(event) => updateFilters({ status: event.target.value })}
             >
               <option value="">All statuses</option>
-              {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+              {filterStatuses.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
           <div className={`${styles.field} ${styles.searchField}`}>
@@ -271,21 +329,16 @@ export function CheckoutProgressTable({
                 type="search"
                 placeholder="e.g. B601"
                 autoComplete="off"
+                maxLength={80}
                 value={roomQuery}
-                onChange={(event) => {
-                  setRoomQuery(event.target.value);
-                  clearSelections();
-                }}
+                onChange={(event) => updateFilters({ room: event.target.value }, 250)}
               />
               {roomQuery && (
                 <button
                   type="button"
                   className={styles.clearSearch}
                   aria-label="Clear room search"
-                  onClick={() => {
-                    setRoomQuery("");
-                    clearSelections();
-                  }}
+                  onClick={() => updateFilters({ room: "" })}
                 >
                   <X size={16} aria-hidden="true" />
                 </button>
@@ -313,7 +366,7 @@ export function CheckoutProgressTable({
                 <button
                   type="button"
                   className={`${followUp.action} ${styles.assignButton}`}
-                  disabled={maintenanceBusy || !maintenanceWorker || !maintenanceSelected.length || maintenanceSelected.length > 100}
+                  disabled={loading || maintenanceBusy || !maintenanceWorker || !maintenanceSelected.length || maintenanceSelected.length > 100}
                   onClick={assignMaintenance}
                 >
                   {maintenanceBusy ? "Assigning…" : `Assign ${maintenanceSelected.length} room(s) to maintenance`}
@@ -333,7 +386,7 @@ export function CheckoutProgressTable({
                 <button
                   type="button"
                   className={`${followUp.action} ${styles.assignButton}`}
-                  disabled={busy || !cleaner || !selected.length || selected.length > 100}
+                  disabled={loading || busy || !cleaner || !selected.length || selected.length > 100}
                   onClick={assign}
                 >
                   {busy ? "Assigning…" : `Assign ${selected.length} room(s) to cleaner`}
@@ -353,7 +406,7 @@ export function CheckoutProgressTable({
                 </label>
                 <input type="hidden" name="reasons" value="Other" />
                 <input type="hidden" name="notes" value="Painting work identified from room defects." />
-                <AssignPaintingButton count={paintingSelected.length} />
+                <AssignPaintingButton count={paintingSelected.length} loading={loading} />
                 {paintingSelected.map((id) => <input key={id} type="hidden" name="rooms" value={id} />)}
               </form>
             )}
@@ -361,9 +414,10 @@ export function CheckoutProgressTable({
         )}
       </div>
 
+      {loading && <p className={followUp.empty} role="status">Loading check-out rooms…</p>}
       {error && <p className={followUp.empty} role="alert">{error}</p>}
       {visibleRooms.length > 0 ? (
-        <div className={`${followUp.scroll} ${styles.scroll}`} role="region" aria-labelledby="checkout-progress-title" tabIndex={0}>
+        <div className={`${followUp.scroll} ${styles.scroll}`} role="region" aria-labelledby="checkout-progress-title" aria-busy={loading} tabIndex={0}>
           <table className={`${followUp.table} ${styles.table}`} aria-labelledby="checkout-progress-title">
             <thead>
               <tr>
@@ -375,8 +429,8 @@ export function CheckoutProgressTable({
                         type="checkbox"
                         aria-label="Select all available maintenance rooms"
                         checked={maintenanceAvailable.length > 0 && maintenanceAvailable.every((id) => maintenanceSelectedIds.has(id))}
-                        disabled={maintenanceBusy || !maintenanceAvailable.length}
-                        onChange={(event) => setMaintenanceSelected(event.target.checked ? maintenanceAvailable : [])}
+                        disabled={loading || maintenanceBusy || !maintenanceAvailable.length}
+                        onChange={(event) => setMaintenanceSelected(previous => selectVisible(previous, maintenanceAvailable, event.target.checked))}
                       />
                     </label>
                   </th>
@@ -389,8 +443,8 @@ export function CheckoutProgressTable({
                         type="checkbox"
                         aria-label="Select all available painting rooms"
                         checked={paintingAvailable.length > 0 && paintingAvailable.every((id) => paintingSelectedIds.has(id))}
-                        disabled={!paintingAvailable.length}
-                        onChange={(event) => setPaintingSelected(event.target.checked ? paintingAvailable : [])}
+                        disabled={loading || !paintingAvailable.length}
+                        onChange={(event) => setPaintingSelected(previous => selectVisible(previous, paintingAvailable, event.target.checked))}
                       />
                     </label>
                   </th>
@@ -403,8 +457,8 @@ export function CheckoutProgressTable({
                         type="checkbox"
                         aria-label="Select all eligible rooms"
                         checked={eligible.length > 0 && eligible.every((id) => selectedIds.has(id))}
-                        disabled={busy || !eligible.length}
-                        onChange={(event) => setSelected(event.target.checked ? eligible : [])}
+                        disabled={loading || busy || !eligible.length}
+                        onChange={(event) => setSelected(previous => selectVisible(previous, eligible, event.target.checked))}
                       />
                     </label>
                   </th>
@@ -428,7 +482,7 @@ export function CheckoutProgressTable({
                       <input
                         type="checkbox"
                         aria-label={`Select maintenance room ${row.room_no}`}
-                        disabled={maintenanceBusy || !canAssignMaintenance}
+                        disabled={loading || maintenanceBusy || !canAssignMaintenance}
                         checked={maintenanceSelectedIds.has(row.id)}
                         onChange={(event) => setMaintenanceSelected(event.target.checked
                           ? [...maintenanceSelected, row.id]
@@ -441,7 +495,7 @@ export function CheckoutProgressTable({
                       <input
                         type="checkbox"
                         aria-label={`Select painting room ${row.room_no}`}
-                        disabled={!canAssignPainting}
+                        disabled={loading || !canAssignPainting}
                         checked={paintingSelectedIds.has(row.id)}
                         onChange={(event) => setPaintingSelected(event.target.checked
                           ? [...paintingSelected, row.id]
@@ -454,7 +508,7 @@ export function CheckoutProgressTable({
                       <input
                         type="checkbox"
                         aria-label={`Select room ${row.room_no}`}
-                        disabled={busy || !cleanerEligible}
+                        disabled={loading || busy || !cleanerEligible}
                         checked={selectedIds.has(row.id)}
                         onChange={(event) => setSelected(event.target.checked
                           ? [...selected, row.id]
@@ -502,8 +556,17 @@ export function CheckoutProgressTable({
             </tbody>
           </table>
         </div>
-      ) : !error && (
-        <div className={followUp.empty}>{rows.length ? "No rooms match your search or filters" : "No check-out rooms yet"}</div>
+      ) : !error && !loading && (
+        <div className={followUp.empty}>{rows.length || blockFilter !== "all" || statusFilter || normalizedRoomQuery
+          ? "No rooms match your search or filters"
+          : pagination && pagination.page > 1 ? "No rooms on this page" : "No check-out rooms yet"}</div>
+      )}
+      {pagination && !error && (pagination.page > 1 || pagination.hasNext) && (
+        <nav className={`pagination ${styles.pagination}`} aria-label="Check-out room pages">
+          {pagination.page > 1 && <button type="button" className="button secondary" disabled={loading} onClick={() => navigate(pagination.filters, pagination.page - 1)}>Previous</button>}
+          <span>Page {pagination.page}</span>
+          {pagination.hasNext && <button type="button" className="button secondary" disabled={loading} onClick={() => navigate(pagination.filters, pagination.page + 1)}>Next</button>}
+        </nav>
       )}
     </section>
   );

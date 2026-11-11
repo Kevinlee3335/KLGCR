@@ -1,5 +1,16 @@
 import {createClient} from './supabase/server';
 import type {BillingDocumentKind,BillingDocumentRecord,BillingAccountDirectory} from './billing-documents';
+
+export async function loadBillingReviewEntries(runId: string) {
+  const db = await createClient();
+  const { data, error } = await db.from('billing_document_index')
+    .select('line_index,bill_no,account_name,amount')
+    .eq('run_id', runId)
+    .order('line_index');
+  if (error) throw Error('Unable to load invoice pack entries');
+  return data ?? [];
+}
+
 export async function loadBillingDocumentRecords(kind:BillingDocumentKind,accountKey?:string):Promise<BillingDocumentRecord[]>{
  const db=await createClient(),rows:BillingDocumentRecord[]=[];
  for(let offset=0;;offset+=1000){

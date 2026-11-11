@@ -13,7 +13,7 @@ import { signatureSchema } from "@/lib/purchase-orders/signature";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-function schedulePostApprovalWork(work: () => Promise<void>) {
+function scheduleReviewWork(work: () => Promise<void>) {
   try {
     after(work);
   } catch {
@@ -39,12 +39,12 @@ export async function advanceDocumentReview(form: FormData) {
   if (entries.length < 2) {
     const verified = await session.rpc("verify_document", { p_type: type, p_id: id });
     if (verified.error) throw Error(verified.error.message);
-    await sendReviewPushes();
+    scheduleReviewWork(sendReviewPushes);
   } else if (type === "billing") {
     const approved = await session.rpc("approve_billing_run", { billing_run_id: id });
     if (approved.error) throw Error(approved.error.message);
     scheduleBillingMail(id);
-    schedulePostApprovalWork(sendReviewPushes);
+    scheduleReviewWork(sendReviewPushes);
   } else {
     const db = createAdminClient();
     const signature = await session.from("user_e_signatures").select("signature").eq("user_id", user.id).maybeSingle();
@@ -60,7 +60,7 @@ export async function advanceDocumentReview(form: FormData) {
     if (saved.error) throw Error(saved.error.message);
 
     // The approved record can also be picked up by the membership job if this execution stops.
-    schedulePostApprovalWork(async () => {
+    scheduleReviewWork(async () => {
       const deliveryStartedAt = performance.now();
       let confirmed = false;
       try {
