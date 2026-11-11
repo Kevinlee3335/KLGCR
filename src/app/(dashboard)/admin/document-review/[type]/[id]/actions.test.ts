@@ -124,4 +124,26 @@ describe("document approval and delivery", () => {
     await mocks.after.mock.calls[0][0]();
     expect(mocks.push).toHaveBeenCalledWith(id);
   });
+
+  it.each([0, 1])("returns after reviewer %i verifies and sends the phone alert in the background", async (stage) => {
+    mocks.requireRole.mockResolvedValue({ id: documentReviewers[stage].id });
+    mocks.verification.mockResolvedValue(entries.slice(0, stage));
+
+    await expect(advanceDocumentReview(form("billing"))).rejects.toThrow("redirect");
+
+    expect(mocks.rpc).toHaveBeenCalledWith("verify_document", { p_type: "billing", p_id: id });
+    expect(mocks.rpc.mock.invocationCallOrder[0]).toBeLessThan(mocks.after.mock.invocationCallOrder[0]);
+    expect(mocks.push).not.toHaveBeenCalled();
+    await mocks.after.mock.calls[0][0]();
+    expect(mocks.push).toHaveBeenCalledWith(id);
+  });
+
+  it("does not schedule a phone alert if verification fails", async () => {
+    mocks.requireRole.mockResolvedValue({ id: documentReviewers[0].id });
+    mocks.verification.mockResolvedValue([]);
+    mocks.rpc.mockResolvedValue({ error: { message: "Verification rejected" } });
+
+    await expect(advanceDocumentReview(form("billing"))).rejects.toThrow("Verification rejected");
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
 });

@@ -1,6 +1,145 @@
-import {countOccupancyRooms,malaysiaDate} from '@/lib/checkout-occupancy-report';
-import {CheckoutProgressTable} from "@/components/checkout-progress-table";
-import {CheckoutBulkAssign} from "@/components/checkout-bulk-assign";
-import {CheckoutStatusDashboard,type CheckoutStatusReport} from "@/components/checkout-status-dashboard";
-import Link from "next/link";import { AppShell } from "@/components/app-shell";import { CheckoutBatchImport } from "@/components/checkout-batch-import";import { CheckoutDefectPicker } from "@/components/checkout-defect-picker";import { requireRole } from "@/lib/auth";import { checkoutProgress,type CheckoutRoom } from "@/lib/checkouts";import { createClient } from "@/lib/supabase/server";import { createCheckout } from "./actions";
-export default async function Page({searchParams}:{searchParams:Promise<{error?:string}>}){const profile=await requireRole(["admin","management_viewer"]);const q=await searchParams;const db=await createClient();const [readyCount,{data,error},{data:blocks},{data:statusReport,error:statusError},{data:workers}]=await Promise.all([countOccupancyRooms(db).catch(()=>null),db.from("checkout_rooms").select("id,reference_no,room_no,utmspace_defects,inspection_notes,status,assigned_to,cleaner_id,created_at,ready_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name),cleaner:profiles!cleaner_id(full_name),defects:checkout_defects(description,status),painting:checkout_paint_tasks(status)").is("deleted_at",null).order("updated_at",{ascending:false}),db.from("blocks").select("id,code").order("code"),db.rpc("checkout_status_report",{p_date:malaysiaDate(),p_group:"ALL"}),db.from("profiles").select("id,full_name,role").eq("is_active",true).is("deleted_at",null).in("role",["maintenance_staff","cleaner"]).order("full_name")]);const rows=(data||[]) as unknown as (CheckoutRoom & {defects:{description:string;status:string}[];painting:{status:string}[]})[];return <AppShell profile={profile} title="Check-out Rooms"><div className="section-head"><div><p className="eyebrow">Separate operational workflow</p><h2>Check-out room readiness</h2><p className="subtle">Track UTMSPACE defects through inspection, rectification, housekeeping and occupancy readiness.</p></div><div className="checkout-page-actions"><Link className="button checkout-painting-entry" href="/admin/checkouts/painting"><span aria-hidden="true">🎨</span> General Worker · Room / Bathroom List</Link><Link className="button secondary" href="/admin/checkouts/occupancy-report">Ready for Occupancy Report</Link></div></div>{(statusError||readyCount===null)?<p className="error">Unable to load dashboard statistics. Please refresh.</p>:statusReport&&<CheckoutStatusDashboard report={{...(statusReport as CheckoutStatusReport),ready:readyCount}} defectRoomCount={rows.filter(r=>checkoutProgress(r.defects).total>0).length} sources={rows}/>}{profile.role==="admin"&&<><Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link><CheckoutBulkAssign rooms={rows.flatMap<{id:string;label:string;kind:"maintenance"|"cleaner"}>(r=>{const p=checkoutProgress(r.defects);const label=`Block ${r.block?.code} · ${r.room_no}`;return r.status==="second_inspection"&&!r.assigned_to&&p.total>0?[{id:r.id,label,kind:"maintenance" as const}]:!r.cleaner_id&&((r.status==="second_inspection"&&p.total===0&&/^no defects?[.!]?$/i.test(r.utmspace_defects.trim()))||(r.status==="verification"&&p.remaining===0))?[{id:r.id,label,kind:"cleaner" as const}]:[]})} workers={workers||[]} canAssignCleaner={["mary","fikri"].includes(profile.username)}/><CheckoutBatchImport blocks={blocks||[]}/><section className="panel checkout-create"><h3>Create check-out room record</h3><form action={createCheckout} className="form-grid"><div className="field"><label>Block</label><select name="block" required><option value="">Select block</option>{blocks?.map(b=><option key={b.id} value={b.id}>Block {b.code}</option>)}</select></div><div className="field"><label>Room</label><input name="room" required placeholder="e.g. A-203"/></div><div className="field field-wide"><label>UTMSPACE reported defects</label><CheckoutDefectPicker name="checkoutDefects" required/></div>{q.error&&<p className="error field-wide">{q.error}</p>}<button className="button">Create and inspect</button></form></section></>}<CheckoutProgressTable rows={rows} maintenanceWorkers={(workers||[]).filter(w=>w.role==="maintenance_staff")} cleaners={(workers||[]).filter(w=>w.role==="cleaner")} isAdmin={profile.role==="admin"} canAssignCleaner={profile.role==="admin"&&(["mary","fikri"].includes(profile.username)||Boolean(profile.is_super_admin))} error={error?.message}/></AppShell>}
+import { Suspense } from "react";
+import Link from "next/link";
+import { AppShell } from "@/components/app-shell";
+import { CheckoutBatchImport } from "@/components/checkout-batch-import";
+import { CheckoutBulkAssign } from "@/components/checkout-bulk-assign";
+import { CheckoutDefectPicker } from "@/components/checkout-defect-picker";
+import { CheckoutProgressTable } from "@/components/checkout-progress-table";
+import { CheckoutStatusDashboard, type CheckoutStatusReport } from "@/components/checkout-status-dashboard";
+import { requireRole } from "@/lib/auth";
+import { countOccupancyRooms, malaysiaDate } from "@/lib/checkout-occupancy-report";
+import { parseCheckoutProgressFilters, type CheckoutProgressFilters } from "@/lib/checkout-progress";
+import { checkoutProgressPageNumber, loadCheckoutOverviewRooms, loadCheckoutProgressPage } from "@/lib/checkout-progress.server";
+import { createClient } from "@/lib/supabase/server";
+import { createCheckout } from "./actions";
+
+type Blocks = Promise<{ id: number; code: string }[]>;
+type Workers = Promise<{ id: string; full_name: string; role: string }[]>;
+type Overview = ReturnType<typeof loadCheckoutOverviewRooms>;
+
+async function CheckoutStatistics({ db, overview }: { db: Awaited<ReturnType<typeof createClient>>; overview: Overview }) {
+  const [readyCount, { data, error }, sources] = await Promise.all([
+    countOccupancyRooms(db).catch(() => null),
+    db.rpc("checkout_status_report", { p_date: malaysiaDate(), p_group: "ALL" }),
+    overview,
+  ]);
+  if (error || sources.error || readyCount === null || !data) {
+    return <p className="error">Unable to load dashboard statistics. Please refresh.</p>;
+  }
+  return <CheckoutStatusDashboard report={{ ...(data as CheckoutStatusReport), ready: readyCount }} sources={sources.rooms} />;
+}
+
+async function CheckoutAssignments({ overview, workers, canAssignCleaner }: { overview: Overview; workers: Workers; canAssignCleaner: boolean }) {
+  const [sources, staff] = await Promise.all([overview, workers]);
+  if (sources.error) return <p className="error">Unable to load rooms awaiting assignment. Please refresh.</p>;
+  const rooms = sources.rooms.flatMap<{ id: string; label: string; kind: "maintenance" | "cleaner" }>(room => {
+    const label = `Block ${room.block_code} · ${room.room_no}`;
+    if (room.can_assign_maintenance) return [{ id: room.id, label, kind: "maintenance" }];
+    if (room.can_assign_cleaner) return [{ id: room.id, label, kind: "cleaner" }];
+    return [];
+  });
+  return <CheckoutBulkAssign rooms={rooms} workers={staff} canAssignCleaner={canAssignCleaner} />;
+}
+
+async function CheckoutCreate({ blocks, error }: { blocks: Blocks; error?: string }) {
+  const availableBlocks = await blocks;
+  return <>
+    <CheckoutBatchImport blocks={availableBlocks} />
+    <section className="panel checkout-create">
+      <h3>Create check-out room record</h3>
+      <form action={createCheckout} className="form-grid">
+        <div className="field">
+          <label htmlFor="checkout-create-block">Block</label>
+          <select id="checkout-create-block" name="block" required>
+            <option value="">Select block</option>
+            {availableBlocks.map(block => <option key={block.id} value={block.id}>Block {block.code}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="checkout-create-room">Room</label>
+          <input id="checkout-create-room" name="room" required placeholder="e.g. A-203" />
+        </div>
+        <div className="field field-wide">
+          <label>UTMSPACE reported defects</label>
+          <CheckoutDefectPicker name="checkoutDefects" required />
+        </div>
+        {error && <p className="error field-wide">{error}</p>}
+        <button className="button">Create and inspect</button>
+      </form>
+    </section>
+  </>;
+}
+
+async function CheckoutProgressSection({ progress, blocks, workers, filters, page, isAdmin, canAssignCleaner }: {
+  progress: ReturnType<typeof loadCheckoutProgressPage>;
+  blocks: Blocks;
+  workers: Workers;
+  filters: CheckoutProgressFilters;
+  page: number;
+  isAdmin: boolean;
+  canAssignCleaner: boolean;
+}) {
+  const [result, availableBlocks, staff] = await Promise.all([progress, blocks, workers]);
+  return <CheckoutProgressTable
+    rows={result.rows}
+    maintenanceWorkers={staff.filter(worker => worker.role === "maintenance_staff")}
+    cleaners={staff.filter(worker => worker.role === "cleaner")}
+    isAdmin={isAdmin}
+    canAssignCleaner={canAssignCleaner}
+    error={result.error?.message}
+    pagination={result.paginated ? { filters, blocks: availableBlocks.map(block => block.code), page, hasNext: result.hasNext } : undefined}
+  />;
+}
+
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [profile, query] = await Promise.all([requireRole(["admin", "management_viewer"]), searchParams]);
+  const db = await createClient();
+  const isAdmin = profile.role === "admin";
+  const isCleanerCoordinator = ["mary", "fikri"].includes(profile.username);
+  const filters = parseCheckoutProgressFilters(query);
+  const page = checkoutProgressPageNumber(query.page);
+  const progress = loadCheckoutProgressPage(db, filters, page);
+  const overview = loadCheckoutOverviewRooms(db);
+  const blocks: Blocks = Promise.resolve(db.from("blocks").select("id,code").order("code")).then(({ data }) => data || []);
+  const workers: Workers = isAdmin
+    ? Promise.resolve(db.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null)
+      .in("role", ["maintenance_staff", "cleaner"]).order("full_name")).then(({ data }) => data || [])
+    : Promise.resolve([]);
+
+  return <AppShell profile={profile} title="Check-out Rooms">
+    <div className="section-head">
+      <div>
+        <p className="eyebrow">Separate operational workflow</p>
+        <h2>Check-out room readiness</h2>
+        <p className="subtle">Track UTMSPACE defects through inspection, rectification, housekeeping and occupancy readiness.</p>
+      </div>
+      <div className="checkout-page-actions">
+        <Link className="button checkout-painting-entry" href="/admin/checkouts/painting"><span aria-hidden="true">🎨</span> General Worker · Room / Bathroom List</Link>
+        <Link className="button secondary" href="/admin/checkouts/occupancy-report">Ready for Occupancy Report</Link>
+      </div>
+    </div>
+    <Suspense fallback={<p className="subtle" role="status">Loading check-out statistics…</p>}>
+      <CheckoutStatistics db={db} overview={overview} />
+    </Suspense>
+    {isAdmin && <>
+      <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>
+      <Suspense fallback={<p className="subtle" role="status">Loading rooms awaiting assignment…</p>}>
+        <CheckoutAssignments overview={overview} workers={workers} canAssignCleaner={isCleanerCoordinator} />
+      </Suspense>
+      <Suspense>
+        <CheckoutCreate blocks={blocks} error={typeof query.error === "string" ? query.error : undefined} />
+      </Suspense>
+    </>}
+    <Suspense fallback={<p className="subtle" role="status">Loading check-out rooms…</p>}>
+      <CheckoutProgressSection
+        progress={progress}
+        blocks={blocks}
+        workers={workers}
+        filters={filters}
+        page={page}
+        isAdmin={isAdmin}
+        canAssignCleaner={isAdmin && (isCleanerCoordinator || Boolean(profile.is_super_admin))}
+      />
+    </Suspense>
+  </AppShell>;
+}

@@ -2,21 +2,16 @@ import Link from 'next/link';
 import { ClipboardList, Sparkles } from 'lucide-react';
 import followUp from './monitoring-follow-up.module.css';
 import statusTable from './checkout-status-table.module.css';
-import {checkoutProgress} from '@/lib/checkouts';
+import type { CheckoutOverviewRoom } from '@/lib/checkout-progress.server';
 
 export type CheckoutReportRoom = {id:string;reference_no:string;room_no:string;block:string;status:string;maintenance:string;assigned_to?:string|null;cleaner:string;maintenance_status:string;cleaner_status:string;cleaner_id?:string|null;repair_percent:number;maintenance_today:boolean;cleaner_today:boolean};
 export type CheckoutStatusReport = {date:string;total:number;ready:number;ready_today:number;maintenance_completed:number;maintenance_today:number;pending_material:number;cleaner_completed:number;cleaner_today:number;cleaner_in_progress:number;rooms:CheckoutReportRoom[]};
-export type CheckoutDashboardSource = {id:string;status:string;cleaner_id:string|null;utmspace_defects:string;defects:{description:string;status:string}[]};
+export type CheckoutDashboardSource = Pick<CheckoutOverviewRoom, 'id' | 'defect_count' | 'can_assign_cleaner'>;
 
 type StaffCounts = {name:string;total:number;completed:number;today:number;active:number;pending:number};
 export function getCheckoutDashboardCounts(report:CheckoutStatusReport, sources:CheckoutDashboardSource[]) {
  const sourceById=new Map(sources.map(room=>[room.id,room]));
- const awaitingCleaning=report.rooms.filter(room=>{
-  const source=sourceById.get(room.id);
-  if(!source || source.cleaner_id) return false;
-  const progress=checkoutProgress(source.defects || []);
-  return (source.status==='verification' && progress.remaining===0) || (source.status==='second_inspection' && progress.total===0 && /^no defects?[.!]?$/i.test((source.utmspace_defects || '').trim()));
- });
+ const awaitingCleaning=report.rooms.filter(room=>sourceById.get(room.id)?.can_assign_cleaner);
  const cleaningRooms=report.rooms.filter(room=>room.status==='cleaning'||room.status==='ready_for_occupancy'||(room.status==='verification'&&!!room.cleaner_id));
  const cleaningCompleted=cleaningRooms.filter(room=>room.cleaner_status==='Completed').length;
  const cleaningActive=cleaningRooms.filter(room=>room.cleaner_status!=='Completed').length;
@@ -27,7 +22,7 @@ export function getCheckoutDashboardCounts(report:CheckoutStatusReport, sources:
   row.total++; row.completed+=Number(room.cleaner_status==='Completed'); row.today+=Number(room.cleaner_today===true); row.active+=Number(room.cleaner_status!=='Completed'); cleaners.set(key,row);
  }
  const maintenance=new Map<string,StaffCounts>();
- const maintenanceRooms=report.rooms.filter(room=>checkoutProgress(sourceById.get(room.id)?.defects || []).total>0);
+ const maintenanceRooms=report.rooms.filter(room=>(sourceById.get(room.id)?.defect_count ?? 0)>0);
  for(const room of maintenanceRooms) {
   const key=room.assigned_to || `name:${room.maintenance}`;
   const row=maintenance.get(key)||{name:room.maintenance,total:0,completed:0,today:0,active:0,pending:0};
@@ -36,13 +31,15 @@ export function getCheckoutDashboardCounts(report:CheckoutStatusReport, sources:
  const awaitingMaintenance=maintenanceRooms.filter(room=>room.repair_percent<100 && !room.assigned_to).length;
  return {awaitingCleaningIds:new Set(awaitingCleaning.map(room=>room.id)),awaitingCleaning:awaitingCleaning.length,cleaningCompleted,cleaningActive,cleaningToday:cleaningRooms.filter(room=>room.cleaner_today===true).length,cleaningTotal:cleaningRooms.length,cleaners,maintenance,awaitingMaintenance};
 }
-export function CheckoutStatusDashboard({report,details=false,defectRoomCount,sources}:{report:CheckoutStatusReport;details?:boolean;defectRoomCount?:number;sources:CheckoutDashboardSource[]}) {
+export function CheckoutStatusDashboard({report,details=false,sources}:{report:CheckoutStatusReport;details?:boolean;sources:CheckoutDashboardSource[]}) {
  const counts=getCheckoutDashboardCounts(report,sources);
+ const defectRoomCount=sources.filter(room=>room.defect_count>0).length;
+ const unfinishedRooms=report.rooms.filter(room=>room.repair_percent<100).length;
  return <section className="checkout-status-dashboard">
   <div className="section-head"><div><p className="eyebrow">Room operations · {report.date}</p><h2>Check-out Dashboard</h2></div>{!details&&<Link className="button secondary" href="/admin/checkouts/status-report">Status Table &amp; Report</Link>}</div>
   <div className="checkout-kpi-grid">
    <article className="panel checkout-kpi-card"><span>Check-out Rooms</span><strong>{report.total}<small> total rooms</small></strong><dl><div><dt>Ready for occupancy</dt><dd>{report.ready}</dd></div><div><dt>Not ready yet</dt><dd>{Math.max(0,report.total-report.ready)}</dd></div><div><dt>Ready today</dt><dd>{report.ready_today}</dd></div></dl></article>
-   <article className="panel checkout-kpi-card"><span>Maintenance</span><strong>{defectRoomCount??report.total}<small> rooms with defects</small></strong><dl><div><dt>Repairs unfinished</dt><dd>{report.rooms.filter(r=>r.repair_percent<100).length}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingMaintenance}</dd></div><div><dt>Defect rooms repaired</dt><dd>{Math.max(0,(defectRoomCount??report.total)-report.rooms.filter(r=>r.repair_percent<100).length)}</dd></div><div><dt>Completed today</dt><dd>{report.maintenance_today}</dd></div><div><dt>Pending material</dt><dd>{report.pending_material}</dd></div></dl></article>
+   <article className="panel checkout-kpi-card"><span>Maintenance</span><strong>{defectRoomCount}<small> rooms with defects</small></strong><dl><div><dt>Repairs unfinished</dt><dd>{unfinishedRooms}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingMaintenance}</dd></div><div><dt>Defect rooms repaired</dt><dd>{Math.max(0,defectRoomCount-unfinishedRooms)}</dd></div><div><dt>Completed today</dt><dd>{report.maintenance_today}</dd></div><div><dt>Pending material</dt><dd>{report.pending_material}</dd></div></dl></article>
    <article className="panel checkout-kpi-card"><span>Cleaning</span><strong>{counts.awaitingCleaning+counts.cleaningActive}<small> rooms not cleaned yet</small></strong><dl><div><dt>Handed to cleaning</dt><dd>{counts.cleaningTotal}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingCleaning}</dd></div><div><dt>Cleaning in progress</dt><dd>{counts.cleaningActive}</dd></div><div><dt>Cleaning completed</dt><dd>{counts.cleaningCompleted}</dd></div><div><dt>Completed today</dt><dd>{counts.cleaningToday}</dd></div></dl></article>
   </div>
   <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="maintenance-status-title">

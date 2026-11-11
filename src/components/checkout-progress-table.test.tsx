@@ -1,8 +1,9 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {describe, expect, it, vi} from 'vitest';
 import {CheckoutProgressTable} from './checkout-progress-table';
-const mocks=vi.hoisted(()=>({assign:vi.fn(),refresh:vi.fn()}));
-vi.mock('next/navigation',()=>({useRouter:()=>({refresh:mocks.refresh})}));
+import type {CheckoutProgressPagination, CheckoutProgressRow} from '@/lib/checkout-progress';
+const mocks=vi.hoisted(()=>({assign:vi.fn(),refresh:vi.fn(),push:vi.fn(),replace:vi.fn()}));
+vi.mock('next/navigation',()=>({useRouter:()=>({refresh:mocks.refresh,push:mocks.push,replace:mocks.replace})}));
 vi.mock('@/app/(dashboard)/admin/checkouts/actions',()=>({bulkAssignCheckouts:mocks.assign}));
 const base={utmspace_defects:'Fan',inspection_notes:null,assigned_to:null,cleaner_id:null,created_at:'2026-11-04T00:00:00Z',ready_at:null,block:{code:'A'},assignee:null,cleaner:null,painting:[]};
 const rows=[{...base,id:'1',reference_no:'R1',room_no:'101',status:'verification' as const,defects:[{description:'Fan',status:'rectified'}]},{...base,id:'2',reference_no:'R2',room_no:'102',status:'verification' as const,defects:[{description:'Fan',status:'rectified'}]},{...base,id:'3',reference_no:'R3',room_no:'103',status:'rectification' as const,defects:[{description:'Fan',status:'open'}]}];
@@ -69,4 +70,33 @@ it('searches room numbers together with block filters and clears the query',()=>
  expect(screen.getByText('A601-ref')).toBeInTheDocument();
  expect(screen.getByText('B601-ref')).toBeInTheDocument();
  expect(screen.queryByText('B608-ref')).not.toBeInTheDocument();
+});
+
+it('keeps selections across pages and resets them when changing server filters', async () => {
+ const row = (id: string, room: string): CheckoutProgressRow => ({
+  id, room_no: room, reference_no: id, status: 'second_inspection', assigned_to: null, cleaner_id: null,
+  created_at: base.created_at, block_code: 'A', maintenance_name: null, cleaner_name: null,
+  defect_count: 1, remaining_count: 1, painting_status: null, progress_status: 'awaiting_maintenance',
+  can_assign_cleaner: false, can_assign_maintenance: true, can_assign_painting: false,
+ });
+ const pagination: CheckoutProgressPagination = {
+  blocks: ['A', 'B', 'C', 'D'], filters: { block: 'A', status: 'awaiting_maintenance', room: '' }, page: 1, hasNext: true,
+ };
+ const table = (rooms: CheckoutProgressRow[], page: CheckoutProgressPagination) => <CheckoutProgressTable
+  rows={rooms} pagination={page} cleaners={[]} maintenanceWorkers={[{id:'m1',full_name:'Abdullah'}]} isAdmin canAssignCleaner={false}
+ />;
+ const {rerender} = render(table([row('a', '101')], pagination));
+ fireEvent.click(screen.getByLabelText('Select maintenance room 101'));
+ fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+ expect(mocks.push).toHaveBeenCalledWith('/admin/checkouts?block=A&status=awaiting_maintenance&page=2', { scroll: false });
+ rerender(table([row('b', '102')], {...pagination, page: 2, hasNext: false}));
+ fireEvent.click(screen.getByLabelText('Select all available maintenance rooms'));
+ expect(screen.getByRole('button', { name: 'Assign 2 room(s) to maintenance' })).toBeInTheDocument();
+ fireEvent.click(screen.getByLabelText('Select all available maintenance rooms'));
+ expect(screen.getByRole('button', { name: 'Assign 1 room(s) to maintenance' })).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Block C' }));
+ expect(mocks.replace).toHaveBeenCalledWith('/admin/checkouts?block=C&status=awaiting_maintenance', { scroll: false });
+ expect(screen.getByRole('button', { name: 'Assign 0 room(s) to maintenance' })).toBeDisabled();
+ fireEvent.change(screen.getByRole('searchbox', { name: 'Search room' }), { target: { value: 'C-101' } });
+ await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/admin/checkouts?block=C&status=awaiting_maintenance&room=C-101', { scroll: false }));
 });
