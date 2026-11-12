@@ -1,13 +1,14 @@
 // @vitest-environment node
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {beforeEach,it,expect,vi} from 'vitest';
 const source=readFileSync('public/billing-mail/gateway.gs','utf8');
 let context:vm.Context;
 let owner:string,properties:Map<string,string>,send:ReturnType<typeof vi.fn>,post:(data:unknown)=>Record<string,unknown>;
 beforeEach(()=>{
  owner='klgcr.noreply@gmail.com';properties=new Map([['KLGCR_GMAIL_WEB_APP_SECRET','test-secret']]);send=vi.fn();
- context=vm.createContext({Session:{getEffectiveUser:()=>({getEmail:()=>owner})},MailApp:{sendEmail:send,getRemainingDailyQuota:()=>100},PropertiesService:{getScriptProperties:()=>({getProperty:(k:string)=>properties.get(k),setProperty:(k:string,v:string)=>properties.set(k,v)})},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{}})},Utilities:{base64Decode:(s:string)=>Buffer.from(s,'base64'),newBlob:(html:string,type:string,name:string)=>({html,type,name})},ContentService:{MimeType:{JSON:'json'},createTextOutput:(value:string)=>({setMimeType:()=>value})}});vm.runInContext(source,context);post=data=>JSON.parse(context.doPost({postData:{contents:JSON.stringify({secret:'test-secret',...(data as object)})}}));
+ context=vm.createContext({Session:{getEffectiveUser:()=>({getEmail:()=>owner})},MailApp:{sendEmail:send,getRemainingDailyQuota:()=>100},PropertiesService:{getScriptProperties:()=>({getProperty:(k:string)=>properties.get(k),setProperty:(k:string,v:string)=>properties.set(k,v)})},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{}})},Utilities:{DigestAlgorithm:{SHA_256:'SHA-256'},computeDigest:(_algorithm:string,value:string|Buffer)=>[...createHash('sha256').update(value).digest()],base64Decode:(s:string)=>Buffer.from(s,'base64'),newBlob:(html:string,type:string,name:string)=>({html,type,name})},ContentService:{MimeType:{JSON:'json'},createTextOutput:(value:string)=>({setMimeType:()=>value})}});vm.runInContext(source,context);post=data=>JSON.parse(context.doPost({postData:{contents:JSON.stringify({secret:'test-secret',...(data as object)})}}));
 });
 const payload={action:'billing-send',key:'11111111-1111-4111-8111-111111111111',from:'klgcr.noreply@gmail.com',to:'account1@keanlenggroup.com',cc:['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'],subject:'Approved rental',text:'Approved by James',invoiceHtml:'<html>Signed original invoice</html>',fileName:'approved.html'};
 it('checks real executor identity and CC capability without sending',()=>{expect(post({action:'billing-capabilities'})).toMatchObject({ok:true,sender:'klgcr.noreply@gmail.com'});expect(send).not.toHaveBeenCalled();owner='other@gmail.com';expect(post({action:'billing-capabilities'}).ok).toBe(false)});
@@ -46,4 +47,50 @@ it('supports a confirmed customer invoice PDF with an independent idempotency ke
   expect(post(invoice)).toEqual(receipt);
   expect(send).toHaveBeenCalledOnce();
   expect(send.mock.calls[0][0]).toMatchObject({to: invoice.to, attachments:[{type:'application/pdf', name:invoice.fileName}]});
+});
+
+const compliancePdf = Buffer.from('%PDF-1.7 original supplier document');
+function compliancePayload(kind: 'quotation' | 'invoice', to = 'supplier@example.com') {
+  const sha256 = createHash('sha256').update(compliancePdf).digest('hex');
+  const key = 'compliance_' + createHash('sha256').update([kind, to, sha256].join('\n')).digest('hex');
+  return {
+    action: 'compliance-send', key, kind, from: payload.from, to,
+    cc: kind === 'invoice' ? [payload.to] : [],
+    subject: 'Approved supplier document', text: 'Approved by James.',
+    fileName: 'Supplier document.pdf', pdfBase64: compliancePdf.toString('base64'), sha256,
+  };
+}
+
+it.each(['quotation', 'invoice'] as const)('sends the approved supplier %s PDF once and uses the required CC only', kind => {
+  const request = compliancePayload(kind);
+  expect(post({ action: 'compliance-capabilities' })).toMatchObject({
+    ok: true, invoiceCc: payload.to, capabilities: ['compliancePdf', 'invoiceCc', 'idempotency'],
+  });
+  expect(send).not.toHaveBeenCalled();
+  const receipt = post(request);
+  expect(receipt).toMatchObject({ status: 'sent', key: request.key, to: request.to, cc: request.cc, sha256: request.sha256 });
+  expect(post(request)).toEqual(receipt);
+  expect(send).toHaveBeenCalledOnce();
+  const sent = send.mock.calls[0][0];
+  expect(sent).toMatchObject({ to: request.to, attachments: [{ type: 'application/pdf', html: compliancePdf }] });
+  expect(sent.cc).toBe(kind === 'invoice' ? payload.to : undefined);
+});
+
+it('rejects invalid recipients, CC, type and PDF hashes before supplier delivery', () => {
+  const request = compliancePayload('invoice');
+  for (const change of [
+    { cc: [] }, { kind: 'service_report' }, { to: 'sup@example.com,other@example.com' },
+    { key: 'compliance_' + 'a'.repeat(64) }, { pdfBase64: Buffer.from('%PDF-1.7 altered').toString('base64') },
+  ]) expect(post({ ...request, ...change }).status).toBe('rejected');
+  expect(post(compliancePayload('invoice', 'noreply@supplier.example.com')).status).toBe('rejected');
+  expect(post(compliancePayload('invoice', 'project@keanlenggroup.com')).status).toBe('rejected');
+  expect(send).not.toHaveBeenCalled();
+});
+
+it('does not retry the same supplier message when an earlier send may have succeeded', () => {
+  const request = compliancePayload('invoice');
+  send.mockImplementation(() => { throw Error('interrupted'); });
+  expect(post(request)).toMatchObject({ status: 'uncertain', key: request.key });
+  expect(post(request)).toMatchObject({ status: 'uncertain', key: request.key });
+  expect(send).toHaveBeenCalledOnce();
 });
