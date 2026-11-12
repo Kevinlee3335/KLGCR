@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { expect, it } from "vitest";
 
 const uid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
-const migration = readFileSync("supabase/migrations/20261112080624_compliance_expiry_reminders.sql", "utf8");
+const migration = readFileSync("supabase/migrations/20261112092300_compliance_expiry_reminders.sql", "utf8");
 
 it("uses Malaysia calendar stages, creates one daily summary per active Admin, and stops at completion", async () => {
   const db = new PGlite();
