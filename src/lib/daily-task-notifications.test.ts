@@ -13,6 +13,10 @@ describe("daily task notifications", () => {
     await notifyDailyTaskCompleted({ id: 42, title: "Check lobby", status: "completed", task_date: "2026-10-12", task_category: "operation" }, "Kevin");
     expect(mocks.admins).not.toHaveBeenCalled();
   });
+  it("passes deferred push delivery through for staff completion", async () => {
+    await notifyDailyTaskCompleted({ id: 42, title: "Check lobby", status: "in_progress", task_date: "2026-10-12", task_category: "operation" }, "Faiz", { deferPush: true });
+    expect(mocks.admins).toHaveBeenCalledWith(expect.objectContaining({ deferPush: true }));
+  });
   it.each([["admin", "/admin/daily-tasks?date=2026-10-12&category=operation"], ["cleaner", "/staff/daily-tasks/42"], ["maintenance_staff", "/staff/daily-tasks/42"]])("routes assignments to the correct %s page", async (role, href) => {
     mocks.profile.mockResolvedValue({ data: { role }, error: null });
     await notifyDailyTaskAssigned({ recipientId: "user-1", title: "Check lobby", date: "2026-10-12", category: "operation", taskId: 42, reminder: true });

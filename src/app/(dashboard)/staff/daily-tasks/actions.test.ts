@@ -17,7 +17,7 @@ describe("staff daily task completion notification", () => {
   it("notifies only after authorized completion succeeds", async () => {
     expect(await completeDailyTask(42, "Done", [])).toEqual({ ok: true });
     expect(mocks.eq).toHaveBeenCalledWith("assigned_to", "staff-id");
-    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ id: 42, status: "in_progress" }), "Faiz");
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ id: 42, status: "in_progress" }), "Faiz", { deferPush: true });
   });
   it("does not send a completion alert when the completion RPC fails", async () => {
     mocks.rpc.mockResolvedValue({ error: { message: "photo required" } });

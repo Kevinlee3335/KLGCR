@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushNotifications } from "@/lib/push";
 
@@ -24,6 +25,7 @@ type NotificationInput = {
   href: string;
   entityId?: string | null;
   expiresAt?: string;
+  deferPush?: boolean;
 };
 
 export async function createAppNotifications(input: NotificationInput) {
@@ -48,7 +50,19 @@ export async function createAppNotifications(input: NotificationInput) {
     })),
   );
   if (error) throw new Error(`Unable to create notification: ${error.message}`);
-  await sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href, expiresAt: input.expiresAt });
+  const send = () => sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href, expiresAt: input.expiresAt });
+  if (input.deferPush) {
+    try {
+      after(async () => {
+        try { await send(); }
+        catch (error) { console.error("Unable to deliver app notification push", error); }
+      });
+      return;
+    } catch {
+      // Keep delivery working if this call has no request context for after().
+    }
+  }
+  await send();
 }
 
 export async function notifyActiveAdmins(input: Omit<NotificationInput, "recipientIds">) {
