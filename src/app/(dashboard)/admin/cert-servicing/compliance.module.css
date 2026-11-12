@@ -4,36 +4,11 @@
   min-width: 0;
 }
 
-.tabs,
-.actions,
-.rowActions {
+.actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-.tabs {
-  padding: 3px;
-  gap: 6px;
-  width: fit-content;
-  border: 1px solid var(--line, #d9cfb4);
-  border-radius: 12px;
-  background: #fff;
-}
-
-.tabs a {
-  padding: 9px 14px;
-  color: #514221;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 650;
-}
-
-.tabs a:hover,
-.tabs a[aria-current="page"] {
-  background: #f0e5c8;
-  color: #33270f;
 }
 
 .heading {
@@ -56,39 +31,12 @@
   margin: 5px 0 0;
 }
 
-.search {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.search label {
-  flex: 1 1 190px;
-}
-
-.search input[type="search"] {
-  width: 100%;
-}
-
-.tableRegion {
-  margin-top: 12px;
-}
-
-.tableRegion small,
 .sourceText,
 .documentDates {
   display: block;
   color: #6e6658;
   margin-top: 3px;
   font-size: .82rem;
-}
-
-.recordLink {
-  color: #4b3611;
-  font-weight: 750;
-  text-decoration: underline;
-  text-underline-offset: .15em;
 }
 
 .status {
@@ -137,7 +85,6 @@
 }
 
 .evidenceGroup,
-.archivePicker,
 .finishForm {
   margin-top: 16px;
 }
@@ -146,7 +93,7 @@
   display: grid;
   gap: 6px;
   list-style: none;
-  margin: 10px 0;
+  margin: 10px 0 0;
   padding: 0;
 }
 
@@ -156,45 +103,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 5px 12px;
+  padding: 8px 12px;
+  border: 1px solid #ebe2ce;
+  border-radius: 8px;
+  background: #fffdf7;
 }
 
 .documentList,
-.historyList,
-.archiveChoices {
+.historyList {
   display: grid;
   gap: 9px;
   list-style: none;
   margin: 10px 0 0;
   padding: 0;
-}
-
-.documentRow,
-.historyItem,
-.archiveOption {
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--line, #e2d8bd);
-  border-radius: 10px;
-}
-
-.documentRow,
-.archiveOption {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.archiveOption input {
-  margin: 2px 5px 0 0;
-}
-
-.archiveOption label {
-  overflow-wrap: anywhere;
-}
-
-.archiveOption .sourceText {
-  padding-left: 20px;
 }
 
 .archiveScope,
@@ -204,30 +125,75 @@
   gap: 6px;
 }
 
-.archivePicker > summary,
-.editor > summary,
-.historyItem > summary {
+.disclosure {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 10px 13px;
+  list-style: none;
+  border: 1px solid #dfd0ad;
+  border-radius: 9px;
+  background: #faf4e5;
+  color: #594217;
+  font-size: .875rem;
   font-weight: 700;
   cursor: pointer;
 }
 
-.archivePicker .search,
-.archivePicker form,
-.editor > form,
-.historyContent {
-  margin-top: 10px;
+.disclosure::-webkit-details-marker {
+  display: none;
 }
 
-.archiveActions {
-  margin-top: 12px;
-  align-items: flex-end;
+.disclosure:hover,
+details[open] > .disclosure {
+  background: #f1e6c8;
+  border-color: #d0bb88;
+}
+
+.disclosure:focus-visible,
+.archiveScope:focus-within,
+.checks label:focus-within {
+  outline: 2px solid #94702c;
+  outline-offset: 2px;
+}
+
+.disclosureChevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-left: auto;
+}
+
+details[open] > .disclosure .disclosureChevron {
+  transform: rotate(180deg);
+}
+
+.editor > .recordForm,
+.historyContent {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #ebe2ce;
+  border-radius: 9px;
+  background: #fffdf7;
+}
+
+.historyContent .dateGrid {
+  margin-top: 0;
+}
+
+.recordForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 16px;
 }
 
 .checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 15px;
-  padding: 8px 10px;
+  min-width: 0;
+  gap: 8px;
+  padding: 8px 10px 10px;
   margin: 0;
   border: 1px solid var(--line, #e2d8bd);
   border-radius: 8px;
@@ -235,6 +201,30 @@
 
 .checks legend {
   padding: 0 4px;
+  color: #564626;
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.checks label,
+.archiveScope {
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid #e6dbc0;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #564626;
+  font-size: .875rem;
+  cursor: pointer;
+}
+
+.checks input[type="checkbox"],
+.archiveScope input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  accent-color: #76541a;
 }
 
 .fullSpan {
@@ -254,18 +244,13 @@
 }
 
 @media (max-width: 580px) {
-  .tabs {
-    width: 100%;
-  }
-
-  .tabs a {
-    flex: 1 1 auto;
-    text-align: center;
-    padding-inline: 10px;
-  }
-
-  .documentRow,
-  .archiveOption {
+  .recordForm {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .editor > .recordForm,
+  .historyContent {
+    padding: 12px;
+  }
+
 }

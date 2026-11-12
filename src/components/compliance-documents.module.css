@@ -1,0 +1,260 @@
+.uploadForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: end;
+  gap: 10px 12px;
+  margin-top: 12px;
+}
+
+.archiveSummary:focus-visible,
+.inlineLink:focus-visible {
+  outline: 2px solid #94702c;
+  outline-offset: 2px;
+}
+
+.uploadMessage {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.documentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #e2d8bd;
+  border-radius: 10px;
+  background: #fffefa;
+}
+
+.documentInfo {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.documentSource svg {
+  margin-right: 3px;
+  vertical-align: text-bottom;
+}
+
+.inlineLink {
+  color: #664a1c;
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+
+.documentActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.documentActions form {
+  max-width: 100%;
+}
+
+.archivePicker {
+  margin-top: 14px;
+  border: 1px solid #e2d8bd;
+  border-radius: 10px;
+  background: #fffefa;
+  scroll-margin-top: 100px;
+}
+
+.archiveSummary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #594116;
+  font-size: .875rem;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.archiveSummary::-webkit-details-marker {
+  display: none;
+}
+
+.archiveSummary:hover {
+  background: #f4ecd7;
+}
+
+.archiveChevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.archivePicker[open] .archiveSummary {
+  border-bottom: 1px solid #e2d8bd;
+  border-radius: 9px 9px 0 0;
+  background: #f7f1e2;
+}
+
+.archivePicker[open] .archiveChevron {
+  transform: rotate(180deg);
+}
+
+.archiveBody {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+}
+
+.archiveBody > p {
+  margin: 0;
+}
+
+.archiveSearch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.archiveSearchField {
+  position: relative;
+  flex: 1 1 210px;
+  min-width: 0;
+}
+
+.archiveSearchField svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: #725324;
+  pointer-events: none;
+}
+
+.archiveSearchField input[type="search"] {
+  padding-inline-start: 36px;
+}
+
+.archiveScope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding-inline: 5px;
+  color: #564626;
+  font-size: .875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.archiveScope input,
+.archiveOptionLabel input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #76541a;
+  cursor: pointer;
+}
+
+.archiveScope input:focus-visible,
+.archiveOptionLabel input:focus-visible {
+  outline: 2px solid #94702c;
+  outline-offset: 2px;
+}
+
+.archiveChoices {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.archiveChoices > legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: #564626;
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.archiveOption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  border: 1px solid #e2d8bd;
+  border-radius: 9px;
+  background: #fffefa;
+}
+
+.archiveOption:has(input:checked) {
+  border-color: #bfa570;
+  background: #f8f1df;
+}
+
+.archiveOptionLabel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.archiveOptionLabel input {
+  margin-top: 2px;
+}
+
+.archiveSourceLink {
+  margin-inline-end: 8px;
+}
+
+.archiveActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.archiveActions label {
+  flex: 0 1 240px;
+}
+
+@media (max-width: 700px) {
+  .uploadForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .uploadForm > button,
+  .archiveActions > button,
+  .archiveActions label,
+  .archiveSearchField {
+    width: 100%;
+  }
+
+  .archiveActions label,
+  .archiveSearchField {
+    flex-basis: 100%;
+  }
+
+  .archiveOption {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .archiveSourceLink {
+    margin: 0 8px 6px 24px;
+  }
+}

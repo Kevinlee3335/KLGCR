@@ -1,0 +1,161 @@
+.input,
+.select,
+.file {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #d6c8a6;
+  border-radius: 9px;
+  background-color: #fffefa;
+  color: #2a251b;
+  font: inherit;
+  font-size: .9375rem;
+  line-height: 1.35;
+}
+
+.input::placeholder {
+  color: #736956;
+  opacity: 1;
+}
+
+textarea.input {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.select {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23725324' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.file {
+  padding: 0 10px 0 0;
+}
+
+.file::file-selector-button {
+  min-height: 42px;
+  margin-right: 10px;
+  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid #e2d5b6;
+  background: #f4ecd7;
+  color: #594116;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file:hover:not(:disabled)::file-selector-button {
+  background: #ecdfbd;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.file:focus-visible,
+.button:focus-visible {
+  outline: 2px solid #94702c;
+  outline-offset: 2px;
+}
+
+.label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  color: #564626;
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.label :is(.input, .select, .file) {
+  font-weight: 400;
+}
+
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.button.primary {
+  background: #76541a;
+  color: #fffdf5;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: #5f4212;
+  color: #fffdf5;
+}
+
+.button.secondary {
+  border-color: #d4c096;
+  background: #fffaf0;
+  color: #5b4013;
+}
+
+.button.secondary:hover:not(:disabled),
+.button.quiet:hover:not(:disabled) {
+  border-color: #ceb985;
+  background: #f2e8ce;
+  color: #4d3611;
+}
+
+.button.quiet {
+  background: transparent;
+  color: #664a1c;
+}
+
+.button.small {
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: .8125rem;
+}
+
+.button:disabled,
+.input:disabled,
+.select:disabled,
+.file:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+@media (pointer: coarse) {
+  .button.small { min-height: 44px; }
+}
+
+@media (max-width: 580px) {
+  .input,
+  .select,
+  .file { font-size: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}

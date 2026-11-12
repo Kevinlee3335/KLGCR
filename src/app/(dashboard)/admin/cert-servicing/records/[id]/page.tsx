@@ -1,6 +1,8 @@
+import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, History, Pencil, Save } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import controls from "@/components/compliance-controls.module.css";
 import { CompliancePdfUpload } from "@/components/compliance-pdf-upload";
 import { ComplianceRecordForm } from "@/components/compliance-record-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -182,7 +184,9 @@ export default async function ComplianceDetailPage({
     <AppShell profile={profile} title="Cert & Servicing">
       <div className={styles.module}>
         <ComplianceTabs active={section} />
-        <Link href={sectionPath(section)} className={styles.recordLink}>← {section.title}</Link>
+        <Link href={sectionPath(section)} className={`${controls.button} ${controls.secondary} ${controls.small}`}>
+          <ArrowLeft className={controls.icon} aria-hidden="true" /> {section.title}
+        </Link>
         <header className={styles.heading}>
           <div><h2>{record.title}</h2>{subtitle && <p className="subtle">{subtitle}</p>}</div>
           <span className={`${styles.status} ${styles[status.tone] ?? ""}`}>{status.label}</span>
@@ -196,17 +200,21 @@ export default async function ComplianceDetailPage({
             <CycleDates cycle={current} />
             {current.notes && <p className="subtle">{current.notes}</p>}
             {isAdmin && <details className={`${styles.editor} ${styles.finishForm}`}>
-              <summary>Record work / return date</summary>
-              <form action={saveComplianceCycleProgress} className="form-grid">
+              <summary className={styles.disclosure}>
+                <CalendarDays className={controls.icon} aria-hidden="true" />
+                <span>Record work / return date</span>
+                <ChevronDown className={styles.disclosureChevron} aria-hidden="true" />
+              </summary>
+              <form action={saveComplianceCycleProgress} className={styles.recordForm}>
                 <input type="hidden" name="recordId" value={record.id} />
                 <input type="hidden" name="cycleId" value={current.id} />
-                <label className="field">{workLabel(record.record_type)}<input name="performedOn" type="date" defaultValue={current.performed_on ?? ""} /></label>
+                <label className={controls.label}>{workLabel(record.record_type)}<input className={controls.input} name="performedOn" type="date" defaultValue={current.performed_on ?? ""} /></label>
                 {!recordRequirements.includes("invoice") && <div className={styles.fullSpan}>
                   <input type="hidden" name="requiresInvoiceProvided" value="1" />
                   <label className={styles.archiveScope}><input type="checkbox" name="requiresInvoice" value="1" defaultChecked={current.requires_invoice} /> Invoice required for this cycle</label>
                 </div>}
-                <label className="field field-wide">Cycle notes<textarea name="notes" rows={2} defaultValue={current.notes ?? ""} maxLength={4000} /></label>
-                <div className={styles.actions}><SubmitButton className="button secondary" pendingText="Saving…">Save progress</SubmitButton></div>
+                <label className={`${controls.label} ${styles.fullSpan}`}>Cycle notes<textarea className={controls.input} name="notes" rows={2} defaultValue={current.notes ?? ""} maxLength={4000} /></label>
+                <div className={styles.actions}><SubmitButton className={`${controls.button} ${controls.primary}`} pendingText="Saving…"><Save className={controls.icon} aria-hidden="true" /> Save progress</SubmitButton></div>
               </form>
             </details>}
             <div className={styles.evidenceGroup} id="cycle-documents">
@@ -227,17 +235,21 @@ export default async function ComplianceDetailPage({
             </div>}
             {isAdmin && !documentResult.error && missing.length === 0 && (
               <details className={`${styles.editor} ${styles.finishForm}`}>
-                <summary>Complete this cycle</summary>
-                <form action={completeComplianceCycle} className="form-grid">
+                <summary className={styles.disclosure}>
+                  <CircleCheck className={controls.icon} aria-hidden="true" />
+                  <span>Complete this cycle</span>
+                  <ChevronDown className={styles.disclosureChevron} aria-hidden="true" />
+                </summary>
+                <form action={completeComplianceCycle} className={styles.recordForm}>
                   <input type="hidden" name="recordId" value={record.id} />
                   <input type="hidden" name="cycleId" value={current.id} />
                   {current.performed_on
                     ? <input type="hidden" name="performedOn" value={current.performed_on} />
-                    : <label className="field">{workLabel(record.record_type)}<input name="performedOn" type="date" required /></label>}
-                  <label className="field">Next due date<input name="nextDueDate" type="date" /></label>
-                  {record.record_type !== "servicing" && <label className="field">Next effective date<input name="nextEffectiveDate" type="date" /></label>}
+                    : <label className={controls.label}>{workLabel(record.record_type)}<input className={controls.input} name="performedOn" type="date" required /></label>}
+                  <label className={controls.label}>Next due date<input className={controls.input} name="nextDueDate" type="date" /></label>
+                  {record.record_type !== "servicing" && <label className={controls.label}>Next effective date<input className={controls.input} name="nextEffectiveDate" type="date" /></label>}
                   <input type="hidden" name="notes" value={current.notes ?? ""} />
-                  <div className={styles.actions}><SubmitButton pendingText="Completing…">Complete</SubmitButton></div>
+                  <div className={`${styles.actions} ${styles.fullSpan}`}><SubmitButton className={`${controls.button} ${controls.primary}`} pendingText="Completing…"><CircleCheck className={controls.icon} aria-hidden="true" /> Complete</SubmitButton></div>
                 </form>
               </details>
             )}
@@ -251,8 +263,12 @@ export default async function ComplianceDetailPage({
           <h3 id="compliance-history-title" className={styles.groupTitle}>Cycle history</h3>
           {history.length ? <ul className={styles.historyList}>{history.map(cycle => (
             <li key={cycle.id}>
-              <details className={styles.historyItem} id={`cycle-${cycle.id}`} open={query.focusCycle === cycle.id}>
-                <summary>Due {dateLabel(cycle.due_date)} · Completed {dateLabel(cycle.performed_on)}</summary>
+              <details id={`cycle-${cycle.id}`} open={query.focusCycle === cycle.id}>
+                <summary className={styles.disclosure}>
+                  <History className={controls.icon} aria-hidden="true" />
+                  <span>Due {dateLabel(cycle.due_date)} · Completed {dateLabel(cycle.performed_on)}</span>
+                  <ChevronDown className={styles.disclosureChevron} aria-hidden="true" />
+                </summary>
                 <div className={styles.historyContent}>
                   <CycleDates cycle={cycle} />
                   {cycle.notes && <p className="subtle">{cycle.notes}</p>}
@@ -273,7 +289,11 @@ export default async function ComplianceDetailPage({
           </dl>
           {record.notes && <p className="subtle">{record.notes}</p>}
           {isAdmin && <details className={`${styles.editor} ${styles.finishForm}`}>
-            <summary>Edit details</summary>
+            <summary className={styles.disclosure}>
+              <Pencil className={controls.icon} aria-hidden="true" />
+              <span>Edit details</span>
+              <ChevronDown className={styles.disclosureChevron} aria-hidden="true" />
+            </summary>
             <ComplianceRecordForm section={section} record={record} effectiveDate={current?.effective_date} suppliers={suppliers} />
           </details>}
         </section>
