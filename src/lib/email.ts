@@ -1,8 +1,9 @@
-import {renderEmailBody} from './email-layout';
+import {appendReplyInstructions, MANAGEMENT_EMAIL, renderEmailBody} from './email-layout';
+
 export const COMMON_EMAIL_FOOTER = `KLG Campus Residence Management
 
 Management Office Contact
-Email: klgresidenceenquiry@gmail.com
+Email: ${MANAGEMENT_EMAIL}
 WhatsApp: 012-791 3988
 
 Operating Hours
@@ -129,6 +130,7 @@ ${COMMON_EMAIL_FOOTER}`,
 export async function sendTransactionalEmail(to: string | null | undefined, message: TransactionalMessage, options?: {timeoutMs:number}) {
   if (!to?.trim()) return { sent: false as const, reason: "disabled_or_missing_recipient" as const };
   const html = renderEmailBody(message);
+  const text = appendReplyInstructions(message.text);
   const gmailEndpoint = process.env.KLGCR_GMAIL_WEB_APP_URL;
   const gmailSecret = process.env.KLGCR_GMAIL_WEB_APP_SECRET;
   if (gmailEndpoint && gmailSecret) {
@@ -137,7 +139,7 @@ export async function sendTransactionalEmail(to: string | null | undefined, mess
         method: "POST",
         signal: options ? AbortSignal.timeout(options.timeoutMs) : undefined,
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ secret: gmailSecret, to: to.trim(), subject: message.subject, text: message.text, html }),
+        body: JSON.stringify({ secret: gmailSecret, to: to.trim(), subject: message.subject, text, html }),
       });
       if (!response.ok) throw new Error(`Gmail gateway returned HTTP ${response.status}`);
       const receipt = await response.json();
@@ -160,7 +162,7 @@ export async function sendTransactionalEmail(to: string | null | undefined, mess
       method: "POST",
       signal: options ? AbortSignal.timeout(options.timeoutMs) : undefined,
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [to.trim()], subject: message.subject, text: message.text, html }),
+      body: JSON.stringify({ from, to: [to.trim()], reply_to: MANAGEMENT_EMAIL, subject: message.subject, text, html }),
     });
     if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await response.text()}`);
     return { sent: true as const };

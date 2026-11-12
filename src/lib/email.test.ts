@@ -16,6 +16,25 @@ describe("transactional email", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("sends from noreply with replies directed to the management mailbox", async () => {
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => new Response());
+    vi.stubGlobal("fetch", fetcher);
+    process.env.KLGCR_EMAIL_ENABLED = "true";
+    process.env.RESEND_API_KEY = "secret";
+    process.env.KLGCR_EMAIL_FROM = "KLG <noreply@example.com>";
+
+    await expect(sendTransactionalEmail("resident@example.com", { subject: "Test", text: "Body" })).resolves.toEqual({ sent: true });
+    const [url, options] = fetcher.mock.calls[0];
+    expect(url).toBe("https://api.resend.com/emails");
+    expect(JSON.parse(options.body as string)).toMatchObject({
+      from: "KLG <noreply@example.com>",
+      to: ["resident@example.com"],
+      reply_to: "klgresidenceenquiry@gmail.com",
+      text: expect.stringContaining("simply reply to this email"),
+      html: expect.stringContaining('mailto:klgresidenceenquiry@gmail.com'),
+    });
+  });
+
   it("absorbs Resend failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     process.env.KLGCR_EMAIL_ENABLED = "true"; process.env.RESEND_API_KEY = "secret"; process.env.KLGCR_EMAIL_FROM = "KLG <test@example.com>";
@@ -38,6 +57,6 @@ describe('Gmail gateway delivery acknowledgement',()=>{
  process.env.KLGCR_GMAIL_WEB_APP_URL='https://script.google.com/test/exec';process.env.KLGCR_GMAIL_WEB_APP_SECRET='test-secret';vi.spyOn(console,'error').mockImplementation(()=>{});
  const fetcher=vi.fn(async()=>new Response(body as string));vi.stubGlobal('fetch',fetcher);
  expect((await sendTransactionalEmail('resident@example.com',{subject:'Defect received',text:'Details',html:'<p>Details</p>'})).sent).toBe(sent);
- const options=(fetcher.mock.calls[0] as unknown as [string,RequestInit])[1];expect(JSON.parse(options.body as string)).toMatchObject({to:'resident@example.com',subject:'Defect received',text:'Details',html:'<p>Details</p>'});
+ const options=(fetcher.mock.calls[0] as unknown as [string,RequestInit])[1];expect(JSON.parse(options.body as string)).toMatchObject({to:'resident@example.com',subject:'Defect received',text:expect.stringContaining('simply reply to this email'),html:expect.stringContaining('mailto:klgresidenceenquiry@gmail.com')});
  });
 });
