@@ -318,7 +318,7 @@
   }
 
   .table tbody td.rowAction {
-    align-self: end;
+    align-self: flex-end;
     padding-top: 9px;
     border-top: 1px solid #eee8db;
   }

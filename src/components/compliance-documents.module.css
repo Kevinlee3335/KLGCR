@@ -1,7 +1,7 @@
 .uploadForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
-  align-items: end;
+  align-items: flex-end;
   gap: 10px 12px;
   margin-top: 12px;
 }
@@ -203,7 +203,7 @@
 .archiveOptionLabel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
   padding: 10px;
@@ -222,7 +222,7 @@
 .archiveActions {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: flex-end;
   gap: 8px;
   margin-top: 12px;
 }
