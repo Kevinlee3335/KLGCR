@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createClient } from "@/lib/supabase/server";
 
 vi.mock("@/lib/auth", () => ({
   requireRole: vi.fn().mockResolvedValue({ id: "admin-id", role: "admin" }),
@@ -43,13 +44,17 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import JobsPage from "./page";
 
+beforeEach(() => { vi.clearAllMocks(); });
+
 describe("Maintenance Jobs", () => {
-  it("loads a job with no appointment without requesting a jobs-to-appointments relationship", async () => {
+  it("loads the compact jobs list without requesting complaints or appointments", async () => {
     const page = await JobsPage({ searchParams: Promise.resolve({}) });
 
     expect(renderToStaticMarkup(page)).toContain("JOB-001: 0 appointments");
     expect(jobsQuery.select).toHaveBeenCalledOnce();
     expect(jobsQuery.select.mock.calls[0][0]).not.toContain("appointments(");
+    expect(jobsQuery.select.mock.calls[0][0]).not.toContain("complaint:");
+    expect((await createClient()).from).not.toHaveBeenCalledWith("appointments");
   });
 
   it("filters timeline dates while keeping location and staff header filters", async () => {
@@ -65,6 +70,8 @@ describe("Maintenance Jobs", () => {
     await JobsPage({ searchParams: Promise.resolve({ search: "a421", block: "block-b-id" }) });
     expect(jobsQuery.eq).toHaveBeenCalledWith("block_id", "block-a-id");
     expect(jobsQuery.or).toHaveBeenCalledWith(expect.stringContaining('room_no.ilike."421"'));
+    const from = vi.mocked((await createClient()).from);
+    expect(from.mock.calls.filter(([table]) => table === "blocks")).toHaveLength(1);
   });
 
 });

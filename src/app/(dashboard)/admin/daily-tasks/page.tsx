@@ -1,6 +1,6 @@
-import { signEvidencePhotos } from "@/lib/evidence-urls";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DailyTaskFilters } from "@/components/daily-task-filters";
+import { DailyTaskDetails } from "@/components/daily-task-details";
 import { taskSearchFilter, taskFilterDate, showDailyTaskInDefaultList } from "@/lib/daily-task-filters";
 import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
@@ -48,11 +48,14 @@ function selectedDailyTaskStatuses(filters: Record<string, string | undefined>) 
 export default async function DailyTasksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const filters = await searchParams;
-  const date = taskFilterDate(filters.date) || myDate();
+  const filterDate = taskFilterDate(filters.date);
+  const todayDate = myDate();
+  const date = filterDate || todayDate;
   const db: any = await createClient();
-  const { error: materializeError } = profile.role === "admin"
-    ? await db.rpc("materialize_recurring_tasks", { p_date: date })
-    : { error: null };
+  const isAdmin = profile.role === "admin";
+  const materialization = Promise.resolve(isAdmin
+    ? db.rpc("materialize_recurring_tasks", { p_date: date })
+    : { error: null });
   const category = dailyTaskCategories.includes(filters.category as DailyTaskCategory) ? filters.category as DailyTaskCategory : undefined;
   const categoryLabel = category ? dailyTaskCategoryLabel[category] : "Daily Tasks";
   const selectedStatuses = selectedDailyTaskStatuses(filters);
@@ -60,9 +63,10 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   const sort = selectedDailyTaskSort(filters);
   const { sortBy, ascending } = sort;
 
-  const allRecords = !taskFilterDate(filters.date);
+  const allRecords = !filterDate;
   let taskQuery = db.from("admin_daily_tasks")
-    .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),activity:daily_task_activity(id,action,comment,created_at,actor:profiles!daily_task_activity_actor_id_fkey(full_name))");
+    .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),photos:daily_task_photos(id)")
+    .limit(1, { referencedTable: "photos" });
   if (!allRecords) taskQuery = taskQuery.eq("task_date", date);
   const search = taskSearchFilter(filters.q);
   if (search) taskQuery = taskQuery.or(search);
@@ -78,32 +82,26 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   if (selectedStatuses.length) taskQuery = taskQuery.in("status", selectedStatuses);
   taskQuery = taskQuery.order(category ? (sortBy === "work_date" ? "task_date" : sortBy) : "created_at", { ascending: category ? ascending : true });
 
-  const [{ data: jobs, error }, { data: adminTasks, error: taskQueryError }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
-    db.from("maintenance_jobs").select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").not("status", "in", '("completed","cancelled")').order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
-    taskQuery,
-    db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
+  // Recurring tasks must be materialized before the task list reads them.
+  const tasks = materialization.then(async ({ error: materializeError }) => ({ materializeError, result: await taskQuery }));
+  const emptyRows = { data: [], error: null };
+  const [{ materializeError, result: { data: adminTasks, error: taskQueryError } }, { data: jobs, error }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
+    tasks,
+    category ? emptyRows : db.from("maintenance_jobs")
+      .select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)")
+      .not("status", "in", '("completed","cancelled")')
+      .or(`scheduled_for.is.null,scheduled_for.eq.${date}`)
+      .order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
+    category ? emptyRows : db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
     db.from("profiles").select("id,full_name,role,daily_task_category").eq("is_active", true).is("deleted_at", null).order("full_name"),
     recurrenceQuery,
   ]);
 
   const taskError = materializeError || taskQueryError;
-  const isAdmin = profile.role === "admin";
   const includeCompletedHistory = selectedStatuses.includes("completed");
   const dailyTaskRows = ((adminTasks ?? []) as any[]).filter((task) =>
-    includeCompletedHistory || showDailyTaskInDefaultList(task, myDate())
+    includeCompletedHistory || showDailyTaskInDefaultList(task, todayDate)
   );
-  const taskIds = dailyTaskRows.map((task) => Number(task.id)).filter(Number.isSafeInteger);
-  const { data: taskPhotos } = taskIds.length
-    ? await db.from("daily_task_photos").select("id,task_id,storage_path,created_at").in("task_id", taskIds).order("created_at")
-    : { data: [] as any[] };
-  const signedTaskPhotos = await signEvidencePhotos(db, "checkout-evidence", (taskPhotos || []) as {id:string;task_id:number;storage_path:string;created_at:string}[]);
-  const taskPhotosByTaskId = new Map<number, typeof signedTaskPhotos>();
-  for (const photo of signedTaskPhotos) {
-    const existing = taskPhotosByTaskId.get(Number(photo.task_id)) || [];
-    existing.push(photo);
-    taskPhotosByTaskId.set(Number(photo.task_id), existing);
-  }
-
   const rows = ((jobs ?? []) as any[]).filter((row) => row.complaint?.room_access_permission !== "no");
   const appointmentRows = (appointments ?? []) as any[];
   const today = rows.filter((row) => row.scheduled_for === date);
@@ -132,16 +130,14 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
       <div className="section-head"><div><h3>{categoryLabel} · {selectedStatuses.length === 1 && includeCompletedHistory ? "Completed" : allRecords ? "Current Tasks" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
       {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
       <div className="daily-task-list">
-        {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => {
-          const photos = taskPhotosByTaskId.get(Number(task.id)) || [];
-          return <article className="panel daily-task-card" key={task.id}>
+        {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => (
+          <article className="panel daily-task-card" key={task.id}>
             <div className="section-head"><div><h3>{task.title}</h3><p className="subtle">Work date · {task.task_date}</p><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
               {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
             </div>
-            {photos.length > 0 && <section className="checkout-evidence"><h4>Completion photos</h4><div className="photo-grid">{photos.map((photo) => photo.url && <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img loading="lazy" decoding="async" src={photo.url} alt="Daily task completion evidence" /><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(photo.created_at))}</span></a>)}</div></section>}
-            <details><summary>Timeline</summary>{task.activity?.length ? <ol className="activity-timeline">{task.activity.map((entry: any) => <li key={entry.id}><div className="activity-marker" /><time><strong>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric" }).format(new Date(entry.created_at))}</strong><span>{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(entry.created_at))}</span></time><div className="activity-content"><strong>{entry.action}</strong>{entry.actor?.full_name && <span className="activity-actor">{entry.actor.full_name}</span>}{entry.comment && <p>{entry.comment}</p>}</div></li>)}</ol> : <p className="subtle">No progress update yet.</p>}</details>
-          </article>;
-        })}
+            <DailyTaskDetails taskId={Number(task.id)} hasPhotos={Boolean(task.photos?.length)}/>
+          </article>
+        ))}
       </div>
     </section>
 

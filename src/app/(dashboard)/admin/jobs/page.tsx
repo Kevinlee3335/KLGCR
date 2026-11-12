@@ -58,8 +58,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const filters = await searchParams;
   const supabase = await createClient();
   const roomSearch = parseRoomSearch(filters.search);
+  const blocksQuery = Promise.resolve(supabase.from("blocks").select("id,code").order("code"));
+  const staffQuery = Promise.resolve(supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name"));
   if (roomSearch) {
-    const { data: searchBlocks, error: blockError } = await supabase.from("blocks").select("id,code").order("code");
+    const { data: searchBlocks, error: blockError } = await blocksQuery;
     if (blockError) throw new Error(blockError.message);
     const block = searchBlocks?.find(row => row.code.toUpperCase() === roomSearch.blockCode);
     // An unknown block must never broaden the search to other buildings.
@@ -84,12 +86,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (roomSearch) archiveQuery = archiveQuery.or(roomSearchFilter(roomSearch));
   else if (filters.search) { const term = JSON.stringify(`%${filters.search}%`); archiveQuery=archiveQuery.or(`complaint_no.ilike.${term},room_no.ilike.${term},description.ilike.${term}`); }
   archiveQuery = archiveQuery.order(archiveStatus === "deleted" && sortBy === "created_at" ? "deleted_at" : "submitted_at", { ascending });
-  const archived = archive ? await archiveQuery.range((page-1)*PAGE_SIZE,page*PAGE_SIZE) : null;
-  const archiveRows = ((archived?.data || []).slice(0,PAGE_SIZE)) as unknown as ArchivedComplaintRow[];
-  // Appointments are linked to complaints, not necessarily to maintenance_jobs
-  // in PostgREST's schema cache. Keep them out of this select and load them
-  // separately below so jobs without appointments still render normally.
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,created_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(id,complaint_no,source,source_reference,complainant_name,availability_date,availability_time,room_access_permission)");
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_at,created_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)");
   if (filters.scope === "today-active") query = query.eq("scheduled_for", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring"]);
   if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", `${today}T00:00:00+08:00`).lt("completed_at", `${today}T23:59:59.999+08:00`);
   if (filters.scope === "completion-photos") query = query.eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00");
@@ -110,31 +107,16 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   else query = query.order(sortBy, { ascending });
   query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const [{ data: jobRows, error }, { data: blocks }, { data: staff }] = await Promise.all([
-    archive ? Promise.resolve({data:[],error:archived?.error}) : query,
-    supabase.from("blocks").select("id,code").order("code"),
-    supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name"),
+  const [archived, jobs, { data: blocks }, { data: staff }] = await Promise.all([
+    archive ? archiveQuery.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : null,
+    archive ? null : query,
+    blocksQuery,
+    staffQuery,
   ]);
-  const data = (jobRows || []).slice(0, PAGE_SIZE) as unknown as JobRow[];
-  const complaintIds = [...new Set(data.map((job) => job.complaint?.id).filter((id): id is string => Boolean(id)))];
-  const appointmentsByComplaint = new Map<string, NonNullable<JobRow["appointments"]>>();
-  if (complaintIds.length) {
-    const { data: appointmentRows, error: appointmentError } = await supabase.from("appointments")
-      .select("complaint_id,appointment_date,appointment_time,status")
-      .in("complaint_id", complaintIds);
-    if (appointmentError) {
-      // Appointment information is supplementary; never break the jobs page
-      // when it is unavailable or when no appointment has been created.
-      console.error("Appointment data could not be loaded", appointmentError.message);
-    } else {
-      for (const appointment of appointmentRows || []) {
-        const existing = appointmentsByComplaint.get(appointment.complaint_id) || [];
-        existing.push(appointment);
-        appointmentsByComplaint.set(appointment.complaint_id, existing);
-      }
-    }
-  }
-  const rows = data.map((job) => ({ ...job, appointments: job.complaint?.id ? appointmentsByComplaint.get(job.complaint.id) || [] : [] }));
+  const error = archive ? archived?.error : jobs?.error;
+  const archiveRows = (archived?.data ?? []).slice(0, PAGE_SIZE) as unknown as ArchivedComplaintRow[];
+  const jobRows = jobs?.data ?? [];
+  const rows = jobRows.slice(0, PAGE_SIZE) as unknown as JobRow[];
   const pageHref = (target: number) => { const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value && key !== "page") params.set(key, value); }); params.set("page", String(target)); return `/admin/jobs?${params}`; };
   const hasNext = (archive ? archived?.data?.length || 0 : jobRows?.length || 0) > PAGE_SIZE;
   const sharedFilters: PreservedValue[] = [
