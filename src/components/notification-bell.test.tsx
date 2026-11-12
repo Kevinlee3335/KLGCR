@@ -1,32 +1,47 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NotificationBell } from "./notification-bell";
+import { DashboardNotificationSession } from "./notification-session";
 
 const removeChannel = vi.fn().mockResolvedValue(undefined);
 const state = vi.hoisted(() => ({
   items: [] as Array<{id:string;title:string;body:string;href:string;created_at:string;read_at:null}>,
   load: vi.fn(),
   update: vi.fn(),
+  channel: vi.fn(),
+  insert: new Map<string, (event: {new: unknown}) => void>(),
+  subscribe: new Map<string, (status: string) => void>(),
 }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: () => ({
-      select: () => ({ eq: () => ({ order: () => ({ limit: async () => {
-        state.load();
-        return { data: state.items };
+      select: () => ({ eq: (column: string, userId: string) => ({ order: () => ({ limit: async () => {
+        return { data: await (state.load(column, userId) ?? state.items) };
       } }) }) }),
       update: () => ({ in: () => ({ eq: (...args: unknown[]) => state.update(...args) }) }),
     }),
-    channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+    channel: (name: string) => {
+      state.channel(name);
+      return { on: (_event: string, _filter: unknown, callback: (event: {new: unknown}) => void) => {
+        state.insert.set(name, callback);
+        return { subscribe: (callback: (status: string) => void) => {
+          state.subscribe.set(name, callback);
+          return { name };
+        } };
+      } };
+    },
     removeChannel,
   }),
 }));
 
 afterEach(() => {
+  cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.restoreAllMocks();
   state.items = [];
+  state.insert.clear();
+  state.subscribe.clear();
   Reflect.deleteProperty(navigator, "serviceWorker");
 });
 
@@ -59,6 +74,111 @@ describe("notification read persistence", () => {
       fireEvent(window, new Event("focus"));
     });
     expect(state.load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("notification session during dashboard navigation", () => {
+  const route = (page: string, userId: string) =>
+    <DashboardNotificationSession><section key={page}><NotificationBell userId={userId}/></section></DashboardNotificationSession>;
+  const notice = (id: string, title: string) => ({
+    id, title, body: "Task updated", href: "/staff", created_at: "2026-11-12T01:00:00Z", read_at: null,
+  });
+
+  it("keeps a single notification query and channel while remounting the bell on a new page", async () => {
+    state.items = [notice("first", "Initial notification")];
+    const view = render(route("Dashboard", "staff-navigation"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await screen.findByText("Initial notification");
+
+    act(() => state.insert.get("notifications-staff-navigation")?.({ new: notice("later", "Realtime notification") }));
+    await screen.findByText("Realtime notification");
+    view.rerender(route("Check-out Rooms", "staff-navigation"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    expect(screen.getByText("Realtime notification")).toBeInTheDocument();
+    expect(state.load).toHaveBeenCalledExactlyOnceWith("recipient_id", "staff-navigation");
+    expect(state.channel).toHaveBeenCalledExactlyOnceWith("notifications-staff-navigation");
+    expect(removeChannel).not.toHaveBeenCalled();
+
+    view.unmount();
+    expect(removeChannel).toHaveBeenCalledExactlyOnceWith({ name: "notifications-staff-navigation" });
+  });
+
+  it("replaces the session when the account changes and ignores late updates from the old account", async () => {
+    state.items = [notice("old", "Old account notification")];
+    const view = render(route("Dashboard", "staff-old"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await screen.findByText("Old account notification");
+
+    state.items = [notice("new", "New account notification")];
+    view.rerender(route("Dashboard", "staff-new"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    expect(screen.queryByText("Old account notification")).not.toBeInTheDocument();
+    await screen.findByText("New account notification");
+    act(() => state.insert.get("notifications-staff-old")?.({ new: notice("late", "Old account late update") }));
+    expect(screen.queryByText("Old account late update")).not.toBeInTheDocument();
+    expect(state.load).toHaveBeenLastCalledWith("recipient_id", "staff-new");
+    expect(removeChannel).toHaveBeenCalledExactlyOnceWith({ name: "notifications-staff-old" });
+  });
+
+  it("refreshes the notification list when realtime reconnects", async () => {
+    state.items = [notice("first", "Initial notification")];
+    render(route("Dashboard", "staff-reconnect"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await screen.findByText("Initial notification");
+    const subscribe = state.subscribe.get("notifications-staff-reconnect");
+    act(() => subscribe?.("SUBSCRIBED"));
+    expect(state.load).toHaveBeenCalledTimes(1);
+
+    state.items = [notice("first", "Initial notification"), notice("missed", "Missed while offline")];
+    act(() => subscribe?.("SUBSCRIBED"));
+    await screen.findByText("Missed while offline");
+    expect(state.load).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves realtime inserts and successful read changes when an older list response arrives", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const initial = notice("first", "Initial notification");
+    state.items = [initial];
+    state.update.mockResolvedValueOnce({ error: null });
+    render(route("Dashboard", "staff-in-flight"));
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await screen.findByText("Initial notification");
+
+    let completeRefresh: (rows: typeof state.items) => void = () => {};
+    state.load.mockReturnValueOnce(new Promise<typeof state.items>((resolve) => { completeRefresh = resolve; }));
+    fireEvent(window, new Event("focus"));
+    act(() => state.insert.get("notifications-staff-in-flight")?.({ new: notice("second", "Realtime notification") }));
+    await screen.findByText("Realtime notification");
+    const button = screen.getByRole("button", { name: "Mark all read" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+
+    await act(async () => completeRefresh([initial]));
+    expect(screen.getByText("Realtime notification").closest("a")).not.toHaveClass("unread");
+    expect(screen.getByText("Initial notification").closest("a")).not.toHaveClass("unread");
+    expect(state.load).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops delayed phone alerts from the old account and handles rejected device notifications", async () => {
+    vi.stubGlobal("Notification", { permission: "granted" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    const showNotification = vi.fn().mockRejectedValue(new Error("Device rejected notification"));
+    const registration = {
+      active: { scriptURL: new URL("/sw.js", window.location.origin).href },
+      pushManager: { getSubscription: vi.fn().mockResolvedValue({ endpoint: "https://push.example/device-swap" }) },
+      showNotification,
+    };
+    let finishReady: (value: typeof registration) => void = () => {};
+    const ready = new Promise<typeof registration>((resolve) => { finishReady = resolve; });
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration: vi.fn().mockResolvedValue(registration), ready } });
+    const view = render(route("Dashboard", "staff-alert-old"));
+    act(() => state.insert.get("notifications-staff-alert-old")?.({ new: notice("old", "Delayed alert") }));
+    view.rerender(route("Dashboard", "staff-alert-new"));
+    await act(async () => finishReady(registration));
+    expect(showNotification).not.toHaveBeenCalled();
+
+    await act(async () => state.insert.get("notifications-staff-alert-new")?.({ new: notice("new", "Active account alert") }));
+    expect(showNotification).toHaveBeenCalledExactlyOnceWith("Active account alert", expect.objectContaining({ body: "Task updated" }));
   });
 });
 
