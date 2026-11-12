@@ -50,12 +50,3 @@ export async function saveWasteSchedule(_: WasteActionState, form: FormData): Pr
     return { error: cause instanceof Error ? cause.message : 'Schedule could not be saved.' };
   }
 }
-export async function reviewWasteSchedule(form: FormData) {
-  const profile = await requireRole(['admin']);
-  const status = String(form.get('reviewStatus'));
-  const note = String(form.get('reviewNote') || '').trim().slice(0, 1000);
-  if (!['open', 'confirmed_missed', 'security_missing', 'cancelled'].includes(status) || (status !== 'open' && !note)) redirect('/admin/waste-collection?error=Add+a+confirmation+note');
-  const { error } = await createAdminClient().from('waste_schedule_dates').update({ review_status: status, review_note: note, reviewed_by: profile.id, reviewed_at: new Date().toISOString() }).eq('id', String(form.get('id')));
-  if (error) redirect('/admin/waste-collection?error=Could+not+save+confirmation');
-  revalidatePath('/admin/waste-collection'); revalidatePath('/waste-collection');
-}
