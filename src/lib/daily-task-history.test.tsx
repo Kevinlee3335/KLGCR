@@ -1,29 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-const mocks = vi.hoisted(() => ({ calls: [] as Array<{ table: string; method: string; args: unknown[] }>, role: "admin", taskError: null as null | { message: string } }));
+const mocks = vi.hoisted(() => ({
+  calls: [] as Array<{ table: string; method: string; args: unknown[] }>,
+  role: "admin",
+  taskError: null as null | { message: string },
+  materialization: null as Promise<{ error: null }> | null,
+}));
 vi.mock("@/lib/auth", () => ({ requireRole: async () => ({ id: "staff-id", role: mocks.role, full_name: "Staff" }) }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("@/components/daily-task-form", () => ({ DailyTaskForm: () => null }));
 vi.mock("@/components/admin-daily-task-controls", () => ({ AdminDailyTaskControls: () => null }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
-  rpc: async (name: string, args: unknown) => { mocks.calls.push({ table: "rpc", method: name, args: [args] }); return { error: null }; },
+  rpc: async (name: string, args: unknown) => { mocks.calls.push({ table: "rpc", method: name, args: [args] }); return mocks.materialization ?? { error: null }; },
   from: (table: string) => {
     const chain: Record<string, unknown> = {};
     for (const method of ["select", "eq", "in", "is", "not", "or", "order", "limit", "gte", "lte"]) chain[method] = (...args: unknown[]) => { mocks.calls.push({ table, method, args }); return chain; };
-    chain.then = (resolve: (result: unknown) => void) => resolve({ data: [], error: table === "admin_daily_tasks" ? mocks.taskError : null });
+    chain.then = (resolve: (result: unknown) => void) => {
+      mocks.calls.push({ table, method: "execute", args: [] });
+      return resolve({ data: [], error: table === "admin_daily_tasks" ? mocks.taskError : null });
+    };
     return chain;
   },
 }) }));
 import AdminTasks from "@/app/(dashboard)/admin/daily-tasks/page";
 import StaffTasks from "@/app/(dashboard)/staff/daily-tasks/page";
 import StaffDashboard from "@/app/(dashboard)/staff/page";
-beforeEach(() => { mocks.calls.length = 0; mocks.role = "admin"; mocks.taskError = null; });
+beforeEach(() => { mocks.calls.length = 0; mocks.role = "admin"; mocks.taskError = null; mocks.materialization = null; });
 const dateCalls = () => mocks.calls.filter(c => c.table === "admin_daily_tasks" && c.method === "eq" && c.args[0] === "task_date");
 describe("Daily Task history visibility", () => {
   it.each(["admin", "operation", "housekeeping"])("keeps all dates visible by default for %s", async category => {
     renderToStaticMarkup(await AdminTasks({ searchParams: Promise.resolve({ category }) }));
     expect(dateCalls()).toHaveLength(0);
     expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["task_category", category] });
+    expect(mocks.calls.some(({ table }) => ["maintenance_jobs", "appointments", "daily_task_photos", "daily_task_activity"].includes(table))).toBe(false);
+    const taskFields = mocks.calls.find((call) => call.table === "admin_daily_tasks" && call.method === "select")?.args[0];
+    expect(taskFields).toEqual(expect.stringContaining("photos:daily_task_photos(id)"));
+    expect(taskFields).not.toEqual(expect.stringContaining("daily_task_activity"));
+    expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "limit", args: [1, { referencedTable: "photos" }] });
+  });
+  it("starts independent overview queries while waiting for recurring tasks before reading the task list", async () => {
+    let finish!: (value: { error: null }) => void;
+    mocks.materialization = new Promise((resolve) => { finish = resolve; });
+    const page = AdminTasks({ searchParams: Promise.resolve({ date: "2026-11-12" }) });
+    const executed = () => mocks.calls.filter((call) => call.method === "execute").map((call) => call.table);
+    try {
+      await vi.waitFor(() => expect(executed()).toEqual(expect.arrayContaining(["maintenance_jobs", "appointments", "profiles", "recurring_daily_tasks"])));
+      expect(executed()).not.toContain("admin_daily_tasks");
+      expect(mocks.calls).toContainEqual({ table: "maintenance_jobs", method: "or", args: ["scheduled_for.is.null,scheduled_for.eq.2026-11-12"] });
+    } finally {
+      finish({ error: null });
+      await page;
+    }
+    expect(executed()).toContain("admin_daily_tasks");
   });
   it("honors an explicit historical date", async () => {
     renderToStaticMarkup(await AdminTasks({ searchParams: Promise.resolve({ category: "admin", date: "2026-10-08" }) }));
