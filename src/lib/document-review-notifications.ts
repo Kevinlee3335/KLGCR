@@ -12,7 +12,7 @@ export async function dispatchDocumentReviewPushes(documentId?:string,recipientI
  if(due.error)throw Error('Unable to load document phone notifications');
  for(const event of due.data||[]){
   const token=crypto.randomUUID();
-  const claim=await db.rpc('claim_document_review_push',{event_id:event.id,token});
+  const claim=await db.rpc(event.document_type==='compliance'?'claim_compliance_review_push':'claim_document_review_push',{event_id:event.id,token});
   if(claim.error)throw Error('Unable to claim document phone notification');
   if(!claim.data)continue;
   try{

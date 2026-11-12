@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type AppNotification = {
   id: string;
+  type?: string;
   title: string;
   body: string;
   href: string;
@@ -148,7 +149,11 @@ export function useNotificationSession(userId: string | null) {
           void navigator.serviceWorker.ready.then((registration) => {
             if (!active || browserPermission() !== "granted") return;
             return registration.showNotification(item.title, {
-              tag: item.href.startsWith("/admin/document-review/") ? "document-review-" + item.id : undefined,
+              tag: item.type === "compliance_expiry" ? `compliance-expiry-${item.id}` :
+                item.href.startsWith("/admin/document-review/") ||
+                  (item.href.startsWith("/admin/cert-servicing/records/") &&
+                    (item.type === "document_verification" || item.type === "document_approval_requested"))
+                  ? `document-review-${item.id}` : undefined,
               body: item.body, icon: "/klg-campus-residence-logo.png", badge: "/klg-campus-residence-logo.png", data: { href: item.href },
             });
           }).catch(() => {});
