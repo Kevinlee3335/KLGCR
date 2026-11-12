@@ -1,5 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ComplianceExpiryFollowUp } from "@/components/compliance-expiry-follow-up";
+import { ComplianceReviewFollowUp } from "@/components/compliance-review-follow-up";
 import { Dashboard, type AdminDashboardData } from "@/components/dashboard";
 import { DashboardActionFollowUp } from "@/components/dashboard-action-follow-up";
 import { DocumentReviewQueue } from "@/components/document-review-queue";
@@ -181,12 +183,14 @@ export default async function AdminPage() {
   return <AppShell profile={profile} title="Dashboard">
     {isPoApprover && <Suspense fallback={null}><PurchaseOrderFollowUp supabase={supabase}/></Suspense>}
     <Suspense fallback={null}><DocumentReviewQueue userId={profile.id}/></Suspense>
+    {isAdmin && <Suspense fallback={null}><ComplianceReviewFollowUp userId={profile.id}/></Suspense>}
     <Suspense fallback={null}><SupplierMailSummary/></Suspense>
     <Suspense fallback={<DashboardSummaryLoading/>}>
       <DashboardContent name={profile.full_name} summary={summary}>
         {cleanerQueue && <Suspense fallback={null}><CleanerAssignmentFollowUp queue={cleanerQueue}/></Suspense>}
         {gymSummary && <Suspense fallback={null}><GymFollowUps summary={gymSummary}/></Suspense>}
         {isAdmin && <PaymentMailFollowUp/>}
+        {isAdmin && <Suspense fallback={null}><ComplianceExpiryFollowUp/></Suspense>}
         <Suspense fallback={null}><MonitoringFollowUp/></Suspense>
       </DashboardContent>
     </Suspense>

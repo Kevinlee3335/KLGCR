@@ -4,6 +4,7 @@ import {dispatchPendingPurchases} from '@/lib/purchase-orders/dispatch';
 import {dispatchPoNotifications} from '@/lib/purchase-orders/notifications';
 import { GET as sendMeetingReminders } from "../meeting-reminders/route";
 import { NextRequest, NextResponse } from "next/server";
+import { dispatchComplianceExpiryReminders } from "@/lib/compliance-expiry-reminders";
 import { notifyDailyTaskAssigned } from "@/lib/daily-task-notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -15,6 +16,7 @@ function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kua
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await dispatchComplianceExpiryReminders().catch(error=>console.error("Compliance expiry reminder pending retry",error));
   let rentalOk=true;
   try{await ensureDueRentalInvoice();}catch(error){rentalOk=false;console.error('Automatic rental generation deferred',error);}
   await dispatchDocumentReviewPushes().catch(error=>console.error('Document phone notification pending retry',error));
