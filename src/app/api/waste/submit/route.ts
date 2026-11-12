@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { securityAccess } from '@/lib/waste/server';
-import { WASTE_BUCKET, validDate } from '@/lib/waste/shared';
+import { WASTE_BUCKET, validDate, malaysiaDate, wasteScheduleYearEnd } from '@/lib/waste/shared';
 export async function POST(request: Request) {
   if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
   const access = await securityAccess();
@@ -15,12 +15,13 @@ export async function POST(request: Request) {
     if (existingError) throw existingError;
     if (existing) return NextResponse.json({ ok: true });
     const date = String(form.get('date')), time = String(form.get('time')), bins = Number(form.get('bins'));
+    const now = new Date();
     const actual = new Date(`${date}T${time}:00+08:00`);
-    if (!validDate(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !Number.isFinite(actual.getTime()) || actual > new Date() || !Number.isInteger(bins) || bins < 1 || bins > 999) throw new Error('Enter a valid date, time (not in the future) and bin count.');
+    if (!validDate(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !Number.isFinite(actual.getTime()) || actual > now || !Number.isInteger(bins) || bins < 1 || bins > 999) throw new Error('Enter a valid date, time (not in the future) and bin count.');
     const scheduleId = String(form.get('scheduleId') || '') || null;
     if (scheduleId) {
       const { data: schedule, error } = await db.from('waste_schedule_dates').select('collection_date,review_status').eq('id', scheduleId).single();
-      if (error || !schedule || schedule.review_status === 'cancelled' || schedule.collection_date > date) throw new Error('Select a scheduled date on or before the collection date.');
+      if (error || !schedule || schedule.review_status === 'cancelled' || schedule.collection_date > wasteScheduleYearEnd(malaysiaDate(now))) throw new Error('Select an available scheduled collection date through December 31.');
     }
     const files = form.getAll('photos').filter((file): file is File => file instanceof File && file.size > 0);
     if (!files.length || files.length > 5 || files.some(file => file.type !== 'image/jpeg' || file.size > 700_000)) throw new Error('Upload 1–5 photos, each under 700 KB.');
