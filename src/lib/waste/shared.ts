@@ -17,5 +17,5 @@ export function scheduleDates(month: string, text: string) {
 export function collectionStatus(plannedDate: string, deadline: string | null, actual: string | null, now = new Date()) {
   const due = new Date(`${plannedDate}T${deadline || '23:59:59'}+08:00`);
   if (actual) return new Date(actual) > due ? 'Delayed' : 'Completed';
-  return now > due ? 'No record — confirm with Security' : 'Scheduled';
+  return now > due ? 'No record' : 'Scheduled';
 }
