@@ -18,7 +18,7 @@ it('queues only approved supplier invoices or quotations, with management-only r
       create table public.compliance_cycle_documents (id uuid primary key, kind text not null, review_stage text not null);
       grant select, insert, update on public.compliance_cycle_documents to service_role;
     `);
-    await db.exec(readFileSync('supabase/migrations/20261112080717_compliance_approval_delivery.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/migrations/20261112092302_compliance_approval_delivery.sql', 'utf8'));
     await db.exec('set role service_role;');
     await db.query("insert into public.compliance_cycle_documents values ($1, 'invoice', 'fikri'), ($2, 'quotation', 'james'), ($3, 'service_report', 'kevin')", [invoice, quotation, report]);
     expect((await db.query('select * from public.compliance_document_delivery')).rows).toHaveLength(0);

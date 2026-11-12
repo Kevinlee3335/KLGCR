@@ -83,8 +83,8 @@ beforeAll(async () => {
   for (const migration of [
     '20261027051233_supplier_mail_archive',
     '20261112075230_supplier_mail_sender_registry',
-    '20261112080552_linked_compliance_cycles',
-    '20261112081304_compliance_document_review_alerts',
+    '20261112092258_linked_compliance_cycles',
+    '20261112092305_compliance_document_review_alerts',
   ]) await db.exec(readFileSync(`supabase/migrations/${migration}.sql`, 'utf8'));
   await db.exec(`
     insert into public.supplier_mail_documents(id,company,content_hash,file_name,folder,storage_path,size_bytes)
