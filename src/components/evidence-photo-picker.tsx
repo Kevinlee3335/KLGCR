@@ -9,7 +9,7 @@ function PhotoPreview({ file, number }: { file: File; number: number }) {
   useEffect(() => { const value = URL.createObjectURL(file); setUrl(value); return () => URL.revokeObjectURL(value); }, [file]);
   // Local object URLs are temporary previews, never public evidence links.
   // eslint-disable-next-line @next/next/no-img-element
-  return url ? <img src={url} alt={`Selected photo ${number}`} style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}/> : null;
+  return url ? <img src={url} alt={`Selected photo ${number}`} loading="lazy" decoding="async" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}/> : null;
 }
 
 export function EvidencePhotoPicker({ photos, onChange, disabled = false, label = "Completion photos *" }: { label?:string; photos: File[]; onChange: (files: File[]) => void; disabled?: boolean }) {

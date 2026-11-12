@@ -2,6 +2,7 @@
 
 import { EvidencePhotoPicker } from "@/components/evidence-photo-picker";
 import { mapPhotoBatches } from "@/lib/operational-photo-batch";
+import { prepareOperationalEvidencePhotos } from "@/lib/operational-evidence-compression";
 import { validateEvidenceFiles } from "@/lib/photo-limits";
 import { useState, type FormEvent } from "react";
 import { completeJob, prepareCompletionUploads } from "@/app/(dashboard)/staff/jobs/actions";
@@ -16,8 +17,7 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    const files = photos;
-    const invalid = validateEvidenceFiles(files);
+    const invalid = validateEvidenceFiles(photos);
     if (invalid) {
       setError(invalid);
       return;
@@ -27,9 +27,11 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
     const formData = new FormData(form);
     setError("");
     setPending(true);
-    setProgress("Preparing photo uploads…");
+    setProgress("Preparing photos…");
     formData.delete("completionPhotoPaths");
     try {
+      const files = await prepareOperationalEvidencePhotos(photos);
+      setProgress("Preparing photo uploads…");
       const prepared = await prepareCompletionUploads(jobId, files.map(({ type, size }) => ({ type, size })));
       if (!prepared.uploads || prepared.uploads.length !== files.length) {
         throw new Error(prepared.error || "Unable to prepare the completion photo upload.");

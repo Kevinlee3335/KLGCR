@@ -24,12 +24,13 @@ export type DailyTaskNotificationRecord = { id: number; title: string; status: s
 
 // Call only after a successful status change; duplicate completion submissions
 // do not create another alert. Numeric task IDs must not go in entity_id (UUID).
-export async function notifyDailyTaskCompleted(task: DailyTaskNotificationRecord | null, actorName: string) {
+export async function notifyDailyTaskCompleted(task: DailyTaskNotificationRecord | null, actorName: string, options?: { deferPush?: boolean }) {
   if (!task || task.status === "completed") return;
   await notifyActiveAdmins({
     type: "daily_task_completed", title: "Daily task completed",
     body: `${actorName} completed: ${task.title}`,
     href: dailyTaskNotificationHref("admin", task.task_category, task.task_date),
     entityId: null,
+    ...options,
   });
 }

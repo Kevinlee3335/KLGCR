@@ -1,14 +1,16 @@
 import {act,render,screen,fireEvent,waitFor,cleanup} from "@testing-library/react";
 import {afterEach,beforeEach,it,expect,vi} from "vitest";
-const state=vi.hoisted(()=>({prepare:vi.fn(),adminPrepare:vi.fn(),upload:vi.fn()}));
+const state=vi.hoisted(()=>({prepare:vi.fn(),adminPrepare:vi.fn(),upload:vi.fn(),preparePhotos:vi.fn()}));
 vi.mock("@/app/(dashboard)/staff/checkouts/actions",()=>({prepareCheckoutEvidence:state.prepare}));
 vi.mock("@/app/(dashboard)/admin/checkouts/actions",()=>({prepareAdminInspectionEvidence:state.adminPrepare}));
 vi.mock("@/lib/supabase/client",()=>({createClient:()=>({storage:{from:()=>({uploadToSignedUrl:state.upload})}})}));
+vi.mock("@/lib/operational-evidence-compression",()=>({prepareOperationalEvidencePhotos:state.preparePhotos}));
 import {CheckoutCompletionForm} from "./checkout-photo-input";
 beforeEach(()=>{
  URL.createObjectURL=vi.fn(()=>"blob:photo");URL.revokeObjectURL=vi.fn();
  const uploads=Array.from({length:7},(_,i)=>({path:"room/completion/photo"+i,token:"token"+i}));
  state.prepare.mockReset().mockResolvedValue({uploads});state.adminPrepare.mockReset().mockResolvedValue({uploads});state.upload.mockReset().mockResolvedValue({error:null});
+ state.preparePhotos.mockReset().mockImplementation(async(files:File[])=>files);
 });
 afterEach(cleanup);
 function seven(){fireEvent.change(screen.getByLabelText("Upload Photos"),{target:{files:Array.from({length:7},(_,i)=>new File(["photo"],"photo"+i+".jpg",{type:"image/jpeg"}))}})}
@@ -64,4 +66,19 @@ it("allows an optional empty Admin inspection gallery and uses the Admin authori
  render(<CheckoutCompletionForm roomId="room" kind="inspection" action={action} buttonLabel="Complete inspection"><input name="assignee" defaultValue="tech"/></CheckoutCompletionForm>);
  fireEvent.submit(screen.getByRole("button",{name:"Complete inspection"}).closest("form")!);
  await waitFor(()=>expect(action).toHaveBeenCalledTimes(1));expect(state.adminPrepare).toHaveBeenCalledWith("room",[]);expect(state.prepare).not.toHaveBeenCalled();
+});
+
+it("uses the prepared image size for signing and transfers the prepared file",async()=>{
+ const original=new File(["camera photo"],"repair.jpg",{type:"image/jpeg"});
+ const prepared=new File(["small"],"repair.jpg",{type:"image/jpeg"});
+ state.preparePhotos.mockResolvedValueOnce([prepared]);
+ const action=vi.fn<(data:FormData)=>Promise<void>>(async()=>{});
+ render(<CheckoutCompletionForm roomId="room" kind="completion" action={action} buttonLabel="Update this defect"><input name="rectifiedDefects" defaultValue="fan"/></CheckoutCompletionForm>);
+ fireEvent.change(screen.getByLabelText("Upload Photos"),{target:{files:[original]}});
+ fireEvent.submit(screen.getByRole("button",{name:"Update this defect"}).closest("form")!);
+ await waitFor(()=>expect(action).toHaveBeenCalledTimes(1));
+ expect(state.preparePhotos).toHaveBeenCalledWith([original]);
+ expect(state.prepare).toHaveBeenCalledWith("room","completion",[{type:"image/jpeg",size:5}]);
+ expect(state.upload.mock.calls[0][2]).toBe(prepared);
+ expect(action.mock.calls[0][0].getAll("photoPaths")).toEqual(["room/completion/photo0"]);
 });

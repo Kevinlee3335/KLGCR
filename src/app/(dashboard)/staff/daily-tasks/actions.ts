@@ -43,7 +43,7 @@ export async function completeDailyTask(taskId: number, comment: string, paths: 
     p_paths: paths,
   });
   if (error) return { error: error.message };
-  try { await notifyDailyTaskCompleted(task, profile.full_name); }
+  try { await notifyDailyTaskCompleted(task, profile.full_name, { deferPush: true }); }
   catch (notificationError) { console.error("Unable to notify daily task completion", notificationError); }
   revalidatePath("/staff");
   revalidatePath("/staff/daily-tasks");
