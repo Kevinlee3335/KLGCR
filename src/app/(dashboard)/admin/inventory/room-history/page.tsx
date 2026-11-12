@@ -30,16 +30,16 @@ export default async function RoomMaterialHistory({ searchParams }: {
   const year = /^20\d{2}$/.test(params.year ?? "") ? params.year! : today.slice(0, 4);
   const validRoom = /^[A-D]\d{3}$/.test(room);
   const supabase = await createClient();
-  const query = supabase.from("material_room_usage")
+  const readPage = (from: number) => supabase.from("material_room_usage")
     .select("request_item_id,qty,issued_at,replaced_at,legacy_issue,used_qty,line:material_request_items(item:inventory_items(item_code,description,unit),request:material_requests(request_no,staff:profiles!requested_by(full_name)))")
     .eq("room_no", room).not("issued_at", "is", null)
     .order("issued_at", { ascending: false }).order("request_item_id")
-    .overrideTypes<RoomMaterialUsage[], { merge: false }>();
-  const first = validRoom ? await query.range(0, 499) : null;
+    .range(from, from + 499).overrideTypes<RoomMaterialUsage[], { merge: false }>();
+  const first = validRoom ? await readPage(0) : null;
   const rows = first?.data ?? [];
   let failed = Boolean(first?.error);
   for (let offset = 500; validRoom && !failed && rows.length === offset; offset += 500) {
-    const page = await query.range(offset, offset + 499);
+    const page = await readPage(offset);
     if (page.error) failed = true;
     else rows.push(...page.data);
   }
