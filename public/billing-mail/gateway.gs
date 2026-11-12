@@ -4,6 +4,7 @@
  * This file contains no secret. Existing to/subject/text/html messages remain supported.
  */
 var KLG_BILLING_FROM='klgcr.noreply@gmail.com';
+var KLG_REPLY_TO='klgresidenceenquiry@gmail.com';
 var KLG_BILLING_TO='account1@keanlenggroup.com';
 var KLG_BILLING_CC=['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'];
 function klgReply(value){return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);}
@@ -22,7 +23,7 @@ function doPost(e){
  // Retains the old gateway contract for resident and membership notifications.
  if(request.action||!request.to||!request.subject||!request.text)throw new Error('Invalid mail request');
  if(sender!==KLG_BILLING_FROM)throw new Error('Authorize this gateway under klgcr.noreply@gmail.com');
- MailApp.sendEmail({to:String(request.to),subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,name:'KLG Campus Residence'});
+ MailApp.sendEmail({to:String(request.to),subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,name:'KLG Campus Residence',replyTo:KLG_REPLY_TO});
  return klgReply({ok:true,sender:sender});
 }
 function klgBillingSend(request,props,sender){
@@ -36,7 +37,7 @@ function klgBillingSend(request,props,sender){
   var attachment=Utilities.newBlob(request.invoiceHtml,'text/html',String(request.fileName||'KLGCR-approved-invoices.html').replace(/[^A-Za-z0-9._-]/g,'_'));
   // Write before MailApp: a stopped execution must never trigger another copy blindly.
   props.setProperty(property,JSON.stringify({status:'started',startedAt:new Date().toISOString()}));
-  try{MailApp.sendEmail({to:KLG_BILLING_TO,cc:KLG_BILLING_CC.join(','),subject:String(request.subject),body:String(request.text),attachments:[attachment],name:'KLG Campus Residence'});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
+  try{MailApp.sendEmail({to:KLG_BILLING_TO,cc:KLG_BILLING_CC.join(','),subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,attachments:[attachment],name:'KLG Campus Residence',replyTo:KLG_REPLY_TO});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
   var receipt={ok:true,status:'sent',key:request.key,sender:sender,to:KLG_BILLING_TO,cc:KLG_BILLING_CC,sentAt:new Date().toISOString()};
   props.setProperty(property,JSON.stringify(receipt));return klgReply(receipt);
  }finally{lock.releaseLock();}
@@ -55,7 +56,7 @@ function klgPoSend(request,props,sender){
   if(MailApp.getRemainingDailyQuota()<3)return klgReply({ok:false,status:'rejected'});
   var attachment=Utilities.newBlob(Utilities.base64Decode(request.pdfBase64),'application/pdf',String(request.fileName||'KLGCR-approved-PO.pdf').replace(/[^A-Za-z0-9._-]/g,'_'));
   props.setProperty(property,JSON.stringify({status:'started',startedAt:new Date().toISOString()}));
-  try{MailApp.sendEmail({to:to,cc:cc.join(','),subject:String(request.subject),body:String(request.text),attachments:[attachment],name:'KLG Campus Residence'});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
+  try{MailApp.sendEmail({to:to,cc:cc.join(','),subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,attachments:[attachment],name:'KLG Campus Residence',replyTo:KLG_REPLY_TO});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
   var receipt={ok:true,status:'sent',key:request.key,sender:sender,to:to,cc:cc,sentAt:new Date().toISOString()};
   props.setProperty(property,JSON.stringify(receipt));return klgReply(receipt);
  }finally{lock.releaseLock();}
@@ -72,7 +73,7 @@ function klgFinanceSend(request,props,sender){
   if(MailApp.getRemainingDailyQuota()<1)return klgReply({ok:false,status:'rejected'});
   var attachment=Utilities.newBlob(Utilities.base64Decode(request.pdfBase64),'application/pdf',String(request.fileName||'KLGCR-Receipt.pdf').replace(/[^A-Za-z0-9._-]/g,'_'));
   props.setProperty(property,JSON.stringify({status:'started',startedAt:new Date().toISOString()}));
-  try{MailApp.sendEmail({to:request.to,subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,attachments:[attachment],name:'KLG Campus Residence'});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
+  try{MailApp.sendEmail({to:request.to,subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,attachments:[attachment],name:'KLG Campus Residence',replyTo:KLG_REPLY_TO});}catch(error){return klgReply({ok:false,status:'uncertain',key:request.key});}
   var receipt={ok:true,status:'sent',key:request.key,sender:sender,to:request.to,sentAt:new Date().toISOString()};
   props.setProperty(property,JSON.stringify(receipt));return klgReply(receipt);
  }finally{lock.releaseLock();}
