@@ -15,7 +15,7 @@ describe('supplier archive access boundaries',()=>{
    grant usage on schema auth,storage to authenticated; grant select on storage.objects to authenticated;`);
    await db.exec(readFileSync('docs/supplier-mail/schema.sql','utf8'));
    await db.exec(readFileSync('docs/supplier-mail/search.sql','utf8'));
-   await db.exec(readFileSync('supabase/migrations/20261112074720_supplier_mail_sender_registry.sql','utf8'));
+   await db.exec(readFileSync('supabase/migrations/20261112075230_supplier_mail_sender_registry.sql','utf8'));
    await db.exec(`insert into public.profiles values('11111111-1111-4111-8111-111111111111'),('22222222-2222-4222-8222-222222222222');
    insert into public.supplier_mail_suppliers(id,name) values('approved-supplier','Approved Supplier');
    insert into public.supplier_mail_sender_rules(rule,supplier_id) values('reports@approved.example','approved-supplier');
