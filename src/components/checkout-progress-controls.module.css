@@ -257,6 +257,13 @@
 .noDefect { background: #dcf3e5; color: #14532d; }
 .painting { background: #ede9fe; color: #5b21b6; }
 .repairComplete { background: #dbeafe; color: #1e40af; }
+.pendingMaterial {
+  background: #fee2e2;
+  color: #991b1b;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .repairing { background: #ffedd5; color: #9a3412; }
 .awaiting { background: #fef3c7; color: #92400e; }
 .neutral { background: #f3f4f6; color: #374151; }

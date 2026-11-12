@@ -100,3 +100,13 @@ it('keeps selections across pages and resets them when changing server filters',
  fireEvent.change(screen.getByRole('searchbox', { name: 'Search room' }), { target: { value: 'C-101' } });
  await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/admin/checkouts?block=C&status=awaiting_maintenance&room=C-101', { scroll: false }));
 });
+
+it('links only rooms waiting for materials to their own request details', () => {
+  const inProgress = { ...rows[2], id: '4', reference_no: 'R4', room_no: '104' };
+  render(<CheckoutProgressTable rows={[rows[2], inProgress]} cleaners={[]} isAdmin canAssignCleaner={false} pendingMaterialRoomIds={['3']} />);
+
+  const pending = screen.getByRole('link', { name: 'View pending materials for room 103' });
+  expect(pending).toHaveTextContent('Pending Material');
+  expect(pending).toHaveAttribute('href', '/admin/checkouts/pending-material?room=3');
+  expect(screen.getByRole('cell', { name: 'Rectification in Progress' })).toBeInTheDocument();
+});

@@ -17,10 +17,16 @@ type Blocks = Promise<{ id: number; code: string }[]>;
 type Workers = Promise<{ id: string; full_name: string; role: string }[]>;
 type Overview = ReturnType<typeof loadCheckoutOverviewRooms>;
 
-async function CheckoutStatistics({ db, overview }: { db: Awaited<ReturnType<typeof createClient>>; overview: Overview }) {
+function loadStatusReport(db: Awaited<ReturnType<typeof createClient>>) {
+  return Promise.resolve(db.rpc("checkout_status_report", { p_date: malaysiaDate(), p_group: "ALL" }));
+}
+
+type StatusReport = ReturnType<typeof loadStatusReport>;
+
+async function CheckoutStatistics({ db, overview, report }: { db: Awaited<ReturnType<typeof createClient>>; overview: Overview; report: StatusReport }) {
   const [readyCount, { data, error }, sources] = await Promise.all([
     countOccupancyRooms(db).catch(() => null),
-    db.rpc("checkout_status_report", { p_date: malaysiaDate(), p_group: "ALL" }),
+    report,
     overview,
   ]);
   if (error || sources.error || readyCount === null || !data) {
@@ -70,8 +76,9 @@ async function CheckoutCreate({ blocks, error }: { blocks: Blocks; error?: strin
   </>;
 }
 
-async function CheckoutProgressSection({ progress, blocks, workers, filters, page, isAdmin, canAssignCleaner }: {
+async function CheckoutProgressSection({ progress, blocks, workers, filters, page, isAdmin, canAssignCleaner, report }: {
   progress: ReturnType<typeof loadCheckoutProgressPage>;
+  report: StatusReport;
   blocks: Blocks;
   workers: Workers;
   filters: CheckoutProgressFilters;
@@ -79,9 +86,12 @@ async function CheckoutProgressSection({ progress, blocks, workers, filters, pag
   isAdmin: boolean;
   canAssignCleaner: boolean;
 }) {
-  const [result, availableBlocks, staff] = await Promise.all([progress, blocks, workers]);
+  const [result, availableBlocks, staff, { data }] = await Promise.all([progress, blocks, workers, report]);
+  const pendingIds = new Set((data as CheckoutStatusReport | null)?.rooms
+    .filter(room => room.maintenance_status === "Pending Material").map(room => room.id));
   return <CheckoutProgressTable
     rows={result.rows}
+    pendingMaterialRoomIds={result.rows.filter(room => pendingIds.has(room.id)).map(room => room.id)}
     maintenanceWorkers={staff.filter(worker => worker.role === "maintenance_staff")}
     cleaners={staff.filter(worker => worker.role === "cleaner")}
     isAdmin={isAdmin}
@@ -100,6 +110,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const page = checkoutProgressPageNumber(query.page);
   const progress = loadCheckoutProgressPage(db, filters, page);
   const overview = loadCheckoutOverviewRooms(db);
+  const report = loadStatusReport(db);
   const blocks: Blocks = Promise.resolve(db.from("blocks").select("id,code").order("code")).then(({ data }) => data || []);
   const workers: Workers = isAdmin
     ? Promise.resolve(db.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null)
@@ -119,7 +130,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       </div>
     </div>
     <Suspense fallback={<p className="subtle" role="status">Loading check-out statistics…</p>}>
-      <CheckoutStatistics db={db} overview={overview} />
+      <CheckoutStatistics db={db} overview={overview} report={report} />
     </Suspense>
     {isAdmin && <>
       <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>
@@ -133,6 +144,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     <Suspense fallback={<p className="subtle" role="status">Loading check-out rooms…</p>}>
       <CheckoutProgressSection
         progress={progress}
+        report={report}
         blocks={blocks}
         workers={workers}
         filters={filters}
