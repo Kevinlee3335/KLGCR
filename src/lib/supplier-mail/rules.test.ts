@@ -17,6 +17,13 @@ describe('supplier mail scope',()=>{
   expect(classifyAttachment('K-HOTEL_SQ2026-10009MFE.pdf','Quotation To Replace Manual Call Point')).toBe('Quotation');
   expect(classifyAttachment('Invoice 123.pdf','Re: Quotation')).toBe('Invoice');
   expect(classifyAttachment('4TH,5TH_K HOTEL.pdf','November 2026 Confirmation For Fire Fighting System Servicing')).toBe('Other Documents');
-  expect(classifyAttachment('contract.pdf','Agreement')).toBe('Other Documents');
+  expect(classifyAttachment('contract.pdf','Agreement')).toBe('Agreement');
+  expect(classifyAttachment('E-Invoice_EX260001.pdf','')).toBe('Invoice');
+  expect(classifyAttachment('Q-WM-12345-SAMPLE COMPANY.pdf','')).toBe('Quotation');
+  expect(classifyAttachment('sample quo-01012026120000.pdf','')).toBe('Quotation');
+  expect(classifyAttachment('Certificate_of_Analysis_COA.pdf','')).toBe('Service Report');
+  expect(classifyAttachment('Security_Weekly_Report.pdf','')).toBe('Service Report');
+  expect(classifyAttachment('KLG WEEK 5-01022026120000.pdf','')).toBe('Service Report');
+  expect(classifyAttachment('Payment_receipt.pdf','Re: Invoice')).toBe('Other Documents');
  });
 });

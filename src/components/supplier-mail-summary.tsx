@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowUpRight, Mail } from "lucide-react";
 import { recentSupplierEmails } from "@/lib/supplier-mail/queries";
 import { createClient } from "@/lib/supabase/server";
-import { suppliers, type Supplier } from "@/lib/supplier-mail/rules";
 import styles from "./monitoring-follow-up.module.css";
 
 export async function SupplierMailSummary() {
@@ -25,7 +24,7 @@ export async function SupplierMailSummary() {
       <table className={styles.table}>
         <thead><tr><th scope="col">Supplier</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Received</th><th scope="col"><span className={styles.srOnly}>Action</span></th></tr></thead>
         <tbody>{rows.map(row => <tr key={row.id}>
-          <td><strong className={styles.staff}>{suppliers[row.company as Supplier]?.name || row.company}</strong></td>
+          <td><strong className={styles.staff}>{row.supplierName || row.company}</strong></td>
           <td><p className={styles.defect}>{row.subject || "(No subject)"}</p></td>
           <td>{!reads.error && !seen.has(row.id) && <span className={`${styles.status} ${styles.today}`}><i/>New</span>}</td>
           <td><span className={styles.staff}>{new Date(row.received_at).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}</span></td>

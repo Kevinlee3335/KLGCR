@@ -11,9 +11,10 @@ it('hides the entire dashboard panel when there is no mail today',async()=>{
  expect(mocks.client).not.toHaveBeenCalled();
 });
 it('shows today mail with its original email link',async()=>{
- mocks.emails.mockResolvedValue({data:[{id:'1234567890',company:'mfe',subject:'New quotation',received_at:'2026-10-28T03:00:00Z'}],error:null});
+ mocks.emails.mockResolvedValue({data:[{id:'1234567890',company:'lab-testing',supplierName:'Lab Testing',subject:'New quotation',received_at:'2026-10-28T03:00:00Z'}],error:null});
  mocks.client.mockResolvedValue({from:()=>({select:()=>({in:async()=>({data:[],error:null})})})});
  render(await SupplierMailSummary());
  expect(screen.getByText('Supplier emails today')).toBeTruthy();
- expect(screen.getByRole('link',{name:/New quotation/}).getAttribute('href')).toBe('/documents/suppliers/mfe/emails/1234567890');
+ expect(screen.getByText('Lab Testing')).toBeTruthy();
+ expect(screen.getByRole('link',{name:/New quotation/}).getAttribute('href')).toBe('/documents/suppliers/lab-testing/emails/1234567890');
 });
