@@ -1,5 +1,5 @@
 'use client';
-import { Camera, CheckCircle2, ArrowRight, LoaderCircle } from 'lucide-react';
+import { Camera, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { malaysiaDate } from '@/lib/waste/shared';
 async function compressPhoto(file: File) {
@@ -37,10 +37,11 @@ export function WasteSecurityForm({ schedules }: { schedules: { id: string; date
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit. Please retry.'); }
     finally { setBusy(false); }
   }}>
-    <div className="waste-form-heading"><span>01</span><div><h2>Collection details</h2><p>Confirm the date, time and number of bins.</p></div></div><label>Collection date<input required type="date" name="date" max={today} defaultValue={today}/></label>
+    <div className="waste-form-heading"><h2>Collection details</h2><p>Confirm the date, time and number of bins.</p></div>
+    <label>Collection date<input required type="date" name="date" max={today} defaultValue={today}/></label>
     <label>Collection time (Malaysia)<input required type="time" name="time" defaultValue={new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' }).format(new Date())}/></label>
-    <label>Bins collected<input required name="bins" type="number" min="1" max="999" step="1" inputMode="numeric" placeholder="Number of bins"/></label>
-    <label>Scheduled collection
+    <label className="waste-form-wide">Bins collected<input required name="bins" type="number" min="1" max="999" step="1" inputMode="numeric" placeholder="Number of bins"/></label>
+    <label className="waste-form-wide">Scheduled collection
       <select name="scheduleId" defaultValue={todaySchedule?.id || ''}>
         <option value="">Extra / unplanned collection</option>
         {todaySchedule && <option value={todaySchedule.id}>{todaySchedule.date} · Today</option>}
@@ -53,8 +54,8 @@ export function WasteSecurityForm({ schedules }: { schedules: { id: string; date
       </select>
       <small>Choose the scheduled date this pickup covers, even if it was collected early or late. Enter the actual pickup date above.</small>
     </label>
-    <label className="waste-upload"><Camera size={30} strokeWidth={1.7}/><strong>Take / upload photos</strong><span className="waste-photo-button">Choose photos <ArrowRight size={16}/></span><input required aria-label="Take or upload collection photos" name="photos" type="file" accept="image/*" multiple onChange={event => setPhotoNames(Array.from(event.target.files || []).map(file => file.name))}/><small>{photoNames.length ? `${photoNames.length} photo(s) selected` : '1–5 photos · Camera or photo library'}</small>{photoNames.length > 0 && <span className="waste-selected">{photoNames.join(' · ')}</span>}</label>
-    <label>Remarks (optional)<textarea name="remarks" maxLength={1000} rows={3}/></label>
+    <label className="waste-upload waste-form-wide"><strong className="waste-upload-title"><Camera size={19} aria-hidden="true"/>Take / upload photos</strong><input required aria-label="Take or upload collection photos" name="photos" type="file" accept="image/*" multiple onChange={event => setPhotoNames(Array.from(event.target.files || []).map(file => file.name))}/><small>{photoNames.length ? `${photoNames.length} photo(s) selected` : '1–5 photos · Camera or photo library'}</small>{photoNames.length > 0 && <span className="waste-selected">{photoNames.join(' · ')}</span>}</label>
+    <label className="waste-form-wide">Remarks (optional)<textarea name="remarks" maxLength={1000} rows={3}/></label>
     {error && <p className="error" role="alert">{error}</p>}
     <button className="button" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="waste-spin" size={19}/> Uploading…</> : <><CheckCircle2 size={20}/> Complete collection</>}</button>
   </form>;
