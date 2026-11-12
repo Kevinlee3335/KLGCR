@@ -1,0 +1,116 @@
+.page {
+  display: grid;
+  gap: 16px;
+  max-width: 900px;
+  min-width: 0;
+}
+
+.header {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.header h2,
+.page p {
+  margin: 0;
+}
+
+.panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.panel h3 {
+  margin: 0 0 5px;
+}
+
+.workbook {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workbookIcon {
+  display: grid;
+  flex: 0 0 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 10px;
+  background: #f4ead2;
+  color: #77541a;
+}
+
+.workbook p,
+.printNote {
+  color: var(--muted, #6d6b64);
+  line-height: 1.5;
+}
+
+.uploadForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.fileField {
+  display: grid;
+  flex: 1 1 275px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.coverageDetails {
+  border: 1px solid var(--line, #e7e4dc);
+  border-radius: 10px;
+  background: #fcfaf5;
+}
+
+.coverageDetails summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border-radius: inherit;
+  color: #4b3816;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.coverageDetails summary:hover {
+  background: #f4ead2;
+}
+
+.coverageDetails summary:focus-visible {
+  outline: 2px solid #8a671e;
+  outline-offset: 2px;
+}
+
+.coverageDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.coverageDetails[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.coverageDetails ul {
+  margin: 4px 12px 12px;
+  padding-inline-start: 22px;
+  line-height: 1.6;
+}
+
+.coverageMatch {
+  color: #255e35;
+}
+
+@media (max-width: 580px) {
+  .uploadForm > button {
+    width: 100%;
+  }
+}

@@ -1,13 +1,15 @@
-import { ArrowUpRight, Printer } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Plus, Printer, Search, Settings2, X } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ComplianceRecordForm } from "@/components/compliance-record-form";
+import controls from "@/components/compliance-controls.module.css";
 import { requireRole } from "@/lib/auth";
 import { listSupplierCompanies } from "@/lib/supplier-mail/queries";
 import { createClient } from "@/lib/supabase/server";
 import { ComplianceTabs } from "../compliance-tabs";
-import { dateLabel, dueStatus, isRecordUuid, isSourceMessageId, recordFields, recordPath, sections, type ComplianceRecord } from "../record-model";
+import { dateLabel, dueStatus, isRecordUuid, isSourceMessageId, recordFields, recordPath, sectionPath, sections, type ComplianceRecord } from "../record-model";
+import list from "../compliance-list.module.css";
 import styles from "../compliance.module.css";
 
 type ListSearch = { error?: string; saved?: string; q?: string; supplierDocumentId?: string; sourceMessageId?: string };
@@ -40,6 +42,7 @@ export default async function ComplianceSectionPage({
   );
   const linkDocumentId = archive?.data ? selectedArchive : undefined;
   const sourceMessageId = linkDocumentId && isSourceMessageId(search.sourceMessageId) ? search.sourceMessageId : undefined;
+  const recordAction = linkDocumentId ? "Select" : "Open";
 
   return (
     <AppShell profile={profile} title="Cert & Servicing">
@@ -48,57 +51,110 @@ export default async function ComplianceSectionPage({
         {search.error && <p className="error" role="alert">{search.error}</p>}
         {search.saved && <p className="success" role="status">Record saved.</p>}
         {selectedArchive && !archive?.data && <p className="error" role="alert">This supplier PDF could not be loaded.</p>}
-        <section className="panel list-panel" aria-labelledby="compliance-section-title">
-          <div className={styles.heading}>
-            <div>
-              <h2 id="compliance-section-title">{section.title}</h2>
-              {archive?.data && <p className="subtle">Choose the record for <strong>{archive.data.file_name}</strong>.</p>}
+        <section className={list.panel} aria-labelledby="compliance-section-title">
+          <div className={list.toolbar}>
+            <div className={list.heading}>
+              <div>
+                <h2 id="compliance-section-title">{section.title}</h2>
+                {archive?.data && <p className="subtle">Choose the record for <strong>{archive.data.file_name}</strong>.</p>}
+              </div>
+              <div className={list.actions}>
+                <a href={`/api/cert-servicing/print?kind=${section.kind}`} className={`${controls.button} ${controls.secondary}`}>
+                  <Printer size={16} aria-hidden="true" /> Print in Excel
+                </a>
+                {isAdmin && (
+                  <Link href="/admin/cert-servicing/print-template" className={`${controls.button} ${controls.quiet}`}>
+                    <Settings2 size={16} aria-hidden="true" /> Print template
+                  </Link>
+                )}
+              </div>
             </div>
-            <div className={styles.actions}>
-              <a href={`/api/cert-servicing/print?kind=${section.kind}`} className="button secondary">
-                <Printer size={16} aria-hidden="true" /> Print in Excel
-              </a>
-              {isAdmin && <Link href="/admin/cert-servicing/print-template" className="button secondary">Print template</Link>}
-            </div>
+            <form className={list.search} method="get" role="search" aria-label="Search records">
+              {linkDocumentId && <input type="hidden" name="supplierDocumentId" value={linkDocumentId} />}
+              {sourceMessageId && <input type="hidden" name="sourceMessageId" value={sourceMessageId} />}
+              <label className={list.searchField}>
+                <span className={styles.srOnly}>Search records</span>
+                <Search className={list.searchIcon} size={18} aria-hidden="true" />
+                <input
+                  key={searchTerm}
+                  className={controls.input}
+                  name="q"
+                  type="search"
+                  defaultValue={searchTerm}
+                  maxLength={120}
+                  placeholder="Name, supplier, block or reference"
+                />
+              </label>
+              <button type="submit" className={`${controls.button} ${controls.primary} ${list.searchSubmit}`}>Search</button>
+              {searchTerm && (
+                <Link href={sectionPath(section, linkDocumentId, sourceMessageId)} className={`${controls.button} ${controls.quiet}`} aria-label="Clear search">
+                  <X size={15} aria-hidden="true" /> Clear
+                </Link>
+              )}
+            </form>
           </div>
-          <form className={`${styles.search} ${styles.tableRegion}`}>
-            {linkDocumentId && <input type="hidden" name="supplierDocumentId" value={linkDocumentId} />}
-            {sourceMessageId && <input type="hidden" name="sourceMessageId" value={sourceMessageId} />}
-            <label><span className={styles.srOnly}>Search records</span><input name="q" type="search" defaultValue={searchTerm} maxLength={120} placeholder="Search name, supplier, block or reference…" /></label>
-            <button type="submit" className="button secondary">Search</button>
-          </form>
-          {result.error ? <p className="error" role="alert">Unable to load records. Please try again.</p> : records.length ? (
-            <div className={`table-wrap ${styles.tableRegion}`} role="region" aria-label={section.title} tabIndex={0}>
-              <table className="table">
-                <thead><tr>
-                  <th scope="col">Record</th>
-                  <th scope="col">Provider / Contact</th>
-                  <th scope="col">Frequency</th>
-                  <th scope="col">Last completed</th>
-                  <th scope="col">Due date</th>
-                  <th scope="col">Status</th>
-                  <th scope="col"><span className={styles.srOnly}>Open</span></th>
+          {result.error ? <p className={`error ${list.empty}`} role="alert">Unable to load records. Please try again.</p> : records.length ? (
+            <div className={list.tableRegion} role="region" aria-label={section.title} tabIndex={0}>
+              <table className={list.table} role="table">
+                <thead role="rowgroup"><tr role="row">
+                  <th scope="col" role="columnheader">Record</th>
+                  <th scope="col" role="columnheader">Provider / Contact</th>
+                  <th scope="col" role="columnheader">Frequency</th>
+                  <th scope="col" role="columnheader">Last completed</th>
+                  <th scope="col" role="columnheader">Due date</th>
+                  <th scope="col" role="columnheader">Status</th>
+                  <th scope="col" role="columnheader"><span className={styles.srOnly}>{recordAction}</span></th>
                 </tr></thead>
-                <tbody>{records.map(record => {
+                <tbody role="rowgroup">{records.map(record => {
                   const status = dueStatus(record.next_due_date, record.status);
                   return (
-                    <tr key={record.id}>
-                      <td><strong>{record.title}</strong>{(record.location || record.reference_no) && <small>{[record.location, record.reference_no].filter(Boolean).join(" · ")}</small>}</td>
-                      <td>{record.provider || "—"}{record.contact_name && <small>{record.contact_name}</small>}</td>
-                      <td>{record.frequency || "—"}</td>
-                      <td>{dateLabel(record.last_completed_date)}</td>
-                      <td>{dateLabel(record.next_due_date)}</td>
-                      <td><span className={`${styles.status} ${styles[status.tone] ?? ""}`}>{status.label}</span></td>
-                      <td><Link href={recordPath(record.id, linkDocumentId, sourceMessageId)} className={styles.recordLink} aria-label={`${linkDocumentId ? "Select" : "Open"} ${record.title}`}>{linkDocumentId ? "Select" : "Open"} <ArrowUpRight size={13} aria-hidden="true" /></Link></td>
+                    <tr key={record.id} role="row">
+                      <td className={list.record} role="cell">
+                        <strong>{record.title}</strong>
+                        {(record.location || record.reference_no) && <small>{[record.location, record.reference_no].filter(Boolean).join(" · ")}</small>}
+                      </td>
+                      <td className={list.provider} role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Provider / Contact</span>
+                        {record.provider || "—"}
+                        {record.contact_name && <small>{record.contact_name}</small>}
+                      </td>
+                      <td role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Frequency</span>
+                        {record.frequency || "—"}
+                      </td>
+                      <td className={list.date} role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Last completed</span>
+                        {dateLabel(record.last_completed_date)}
+                      </td>
+                      <td className={`${list.date} ${list.dueDate}`} role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Due date</span>
+                        {dateLabel(record.next_due_date)}
+                      </td>
+                      <td role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Status</span>
+                        <span className={`${styles.status} ${styles[status.tone] ?? ""}`}>{status.label}</span>
+                      </td>
+                      <td className={list.rowAction} role="cell">
+                        <Link
+                          href={recordPath(record.id, linkDocumentId, sourceMessageId)}
+                          className={`${controls.button} ${controls.secondary} ${controls.small}`}
+                          aria-label={`${recordAction} ${record.title}`}
+                        >
+                          {recordAction} <ArrowUpRight size={14} aria-hidden="true" />
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}</tbody>
               </table>
             </div>
-          ) : <p className="subtle">{searchTerm ? "No records match your search." : "No records found."}</p>}
+          ) : <p className={`subtle ${list.empty}`}>{searchTerm ? "No records match your search." : "No records found."}</p>}
         </section>
-        {isAdmin && !selectedArchive && <details className={`panel ${styles.editor}`}>
-          <summary>Add {section.singular}</summary>
+        {isAdmin && !selectedArchive && <details className={list.editor}>
+          <summary className={`${controls.button} ${controls.secondary}`}>
+            <Plus size={16} aria-hidden="true" /> Add {section.singular}
+            <ChevronDown className={list.addChevron} size={16} aria-hidden="true" />
+          </summary>
           <ComplianceRecordForm section={section} suppliers={suppliers} />
         </details>}
       </div>

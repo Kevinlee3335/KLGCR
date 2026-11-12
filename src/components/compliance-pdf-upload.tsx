@@ -2,9 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { Upload } from 'lucide-react';
 import { prepareComplianceUpload, uploadComplianceDocument } from '@/app/(dashboard)/admin/cert-servicing/actions';
 import { complianceDocumentBucket, complianceDocumentKinds, complianceDocumentLabels, compliancePdfLimit } from '@/lib/compliance-workflow';
 import { createClient } from '@/lib/supabase/client';
+import controls from './compliance-controls.module.css';
+import styles from './compliance-documents.module.css';
 
 export function CompliancePdfUpload({ recordId, cycleId }: { recordId: string; cycleId: string }) {
   const router = useRouter();
@@ -55,16 +58,21 @@ export function CompliancePdfUpload({ recordId, cycleId }: { recordId: string; c
     }
   }
 
-  return <form className="form-stack" onSubmit={submit}>
-    <label>Document type
-      <select name="kind" required defaultValue="">
+  return <form className={styles.uploadForm} onSubmit={submit}>
+    <label className={controls.label}>Document type
+      <select className={controls.select} name="kind" required defaultValue="" disabled={busy}>
         <option value="" disabled>Select document type</option>
         {complianceDocumentKinds.map(kind => <option key={kind} value={kind}>{complianceDocumentLabels[kind]}</option>)}
       </select>
     </label>
-    <label>PDF <input type="file" name="file" accept=".pdf,application/pdf" required /></label>
-    {message.error && <p className="error" role="alert">{message.error}</p>}
-    {message.success && <p className="success" role="status">{message.success}</p>}
-    <button type="submit" className="button secondary-button" disabled={busy}>{busy ? 'Uploading…' : 'Upload PDF'}</button>
+    <label className={controls.label}>PDF
+      <input className={controls.file} type="file" name="file" accept=".pdf,application/pdf" required disabled={busy} />
+    </label>
+    <button type="submit" className={`${controls.button} ${controls.primary}`} disabled={busy} aria-busy={busy || undefined}>
+      <Upload className={controls.icon} aria-hidden="true" />
+      {busy ? 'Uploading…' : 'Upload PDF'}
+    </button>
+    {message.error && <p className={`error ${styles.uploadMessage}`} role="alert">{message.error}</p>}
+    {message.success && <p className={`success ${styles.uploadMessage}`} role="status">{message.success}</p>}
   </form>;
 }

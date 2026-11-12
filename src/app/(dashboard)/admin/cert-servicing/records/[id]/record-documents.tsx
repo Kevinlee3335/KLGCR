@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { FileText, Mail, Upload } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, FileText, FolderOpen, Link2, Mail, RotateCw, Search, Upload } from "lucide-react";
 import { SubmitButton } from "@/components/submit-button";
+import controls from "@/components/compliance-controls.module.css";
+import documentStyles from "@/components/compliance-documents.module.css";
 import { linkComplianceDocument, retryComplianceDelivery, reviewComplianceDocument } from "../../actions";
 import {
   archiveEvidenceKind,
@@ -58,13 +60,13 @@ export function DocumentList({
           document.james_approved_at && `James approved ${timestampLabel(document.james_approved_at)}`,
         ].filter(Boolean);
         return (
-          <li key={document.id} className={styles.documentRow} id={`document-${document.id}`}>
-            <div>
+          <li key={document.id} className={documentStyles.documentRow} id={`document-${document.id}`}>
+            <div className={documentStyles.documentInfo}>
               <strong className={styles.documentTitle}>{evidenceLabels[document.kind]} · {document.file_name}</strong>
-              <div className={styles.sourceText}>
-                {document.source === "supplier_email" ? <Mail size={14} aria-hidden="true" /> : <Upload size={14} aria-hidden="true" />}
+              <div className={`${styles.sourceText} ${documentStyles.documentSource}`}>
+                {document.source === "supplier_email" ? <Mail className={controls.icon} aria-hidden="true" /> : <Upload className={controls.icon} aria-hidden="true" />}
                 {" "}{document.source === "supplier_email" ? "Supplier email" : "Admin upload"} · {timestampLabel(document.created_at)}
-                {emailPath && <> · <Link href={emailPath}>Source email</Link></>}
+                {emailPath && <> · <Link className={documentStyles.inlineLink} href={emailPath}>Source email</Link></>}
               </div>
               {timeline.length > 0 && <small className={styles.documentDates}>{timeline.join(" · ")}</small>}
               {delivery && <small className={styles.documentDates}>
@@ -73,22 +75,26 @@ export function DocumentList({
                 {delivery.error && ` · ${delivery.error}`}
               </small>}
             </div>
-            <div className={styles.rowActions}>
+            <div className={documentStyles.documentActions}>
               <span className={`${styles.status} ${completionStage(document) ? styles.complete : styles.pending}`}>{reviewLabels[document.review_stage]}</span>
-              <a className="button secondary" href={`/api/compliance-documents/${document.id}`} target="_blank" rel="noopener noreferrer">
-                <FileText size={14} aria-hidden="true" /> View PDF
+              <a className={`${controls.button} ${controls.secondary} ${controls.small}`} href={`/api/compliance-documents/${document.id}`} target="_blank" rel="noopener noreferrer">
+                <FileText className={controls.icon} aria-hidden="true" /> View PDF
               </a>
               {canReview && <form action={reviewComplianceDocument}>
                 <input type="hidden" name="recordId" value={recordId} />
                 <input type="hidden" name="cycleId" value={cycle.id} />
                 <input type="hidden" name="documentId" value={document.id} />
                 <input type="hidden" name="expectedStage" value={reviewerStage} />
-                <SubmitButton pendingText="Saving…">{reviewerStage === "james" ? "Approve" : "Verify"}</SubmitButton>
+                <SubmitButton className={`${controls.button} ${controls.primary} ${controls.small}`} pendingText="Saving…">
+                  <Check className={controls.icon} aria-hidden="true" /> {reviewerStage === "james" ? "Approve" : "Verify"}
+                </SubmitButton>
               </form>}
               {canRetry && <form action={retryComplianceDelivery}>
                 <input type="hidden" name="recordId" value={recordId} />
                 <input type="hidden" name="documentId" value={document.id} />
-                <SubmitButton className="button secondary" pendingText="Checking…">Check or retry email</SubmitButton>
+                <SubmitButton className={`${controls.button} ${controls.secondary} ${controls.small}`} pendingText="Checking…">
+                  <RotateCw className={controls.icon} aria-hidden="true" /> Check or retry email
+                </SubmitButton>
               </form>}
             </div>
           </li>
@@ -125,54 +131,69 @@ export function ArchivePicker({
   const defaultKind = candidates.length === 1 && initialChoice ? archiveEvidenceKind(initialChoice.folder, record.record_type) : "";
   const activeSearch = searchTerm || allSuppliers;
   return (
-    <details className={styles.archivePicker} id="supplier-email-pdf" open={Boolean(selectedArchive || activeSearch)}>
-      <summary>Link PDF from supplier email</summary>
-      <form action={recordPath(record.id) + "#supplier-email-pdf"} className={styles.search} method="get">
-        <label>
-          <span className={styles.srOnly}>Find a PDF by file name</span>
-          <input name="archiveQ" type="search" defaultValue={searchTerm} maxLength={120} placeholder="Find PDF by file name…" required={!record.supplier_key} />
-        </label>
-        {record.supplier_key && <label className={styles.archiveScope}><input type="checkbox" name="allSuppliers" value="1" defaultChecked={allSuppliers} /> All suppliers</label>}
-        <button type="submit" className="button secondary">Search PDFs</button>
-        <Link href="/documents/suppliers" className="button secondary">Supplier library</Link>
-      </form>
-      {loadError ? <p className="error" role="alert">Unable to search the supplier archive. Please try again.</p> : candidates.length ? (
-        <form action={linkComplianceDocument}>
-          <input type="hidden" name="recordId" value={record.id} />
-          <input type="hidden" name="cycleId" value={cycle.id} />
-          {sourceMessageId && selected && <input type="hidden" name="sourceMessageId" value={sourceMessageId} />}
-          <fieldset className={styles.archiveChoices}>
-            <legend className={styles.groupTitle}>Choose PDF</legend>
-            {candidates.map(item => {
-              const emailPath = archiveEmailPath(item);
-              return <div key={item.id} className={styles.archiveOption}>
-                <div>
-                  <label>
-                    <input type="radio" name="supplierDocumentId" value={item.id} required defaultChecked={item.id === initialChoice?.id} />
-                    <strong>{item.file_name}</strong>
-                  </label>
-                  <small className={styles.sourceText}>
-                    {supplierNames.get(item.company) ?? item.company} · {item.folder} · {timestampLabel(item.email?.received_at ?? item.created_at)}
-                    {item.email?.subject && ` · ${item.email.subject}`}
-                  </small>
-                </div>
-                {emailPath && <Link className="button secondary" href={emailPath} target="_blank" rel="noopener noreferrer">Source email</Link>}
-              </div>;
-            })}
-          </fieldset>
-          <div className={`${styles.actions} ${styles.archiveActions}`}>
-            <label className="field">File as
-              <select name="kind" required defaultValue={defaultKind}>
-                <option value="" disabled>Select document type</option>
-                {evidenceKinds.map(kind => <option key={kind} value={kind}>{evidenceLabels[kind]}</option>)}
-              </select>
-            </label>
-            <SubmitButton pendingText="Linking…">Link to this cycle</SubmitButton>
-          </div>
+    <details className={documentStyles.archivePicker} id="supplier-email-pdf" open={Boolean(selectedArchive || activeSearch)}>
+      <summary className={documentStyles.archiveSummary}>
+        <Mail className={controls.icon} aria-hidden="true" />
+        Link PDF from supplier email
+        <ChevronDown className={documentStyles.archiveChevron} aria-hidden="true" />
+      </summary>
+      <div className={documentStyles.archiveBody}>
+        <form action={recordPath(record.id) + "#supplier-email-pdf"} className={documentStyles.archiveSearch} method="get">
+          <label className={documentStyles.archiveSearchField}>
+            <span className={styles.srOnly}>Find a PDF by file name</span>
+            <Search className={controls.icon} aria-hidden="true" />
+            <input className={controls.input} name="archiveQ" type="search" defaultValue={searchTerm} maxLength={120} placeholder="Find PDF by file name…" required={!record.supplier_key} />
+          </label>
+          {record.supplier_key && <label className={documentStyles.archiveScope}><input type="checkbox" name="allSuppliers" value="1" defaultChecked={allSuppliers} /> All suppliers</label>}
+          <button type="submit" className={`${controls.button} ${controls.secondary}`}>Search PDFs</button>
+          <Link href="/documents/suppliers" className={`${controls.button} ${controls.quiet}`}>
+            <FolderOpen className={controls.icon} aria-hidden="true" /> Supplier library
+          </Link>
         </form>
-      ) : (
-        <p className="subtle">{selectedArchive || activeSearch || record.supplier_key ? "No matching unlinked PDFs found." : "Search by file name or select the supplier in the record details."}</p>
-      )}
+        {loadError ? <p className="error" role="alert">Unable to search the supplier archive. Please try again.</p> : candidates.length ? (
+          <form action={linkComplianceDocument}>
+            <input type="hidden" name="recordId" value={record.id} />
+            <input type="hidden" name="cycleId" value={cycle.id} />
+            {sourceMessageId && selected && <input type="hidden" name="sourceMessageId" value={sourceMessageId} />}
+            <fieldset className={documentStyles.archiveChoices}>
+              <legend className={styles.groupTitle}>Choose PDF</legend>
+              {candidates.map(item => {
+                const emailPath = archiveEmailPath(item);
+                const titleId = `archive-title-${item.id}`;
+                const sourceId = `archive-source-${item.id}`;
+                return <div key={item.id} className={documentStyles.archiveOption}>
+                  <label className={documentStyles.archiveOptionLabel}>
+                    <input type="radio" name="supplierDocumentId" value={item.id} required defaultChecked={item.id === initialChoice?.id} aria-labelledby={titleId} aria-describedby={sourceId} />
+                    <span>
+                      <strong id={titleId}>{item.file_name}</strong>
+                      <small id={sourceId} className={styles.sourceText}>
+                        {supplierNames.get(item.company) ?? item.company} · {item.folder} · {timestampLabel(item.email?.received_at ?? item.created_at)}
+                        {item.email?.subject && ` · ${item.email.subject}`}
+                      </small>
+                    </span>
+                  </label>
+                  {emailPath && <Link className={`${controls.button} ${controls.quiet} ${controls.small} ${documentStyles.archiveSourceLink}`} href={emailPath} target="_blank" rel="noopener noreferrer">
+                    Source email <ArrowUpRight className={controls.icon} aria-hidden="true" />
+                  </Link>}
+                </div>;
+              })}
+            </fieldset>
+            <div className={documentStyles.archiveActions}>
+              <label className={controls.label}>File as
+                <select className={controls.select} name="kind" required defaultValue={defaultKind}>
+                  <option value="" disabled>Select document type</option>
+                  {evidenceKinds.map(kind => <option key={kind} value={kind}>{evidenceLabels[kind]}</option>)}
+                </select>
+              </label>
+              <SubmitButton className={`${controls.button} ${controls.primary}`} pendingText="Linking…">
+                <Link2 className={controls.icon} aria-hidden="true" /> Link to this cycle
+              </SubmitButton>
+            </div>
+          </form>
+        ) : (
+          <p className="subtle">{selectedArchive || activeSearch || record.supplier_key ? "No matching unlinked PDFs found." : "Search by file name or select the supplier in the record details."}</p>
+        )}
+      </div>
     </details>
   );
 }
