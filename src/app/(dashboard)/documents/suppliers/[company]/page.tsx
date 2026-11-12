@@ -6,18 +6,19 @@ import { SupplierDocumentFolder } from '@/components/supplier-document-folder';
 import { SupplierDocumentButton } from '@/components/supplier-document-button';
 import { SupplierPriceHistory } from '@/components/supplier-price-history';
 import { requireRole } from '@/lib/auth';
+import { getSupplierCompany } from '@/lib/supplier-mail/queries';
 import { createClient } from '@/lib/supabase/server';
-import { suppliers, folders, type Supplier } from '@/lib/supplier-mail/rules';
+import { folders } from '@/lib/supplier-mail/rules';
 export default async function CompanyArchive({params,searchParams}:{params:Promise<{company:string}>;searchParams:Promise<{folder?:string;q?:string;page?:string}>}) {
   const profile=await requireRole(['admin','management_viewer']);
   const {company}=await params;
-  if(!Object.hasOwn(suppliers,company)) notFound();
-  const supplier=suppliers[company as Supplier];
+  const db=await createClient();
+  const supplier=await getSupplierCompany(company,db);
+  if(!supplier) notFound();
   const search=await searchParams;
   const folder=folders.find(f=>f===search.folder);
   const q=(search.q || '').slice(0,200).replace(/[%_,()]/g,' ');
   const page=Math.max(1,Math.min(10000,Number.parseInt(search.page || '1') || 1)),offset=(page-1)*50;
-  const db=await createClient();
   let query=folder?db.from('supplier_mail_documents').select('id,file_name,folder,size_bytes,created_at,supplier_mail_attachments(message_id,supplier_emails(subject,received_at))',{count:'exact'}).eq('company',company).eq('folder',folder):db.from('supplier_emails').select('id,subject,sender,received_at',{count:'exact'}).eq('company',company);
   let searchError=false;
   if(q && folder) {

@@ -2,6 +2,7 @@ import "./documents.css";
 import { AppShell } from "@/components/app-shell";
 import { DocumentsPanel } from "@/components/documents-panel";
 import { requireRole } from "@/lib/auth";
+import { listSupplierCompanies } from "@/lib/supplier-mail/queries";
 import { createClient } from "@/lib/supabase/server";
 
 async function loadDocuments(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -13,6 +14,14 @@ async function loadDocuments(supabase: Awaited<ReturnType<typeof createClient>>)
     if (!result.data || result.data.length < 1000) break;
   }
   return { documents, error: null };
+}
+
+async function loadSupplierFolders(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const companies = await listSupplierCompanies(supabase);
+  return Promise.all(companies.map(async company => {
+    const result = await supabase.from("supplier_mail_documents").select("id", { count: "exact", head: true }).eq("company", company.id);
+    return { name: company.name, href: `/documents/suppliers/${company.id}`, count: result.error ? null : result.count || 0 };
+  }));
 }
 
 export default async function DocumentsPage() {
@@ -38,10 +47,7 @@ export default async function DocumentsPage() {
         return { name: "Quotations", href: "/documents/quotations", count: result.error ? null : Array.isArray(quotes) ? quotes.length : 0 };
       })(),
     ]) : [],
-    canManage ? Promise.all(["sigma", "mfe"].map(async company => {
-      const result = await supabase.from("supplier_mail_documents").select("id", { count: "exact", head: true }).eq("company", company);
-      return { name: company === "sigma" ? "Sigma" : "MFE", href: `/documents/suppliers/${company}`, count: result.error ? null : result.count || 0 };
-    })) : [],
+    canManage ? loadSupplierFolders(supabase) : [],
   ]);
   return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={documents} canManage={canManage} companyFolders={[...businessFolders,...companyFolders]}/>}</AppShell>;
 }

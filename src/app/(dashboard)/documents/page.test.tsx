@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   quotationSelect: vi.fn(),
   documentRange: vi.fn(),
+  listSupplierCompanies: vi.fn(),
   requireRole: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ requireRole: mocks.requireRole }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: mocks.from }) }));
+vi.mock("@/lib/supplier-mail/queries", () => ({ listSupplierCompanies: mocks.listSupplierCompanies }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("@/components/documents-panel", () => ({
   DocumentsPanel: ({ documents, canManage, companyFolders }: {
@@ -30,6 +32,9 @@ const file = { id: "doc-1", file_name: "Plan.pdf", size_bytes: 128, created_at: 
 beforeEach(() => {
   mocks.requireRole.mockReset();
   mocks.documentRange.mockReset().mockResolvedValue({ data: [file], error: null });
+  mocks.listSupplierCompanies.mockReset().mockResolvedValue([
+    { id: "sigma", name: "Sigma" }, { id: "mfe", name: "MFE" }, { id: "lab-testing", name: "Lab Testing" },
+  ]);
   mocks.quotationSelect.mockReset().mockReturnValue({
     eq: () => ({ maybeSingle: async () => ({ data: { quotes: [{}, {}] }, error: null }) }),
   });
@@ -64,7 +69,7 @@ it("starts business and supplier folder reads while the document list is pending
   try {
     await vi.waitFor(() => expect(mocks.from.mock.calls.map(([table]) => table).sort()).toEqual([
       "billing_document_index", "billing_document_index", "inventory_purchase_orders", "quotation_registry",
-      "supplier_mail_documents", "supplier_mail_documents", "system_documents",
+      "supplier_mail_documents", "supplier_mail_documents", "supplier_mail_documents", "system_documents",
     ]));
   } finally {
     finishDocuments?.();
@@ -75,7 +80,7 @@ it("starts business and supplier folder reads while the document list is pending
   expect(screen.getByText("1 files")).toBeInTheDocument();
   expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual([
     "Utility Reading History · —", "Receipts · —", "Rental · 3", "Utilities · 0",
-    "Purchase Orders · 5", "Quotations · 2", "Sigma · 7", "MFE · —",
+    "Purchase Orders · 5", "Quotations · 2", "Sigma · 7", "MFE · —", "Lab Testing · 7",
   ]);
 });
 
@@ -84,6 +89,7 @@ it("skips all management folder queries for a cleaner", async () => {
   render(await DocumentsPage());
 
   expect(mocks.from.mock.calls).toEqual([["system_documents"]]);
+  expect(mocks.listSupplierCompanies).not.toHaveBeenCalled();
   expect(screen.getByText("1 files")).toBeInTheDocument();
   expect(screen.queryAllByRole("link")).toHaveLength(0);
   expect(screen.queryByText("Management")).toBeNull();
