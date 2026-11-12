@@ -2,13 +2,21 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
-import { collectionStatus, scheduleDates } from './shared';
+import { collectionStatus, malaysiaDate, scheduleDates, wasteScheduleYearEnd } from './shared';
 const migration = readFileSync('supabase/migrations/20261021072208_waste_collection_schedule.sql','utf8');
 describe('waste collection validation', () => {
  it('rejects invalid dates, wrong months and deduplicates dates', () => {
   expect(scheduleDates('2026-10','2, 02, 9\n2026-10-31')).toEqual(['2026-10-02','2026-10-09','2026-10-31']);
   expect(() => scheduleDates('2026-02','30')).toThrow();
   expect(() => scheduleDates('2026-10','2026-11-01')).toThrow();
+ });
+ it('includes upcoming slots through the end of the current Malaysia calendar year', () => {
+  const actualDate = malaysiaDate(new Date('2026-11-12T04:02:00Z'));
+  expect(actualDate).toBe('2026-11-12');
+  expect(wasteScheduleYearEnd(actualDate)).toBe('2026-12-31');
+  expect('2026-11-13' <= wasteScheduleYearEnd(actualDate)).toBe(true);
+  expect(wasteScheduleYearEnd(malaysiaDate(new Date('2026-12-31T16:00:00Z')))).toBe('2027-12-31');
+  expect(collectionStatus('2026-11-13', null, '2026-11-12T12:02:00+08:00')).toBe('Completed');
  });
  it('uses Malaysia deadlines and does not mark Friday unfinished before the deadline', () => {
   expect(collectionStatus('2026-10-23',null,null,new Date('2026-10-23T08:50:00Z'))).toBe('Scheduled');
