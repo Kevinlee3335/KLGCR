@@ -139,6 +139,7 @@ export function CheckoutProgressTable({
   canAssignCleaner,
   error,
   pagination,
+  pendingMaterialRoomIds = [],
 }: {
   rows: Row[];
   cleaners: Worker[];
@@ -147,6 +148,7 @@ export function CheckoutProgressTable({
   canAssignCleaner: boolean;
   error?: string;
   pagination?: CheckoutProgressPagination;
+  pendingMaterialRoomIds?: string[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [cleaner, setCleaner] = useState("");
@@ -522,7 +524,15 @@ export function CheckoutProgressTable({
                     <Link className={`${styles.textLink} ${styles.reference}`} href={`/admin/checkouts/${row.id}`}>{row.reference_no}</Link>
                   </td>
                   <td>
-                    <span className={`${followUp.status} ${styles.badge} ${styles[display.tone]}`}><i aria-hidden="true" />{display.label}</span>
+                    {pendingMaterialRoomIds.includes(row.id) ? (
+                      <Link
+                        className={`${followUp.status} ${styles.badge} ${styles.pendingMaterial}`}
+                        href={{ pathname: "/admin/checkouts/pending-material", query: { room: row.id } }}
+                        aria-label={`View pending materials for room ${row.room_no}`}
+                      ><i aria-hidden="true" />Pending Material</Link>
+                    ) : (
+                      <span className={`${followUp.status} ${styles.badge} ${styles[display.tone]}`}><i aria-hidden="true" />{display.label}</span>
+                    )}
                   </td>
                   <td>
                     <div className={styles.progressValue}>

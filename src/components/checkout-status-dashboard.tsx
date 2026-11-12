@@ -8,6 +8,12 @@ export type CheckoutReportRoom = {id:string;reference_no:string;room_no:string;b
 export type CheckoutStatusReport = {date:string;total:number;ready:number;ready_today:number;maintenance_completed:number;maintenance_today:number;pending_material:number;cleaner_completed:number;cleaner_today:number;cleaner_in_progress:number;rooms:CheckoutReportRoom[]};
 export type CheckoutDashboardSource = Pick<CheckoutOverviewRoom, 'id' | 'defect_count' | 'can_assign_cleaner'>;
 
+const pendingMaterialPath = '/admin/checkouts/pending-material';
+
+export function checkoutMaintenanceKey(room: CheckoutReportRoom) {
+  return room.assigned_to || `name:${room.maintenance}`;
+}
+
 type StaffCounts = {name:string;total:number;completed:number;today:number;active:number;pending:number};
 export function getCheckoutDashboardCounts(report:CheckoutStatusReport, sources:CheckoutDashboardSource[]) {
  const sourceById=new Map(sources.map(room=>[room.id,room]));
@@ -24,7 +30,7 @@ export function getCheckoutDashboardCounts(report:CheckoutStatusReport, sources:
  const maintenance=new Map<string,StaffCounts>();
  const maintenanceRooms=report.rooms.filter(room=>(sourceById.get(room.id)?.defect_count ?? 0)>0);
  for(const room of maintenanceRooms) {
-  const key=room.assigned_to || `name:${room.maintenance}`;
+  const key=checkoutMaintenanceKey(room);
   const row=maintenance.get(key)||{name:room.maintenance,total:0,completed:0,today:0,active:0,pending:0};
   row.total++; row.completed+=Number(room.repair_percent===100); row.today+=Number(room.maintenance_today===true); row.active+=Number(room.repair_percent<100 && !!room.assigned_to); row.pending+=Number(room.maintenance_status==='Pending Material'); maintenance.set(key,row);
  }
@@ -39,12 +45,12 @@ export function CheckoutStatusDashboard({report,details=false,sources}:{report:C
   <div className="section-head"><div><p className="eyebrow">Room operations · {report.date}</p><h2>Check-out Dashboard</h2></div>{!details&&<Link className="button secondary" href="/admin/checkouts/status-report">Status Table &amp; Report</Link>}</div>
   <div className="checkout-kpi-grid">
    <article className="panel checkout-kpi-card"><span>Check-out Rooms</span><strong>{report.total}<small> total rooms</small></strong><dl><div><dt>Ready for occupancy</dt><dd>{report.ready}</dd></div><div><dt>Not ready yet</dt><dd>{Math.max(0,report.total-report.ready)}</dd></div><div><dt>Ready today</dt><dd>{report.ready_today}</dd></div></dl></article>
-   <article className="panel checkout-kpi-card"><span>Maintenance</span><strong>{defectRoomCount}<small> rooms with defects</small></strong><dl><div><dt>Repairs unfinished</dt><dd>{unfinishedRooms}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingMaintenance}</dd></div><div><dt>Defect rooms repaired</dt><dd>{Math.max(0,defectRoomCount-unfinishedRooms)}</dd></div><div><dt>Completed today</dt><dd>{report.maintenance_today}</dd></div><div><dt>Pending material</dt><dd>{report.pending_material}</dd></div></dl></article>
+   <article className="panel checkout-kpi-card"><span>Maintenance</span><strong>{defectRoomCount}<small> rooms with defects</small></strong><dl><div><dt>Repairs unfinished</dt><dd>{unfinishedRooms}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingMaintenance}</dd></div><div><dt>Defect rooms repaired</dt><dd>{Math.max(0,defectRoomCount-unfinishedRooms)}</dd></div><div><dt>Completed today</dt><dd>{report.maintenance_today}</dd></div><div><dt>Pending material</dt><dd>{report.pending_material > 0 ? <Link className={statusTable.roomLink} href={pendingMaterialPath} aria-label={`View ${report.pending_material} rooms pending material`}>{report.pending_material}</Link> : 0}</dd></div></dl></article>
    <article className="panel checkout-kpi-card"><span>Cleaning</span><strong>{counts.awaitingCleaning+counts.cleaningActive}<small> rooms not cleaned yet</small></strong><dl><div><dt>Handed to cleaning</dt><dd>{counts.cleaningTotal}</dd></div><div><dt>Awaiting assign</dt><dd>{counts.awaitingCleaning}</dd></div><div><dt>Cleaning in progress</dt><dd>{counts.cleaningActive}</dd></div><div><dt>Cleaning completed</dt><dd>{counts.cleaningCompleted}</dd></div><div><dt>Completed today</dt><dd>{counts.cleaningToday}</dd></div></dl></article>
   </div>
   <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="maintenance-status-title">
    <header className={followUp.header}><div className={followUp.heading}><span className={followUp.icon}><ClipboardList size={20}/></span><div><span className={followUp.eyebrow}>CHECK-OUT ROOMS</span><h2 id="maintenance-status-title">Maintenance Status Table</h2><p>Room repair progress by maintenance staff.</p></div></div></header>
-   <div className={`${followUp.scroll} ${statusTable.scroll}`} role="region" aria-labelledby="maintenance-status-title" tabIndex={0}><table className={`${followUp.table} ${statusTable.table}`} aria-labelledby="maintenance-status-title"><thead><tr><th scope="col">Maintenance</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th><th scope="col">Pending material</th></tr></thead><tbody>{[...counts.maintenance].map(([id,r])=><tr key={id}><th scope="row">{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td><td>{r.pending}</td></tr>)}</tbody></table></div>{!counts.maintenance.size&&<p className={followUp.empty}>No rooms with maintenance defects yet.</p>}
+   <div className={`${followUp.scroll} ${statusTable.scroll}`} role="region" aria-labelledby="maintenance-status-title" tabIndex={0}><table className={`${followUp.table} ${statusTable.table}`} aria-labelledby="maintenance-status-title"><thead><tr><th scope="col">Maintenance</th><th scope="col">Total rooms</th><th scope="col">Completed</th><th scope="col">Completed today</th><th scope="col">In progress</th><th scope="col">Pending material</th></tr></thead><tbody>{[...counts.maintenance].map(([id,r])=><tr key={id}><th scope="row">{r.name}</th><td>{r.total}</td><td>{r.completed}</td><td>{r.today}</td><td>{r.active}</td><td>{r.pending > 0 ? <Link className={statusTable.roomLink} href={{ pathname: pendingMaterialPath, query: { staff: id } }} aria-label={`View ${r.pending} rooms pending material for ${r.name}`}>{r.pending}</Link> : 0}</td></tr>)}</tbody></table></div>{!counts.maintenance.size&&<p className={followUp.empty}>No rooms with maintenance defects yet.</p>}
   </section>
   <section className={`${followUp.panel} ${statusTable.panel}`} aria-labelledby="cleaner-status-title">
    <header className={followUp.header}><div className={followUp.heading}><span className={followUp.icon}><Sparkles size={20}/></span><div><span className={followUp.eyebrow}>CHECK-OUT ROOMS</span><h2 id="cleaner-status-title">Cleaner Status Table</h2><p>Room cleaning progress by cleaner.</p></div></div></header>
