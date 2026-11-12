@@ -2,6 +2,9 @@ export const WASTE_BUCKET = 'waste-collection';
 export function malaysiaDate(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
+export function wasteScheduleYearEnd(today = malaysiaDate()) {
+  return `${today.slice(0, 4)}-12-31`;
+}
 export function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }

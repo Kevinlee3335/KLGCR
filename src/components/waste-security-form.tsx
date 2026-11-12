@@ -18,6 +18,9 @@ export function WasteSecurityForm({ schedules }: { schedules: { id: string; date
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [photoNames, setPhotoNames] = useState<string[]>([]);
   const today = malaysiaDate();
+  const todaySchedule = schedules.find(schedule => schedule.date === today);
+  const upcomingSchedules = schedules.filter(schedule => schedule.date > today).sort((a, b) => a.date.localeCompare(b.date));
+  const earlierSchedules = schedules.filter(schedule => schedule.date < today);
   if (done) return <section className="panel waste-success"><CheckCircle2 size={48}/><h2>Collection recorded</h2><p>Your collection record and photos have been saved.</p><button className="button" onClick={() => { setDone(false); setPhotoNames([]); setRequestId(crypto.randomUUID()); }}>Record another collection</button></section>;
   return <form className="panel waste-form" onSubmit={async event => {
     event.preventDefault(); if (busy) return; setBusy(true); setError('');
@@ -37,7 +40,19 @@ export function WasteSecurityForm({ schedules }: { schedules: { id: string; date
     <div className="waste-form-heading"><span>01</span><div><h2>Collection details</h2><p>Confirm the date, time and number of bins.</p></div></div><label>Collection date<input required type="date" name="date" max={today} defaultValue={today}/></label>
     <label>Collection time (Malaysia)<input required type="time" name="time" defaultValue={new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' }).format(new Date())}/></label>
     <label>Bins collected<input required name="bins" type="number" min="1" max="999" step="1" inputMode="numeric" placeholder="Number of bins"/></label>
-    <label>Scheduled collection<select name="scheduleId" defaultValue={schedules.find(s => s.date === today)?.id || ''}><option value="">Extra / unplanned collection</option>{schedules.map(s => <option value={s.id} key={s.id}>{s.date}{s.date < today ? ' · Earlier scheduled date' : ''}</option>)}</select><small>For a delayed collection, select the original scheduled date.</small></label>
+    <label>Scheduled collection
+      <select name="scheduleId" defaultValue={todaySchedule?.id || ''}>
+        <option value="">Extra / unplanned collection</option>
+        {todaySchedule && <option value={todaySchedule.id}>{todaySchedule.date} · Today</option>}
+        {upcomingSchedules.length > 0 && <optgroup label="Upcoming scheduled dates">
+          {upcomingSchedules.map(schedule => <option value={schedule.id} key={schedule.id}>{schedule.date}</option>)}
+        </optgroup>}
+        {earlierSchedules.length > 0 && <optgroup label="Earlier scheduled dates">
+          {earlierSchedules.map(schedule => <option value={schedule.id} key={schedule.id}>{schedule.date}</option>)}
+        </optgroup>}
+      </select>
+      <small>Choose the scheduled date this pickup covers, even if it was collected early or late. Enter the actual pickup date above.</small>
+    </label>
     <label className="waste-upload"><Camera size={30} strokeWidth={1.7}/><strong>Take / upload photos</strong><span className="waste-photo-button">Choose photos <ArrowRight size={16}/></span><input required aria-label="Take or upload collection photos" name="photos" type="file" accept="image/*" multiple onChange={event => setPhotoNames(Array.from(event.target.files || []).map(file => file.name))}/><small>{photoNames.length ? `${photoNames.length} photo(s) selected` : '1–5 photos · Camera or photo library'}</small>{photoNames.length > 0 && <span className="waste-selected">{photoNames.join(' · ')}</span>}</label>
     <label>Remarks (optional)<textarea name="remarks" maxLength={1000} rows={3}/></label>
     {error && <p className="error" role="alert">{error}</p>}
