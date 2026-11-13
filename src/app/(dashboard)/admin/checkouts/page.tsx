@@ -118,40 +118,38 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     : Promise.resolve([]);
 
   return <AppShell profile={profile} title="Check-out Rooms">
-    <div className="section-head">
-      <div>
-        <p className="eyebrow">Separate operational workflow</p>
+    <div className="checkout-overview">
+      <div className="checkout-overview-header">
         <h2>Check-out room readiness</h2>
-        <p className="subtle">Track UTMSPACE defects through inspection, rectification, housekeeping and occupancy readiness.</p>
+        <div className="checkout-overview-actions">
+          {isAdmin && <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>}
+          <Link className="button secondary" href="/admin/checkouts/painting"><span aria-hidden="true">🎨</span> General Worker · Room / Bathroom List</Link>
+          <Link className="button secondary" href="/admin/checkouts/occupancy-report">Ready for Occupancy Report</Link>
+        </div>
       </div>
-      <div className="checkout-page-actions">
-        <Link className="button checkout-painting-entry" href="/admin/checkouts/painting"><span aria-hidden="true">🎨</span> General Worker · Room / Bathroom List</Link>
-        <Link className="button secondary" href="/admin/checkouts/occupancy-report">Ready for Occupancy Report</Link>
-      </div>
+      <Suspense fallback={<p className="subtle" role="status">Loading check-out statistics…</p>}>
+        <CheckoutStatistics db={db} overview={overview} report={report} />
+      </Suspense>
+      {isAdmin && <>
+        <Suspense fallback={<p className="subtle" role="status">Loading rooms awaiting assignment…</p>}>
+          <CheckoutAssignments overview={overview} workers={workers} canAssignCleaner={isCleanerCoordinator} />
+        </Suspense>
+        <Suspense>
+          <CheckoutCreate blocks={blocks} error={typeof query.error === "string" ? query.error : undefined} />
+        </Suspense>
+      </>}
+      <Suspense fallback={<p className="subtle" role="status">Loading check-out rooms…</p>}>
+        <CheckoutProgressSection
+          progress={progress}
+          report={report}
+          blocks={blocks}
+          workers={workers}
+          filters={filters}
+          page={page}
+          isAdmin={isAdmin}
+          canAssignCleaner={isAdmin && (isCleanerCoordinator || Boolean(profile.is_super_admin))}
+        />
+      </Suspense>
     </div>
-    <Suspense fallback={<p className="subtle" role="status">Loading check-out statistics…</p>}>
-      <CheckoutStatistics db={db} overview={overview} report={report} />
-    </Suspense>
-    {isAdmin && <>
-      <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>
-      <Suspense fallback={<p className="subtle" role="status">Loading rooms awaiting assignment…</p>}>
-        <CheckoutAssignments overview={overview} workers={workers} canAssignCleaner={isCleanerCoordinator} />
-      </Suspense>
-      <Suspense>
-        <CheckoutCreate blocks={blocks} error={typeof query.error === "string" ? query.error : undefined} />
-      </Suspense>
-    </>}
-    <Suspense fallback={<p className="subtle" role="status">Loading check-out rooms…</p>}>
-      <CheckoutProgressSection
-        progress={progress}
-        report={report}
-        blocks={blocks}
-        workers={workers}
-        filters={filters}
-        page={page}
-        isAdmin={isAdmin}
-        canAssignCleaner={isAdmin && (isCleanerCoordinator || Boolean(profile.is_super_admin))}
-      />
-    </Suspense>
   </AppShell>;
 }

@@ -43,11 +43,11 @@
 
 .blocks button {
   min-height: 36px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 7px;
   padding: 6px 14px;
-  background: transparent;
-  color: #746a55;
+  background: #fff9eb;
+  color: #624919;
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -60,8 +60,9 @@
 }
 
 .blocks button[aria-pressed="true"] {
-  background: #27251e;
-  color: #f6d987;
+  border-color: #b79950;
+  background: linear-gradient(135deg, #29251c, #101111);
+  color: #f6df9d;
 }
 
 .field {
@@ -106,17 +107,26 @@
 
 .toolbar .assignButton {
   min-height: 44px;
-  font-size: 1rem;
+  border-color: #b79950;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #29251c, #101111);
+  color: #f6df9d;
+  font-size: 13px;
   cursor: pointer;
   white-space: normal;
   text-align: center;
+}
+
+.toolbar .assignButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #403521, #191919);
+  color: #fff0bc;
 }
 
 .toolbar .assignButton:disabled {
   border-color: #e5dece;
   background: #f4f1e8;
   color: #706957;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .searchInputWrap {
