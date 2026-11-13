@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { notifyActiveMaterialApprovers } from "@/lib/app-notifications";
+import { parseMaterialRooms } from "@/lib/material-room-allocations";
 import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -30,8 +31,25 @@ export async function POST(request: Request) {
     url.searchParams.set("error", "Do not select the same material more than once.");
     return NextResponse.redirect(url, 303);
   }
+  const roomInputs = form.getAll("rooms");
+  const selectedIndexes = itemIds.flatMap((id, index) => id ? [index] : []);
+  let allocatedItems;
+  try {
+    allocatedItems = items.map((item, index) => ({
+      ...item,
+      rooms: parseMaterialRooms(String(roomInputs[selectedIndexes[index]] ?? ""), item.qty),
+    }));
+  } catch (allocationError) {
+    url.searchParams.set("error", allocationError instanceof Error ? allocationError.message : "Invalid room allocation.");
+    return NextResponse.redirect(url, 303);
+  }
   const supabase = await createClient();
-  const { data: requestId, error } = await supabase.rpc(checkoutId ? "create_checkout_material_request" : "create_material_request", { [checkoutId ? "p_checkout_id" : "p_job_id"]: checkoutId || jobId, p_note: note, p_items: items });
+  const { data: requestId, error } = await supabase.rpc("create_room_material_request", {
+    p_source_id: checkoutId || jobId,
+    p_checkout: checkoutId !== null,
+    p_note: note,
+    p_items: allocatedItems,
+  });
   if (error) {
     url.searchParams.set("error", error.message);
   } else {

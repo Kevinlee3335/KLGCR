@@ -1,5 +1,5 @@
 // @vitest-environment node
-import {it} from 'vitest';
+import {expect,it} from 'vitest';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
 it('checks checkout materials, duplicate painting assignments, readiness and report integration',async()=>{
@@ -12,7 +12,7 @@ create function is_admin() returns boolean language sql as $$select public.curre
 create function is_management() returns boolean language sql as $$select public.current_role() in ('admin','management_viewer')$$;
 create function set_updated_at() returns trigger language plpgsql as $$begin new.updated_at=now();return new;end$$;
 create table blocks(id uuid primary key,code text);
-create table maintenance_jobs(id uuid primary key,assigned_to uuid,status text,block_id uuid);
+create table maintenance_jobs(id uuid primary key,assigned_to uuid,status text,block_id uuid,room_no text);
 create table profile_blocks(profile_id uuid,block_id uuid);
 create function set_job_pending_material(uuid,text) returns void language sql as $$select$$;
 create table checkout_rooms(id uuid primary key,reference_no text,block_id uuid,room_no text,assigned_to uuid,cleaner_id uuid,status text,deleted_at timestamptz,created_at timestamptz default now(),ready_at timestamptz);
@@ -31,7 +31,7 @@ await db.exec(readFileSync('supabase/migrations/20261029033812_checkout_painting
 const admin='00000000-0000-4000-8000-000000000001',staff='00000000-0000-4000-8000-000000000002',room='00000000-0000-4000-8000-000000000010',block='00000000-0000-4000-8000-000000000020',item='00000000-0000-4000-8000-000000000030';
 await db.exec(`insert into profiles values('${admin}','Admin','admin'),('${staff}','Worker','maintenance_staff');insert into blocks values('${block}','A');insert into checkout_rooms(id,reference_no,block_id,room_no,assigned_to,status) values('${room}','TEST','${block}','101','${staff}','rectification');insert into checkout_defects values('${room}','Moldy','open',null);insert into inventory_items values('${item}',10,true);set app.uid='${staff}';`);
 const req=(await db.query<{id:string}>(`select create_checkout_material_request($1,'test',$2::jsonb) id`,[room,JSON.stringify([{inventory_item_id:item,qty:2}])])).rows[0].id;
-await db.exec(`insert into maintenance_jobs values('${room}','${staff}','pending_material',null)`);
+await db.exec(`insert into maintenance_jobs values('${room}','${staff}','pending_material',null,null)`);
 const jobRequest=(await db.query<{id:string}>(`select create_material_request($1,'extra',$2::jsonb) id`,[room,JSON.stringify(Array.from({length:5},(_,i)=>({other_item_name:`Job extra ${i}`,qty:1})))])).rows[0].id;
 if((await db.query<{n:number}>('select count(*)::int n from material_request_items where request_id=$1',[jobRequest])).rows[0].n!==5)throw Error('Defect job additional materials missing');
 const beforeCleaning=(await db.query<{report:{cleaner_total:number;cleaner_completed:number}}>("select checkout_status_report((now() at time zone 'Asia/Kuala_Lumpur')::date) report")).rows[0].report;
@@ -42,6 +42,35 @@ await db.exec(`set app.uid='${admin}';update material_requests set status='appro
 await db.query('select issue_material_request($1)',[req]);
 if((await db.query<{balance_qty:string}>('select balance_qty from inventory_items')).rows[0].balance_qty!=='8')throw Error('Wrong balance');
 try{await db.query('select issue_material_request($1)',[req]);throw Error('Repeated issue allowed')}catch(e){if(!(e instanceof Error && e.message.includes('Approved request not found')))throw e;}
+await db.exec(readFileSync('supabase/migrations/20261112100000_material_room_usage.sql','utf8'));
+expect((await db.query("select room_no,legacy_issue,replaced_at from material_room_usage")).rows).toEqual([
+  {room_no:"A101",legacy_issue:true,replaced_at:null},
+]);
+await db.exec(`set app.uid='${staff}'`);
+const requestRooms = (rooms: {room_no:string;qty:number}[]) => db.query<{id:string}>(
+  "select create_room_material_request($1,true,'batch',$2::jsonb) id",
+  [room, JSON.stringify([{inventory_item_id:item,qty:3,rooms}])],
+);
+await expect(requestRooms([{room_no:"A110",qty:1}])).rejects.toThrow("Room quantities");
+expect((await db.query("select id from material_requests where note='batch'")).rows).toHaveLength(0);
+const batch = (await requestRooms([{room_no:"A110",qty:1},{room_no:"A111",qty:2}])).rows[0].id;
+const usage = (await db.query<{id:string}>("select id from material_request_items where request_id=$1",[batch])).rows[0].id;
+const confirm = (roomNo:string,qty:number) => db.query(
+  "select confirm_room_material_replacement($1,$2,(now() at time zone 'Asia/Kuala_Lumpur')::date,$3)",
+  [usage,roomNo,qty],
+);
+await expect(confirm("A110",1)).rejects.toThrow("Administrator access");
+await db.exec(`set app.uid='${admin}';update material_requests set status='approved' where id='${batch}';update material_request_items set approved_qty=3 where id='${usage}';`);
+await expect(confirm("A110",1)).rejects.toThrow("Select an issued item");
+await db.query("select issue_material_request($1)",[batch]);
+expect((await db.query("select balance_qty from inventory_items")).rows).toEqual([{balance_qty:"5"}]);
+await expect(confirm("A110",2)).rejects.toThrow("Select an issued item");
+await confirm("A110",1);
+await expect(confirm("A110",1)).rejects.toThrow("Select an issued item");
+expect((await db.query("select room_no,qty,issued_at is not null as issued,replaced_at is not null as replaced from material_room_usage where request_item_id=$1 order by room_no",[usage])).rows).toEqual([
+  {room_no:"A110",qty:"1.00",issued:true,replaced:true},
+  {room_no:"A111",qty:"2.00",issued:true,replaced:false},
+]);
 await db.query(`insert into checkout_paint_tasks(checkout_room_id,area,reasons,worker_name,work_date,created_by) values($1,'room',array['Moldy'],'General Worker',current_date,$2)`,[room,admin]);
 try{await db.query(`insert into checkout_paint_tasks(checkout_room_id,area,reasons,worker_name,work_date,created_by) values($1,'room',array['Dirty'],'Other Worker',current_date,$2)`,[room,admin]);throw Error('Duplicate room allowed')}catch(e){if(!(e instanceof Error && e.message.includes('checkout_paint_active_room_idx')))throw e;}
 try{await db.exec("update checkout_rooms set status='ready_for_occupancy'");throw Error('Unfinished painting accepted')}catch(e){if(!(e instanceof Error && e.message.includes('Complete General Worker')))throw e;}

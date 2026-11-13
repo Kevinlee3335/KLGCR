@@ -78,7 +78,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const near = rows.filter((x) => Number(x.balance_qty) > 0 && Number(x.balance_qty) <= Number(x.reorder_level) && x.is_active && !x.quantity_unverified).length;
 
   return <AppShell profile={profile} title={storeTitle}>
-    <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
+    <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div><Link className="button secondary" href="/admin/inventory/room-history">Room Material History</Link></div>
     {query.warning && <p className="error">{query.warning}</p>}{query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">{query.success === "buy_when_needed" ? "Selected materials saved as Buy When Needed and hidden from Items to Order." : query.success === "maintain_stock" ? "Stock alerts restored. Materials appear when stock reaches the reorder point." : query.success === "stock_out" ? "Stock Out saved successfully. Stock balance and history updated." : "Inventory saved successfully."}</p>}{error && <p className="error">{error.message}</p>}{catalogError && <p className="error">Purchase list could not be loaded: {catalogError.message}</p>}
 
     {store === "office" && <Suspense fallback={<p className="subtle" role="status">Loading office usage…</p>}>
