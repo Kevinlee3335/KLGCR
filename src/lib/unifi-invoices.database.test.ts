@@ -7,7 +7,7 @@ import { documentReviewers } from './document-review-status';
 const [fikri, kevin, james] = documentReviewers;
 const invoiceId = '00000000-0000-4000-8000-000000000001';
 const secondInvoiceId = '00000000-0000-4000-8000-000000000002';
-const migration = readFileSync('supabase/migrations/20261113042758_unifi_invoice_review.sql', 'utf8');
+const migration = readFileSync('supabase/migrations/20261113050205_unifi_invoice_review.sql', 'utf8');
 
 it('restricts the TM Unifi archive and advances only the assigned reviewer, queuing each stage once', async () => {
   const db = new PGlite();
