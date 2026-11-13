@@ -7,6 +7,7 @@ import {companySealDataUrl} from './company-seal';
 import {signaturePhotoBounds} from './signature-image-layout';
 import {signatureSchema,type Signature} from './purchase-orders/signature';
 import type {Verification} from './document-review';
+import {documentVerificationSlots} from './document-review-status';
 import type {CommitteeReport} from './committee-report';
 import type {PaymentListRow} from './membership-payment-list';
 
@@ -91,7 +92,8 @@ export async function gymReportPdf(input:ReportInput){
    if(y<225)start(true);
    y-=34;
    const verified=input.verifications||[];
-   const slots=[{label:'Verified by Fikri',date:verified[0]?.verified_at,signature:verified[0]?.signature},{label:'Verified by Kevin',date:verified[1]?.verified_at,signature:verified[1]?.signature},{label:'Approved by James',date:input.approved_at,signature:input.approved_at?input.signature:undefined}];
+   const [fikri,kevin]=documentVerificationSlots(verified);
+   const slots=[{label:'Verified by Fikri',date:fikri?.verified_at,signature:fikri?.signature},{label:'Verified by Kevin',date:kevin?.verified_at,signature:kevin?.signature},{label:'Approved by James',date:input.approved_at,signature:input.approved_at?input.signature:undefined}];
    const cellWidth=width/3;
    for(const [i,slot] of slots.entries()){
      const x=margin+i*cellWidth,parsed=signatureSchema.safeParse(slot.signature);

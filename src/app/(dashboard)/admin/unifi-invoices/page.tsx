@@ -3,8 +3,9 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { requireRole } from "@/lib/auth";
+import { canReviewDocumentStage, documentReviewerStage } from "@/lib/document-review-status";
 import { listUnifiInvoiceDeliveries } from "@/lib/unifi-invoice-mail";
-import { isUnifiPendingStage, listUnifiInvoices, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { isUnifiPendingStage, listUnifiInvoices, unifiInvoicePath } from "@/lib/unifi-invoices";
 import { getUnifiWebmailConnectionStatus } from "@/lib/unifi-webmail-connection";
 import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "./display";
 import styles from "./unifi-invoices.module.css";
@@ -18,6 +19,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
     listUnifiInvoices().catch(() => null),
     canConnectWebmail ? getUnifiWebmailConnectionStatus().catch(() => null) : null,
   ]);
+  const reviewer = documentReviewerStage(profile.id);
   const approvedIds = invoices?.filter(invoice => invoice.review_stage === "approved").map(invoice => invoice.id) ?? [];
   const deliveries = approvedIds.length ? await listUnifiInvoiceDeliveries(approvedIds).catch(() => null) : null;
   const approved = approvedIds.length;
@@ -40,7 +42,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
               <span className={styles.icon}><FileText size={22} aria-hidden="true" /></span>
               <div>
                 <h2 id="unifi-invoice-list">TM Unifi invoices</h2>
-                <p>New invoices follow Fikri Verify → Kevin Verify → James Approve</p>
+                <p>Fikri and Kevin verify new invoices in either order before James approves.</p>
               </div>
             </div>
             {invoices && <dl className={styles.counts}>
@@ -71,7 +73,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                     const stage = invoice.review_stage;
                     const delivery = deliveries?.get(invoice.id);
                     const reviewPending = isUnifiPendingStage(stage);
-                    const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
+                    const canReview = canReviewDocumentStage(stage, reviewer);
                     const month = formatUnifiBillingMonth(invoice.period);
                     const line = formatUnifiLine(invoice.line_number);
                     return (

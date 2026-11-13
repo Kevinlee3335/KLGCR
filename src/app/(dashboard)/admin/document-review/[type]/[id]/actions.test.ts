@@ -125,9 +125,9 @@ describe("document approval and delivery", () => {
     expect(mocks.push).toHaveBeenCalledWith(id);
   });
 
-  it.each([0, 1])("returns after reviewer %i verifies and sends the phone alert in the background", async (stage) => {
+  it.each([[0, []], [1, []], [0, [entries[1]]], [1, [entries[0]]]] as const)("returns after reviewer %i verifies and schedules the phone alert", async (stage, signatures) => {
     mocks.requireRole.mockResolvedValue({ id: documentReviewers[stage].id });
-    mocks.verification.mockResolvedValue(entries.slice(0, stage));
+    mocks.verification.mockResolvedValue(signatures);
 
     await expect(advanceDocumentReview(form("billing"))).rejects.toThrow("redirect");
 

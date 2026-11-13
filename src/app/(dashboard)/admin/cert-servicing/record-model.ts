@@ -1,7 +1,8 @@
+import { documentReviewerStage } from "@/lib/document-review-status";
 import { malaysiaDate } from "@/lib/monitoring-follow-up";
 import {
   complianceDocumentKinds, complianceDocumentLabels, complianceListPaths, compliancePath, complianceRecordPath,
-  complianceReviewers, type ComplianceDocumentKind,
+  type ComplianceDocumentKind,
 } from "@/lib/compliance-workflow";
 
 export const complianceBase = compliancePath;
@@ -92,6 +93,7 @@ export type ComplianceCycle = {
 };
 
 export const reviewLabels = {
+  verification: "Awaiting Fikri and Kevin Verify",
   fikri: "Awaiting Fikri Verify",
   kevin: "Awaiting Kevin Verify",
   james: "Awaiting James Approve",
@@ -101,11 +103,7 @@ export const reviewLabels = {
 } as const;
 
 export type ReviewStage = keyof typeof reviewLabels;
-export const reviewActionStages = ["fikri", "kevin", "james"] as const;
-
-export function stageForReviewer(userId: string) {
-  return reviewActionStages.find(stage => complianceReviewers[stage].id === userId);
-}
+export const stageForReviewer = documentReviewerStage;
 
 export type ComplianceDocument = {
   id: string;

@@ -10,7 +10,7 @@ import {documentReviewers,documentVerification} from '@/lib/document-review';
 import type {Signature} from '@/lib/purchase-orders/signature';
 import {companySealDataUrl} from '@/lib/company-seal';
 
-import { isDocumentReviewTarget } from '@/lib/document-review-status';
+import { documentReviewStatus, documentVerificationSlots, isDocumentReviewTarget, pendingDocumentReviewers } from '@/lib/document-review-status';
 import { DocumentDeliveryStatus } from '@/components/document-delivery-status';
 import { advanceDocumentReview } from './actions';
 
@@ -45,22 +45,24 @@ export default async function Page({params}:{params:Promise<{type:string;id:stri
  const period='period' in doc?doc.period:doc.month.slice(0,7);
  const gymSnapshot='snapshot' in doc?doc.snapshot:null;
  const money=(n:number|null)=>n==null?'—':Number(n).toLocaleString('en-MY',{style:'currency',currency:'MYR'});
- const next=documentReviewers[entries.length];
- return <AppShell profile={user} title="Document review"><style>{`.report-entries-grid th,.report-entries-grid td{border:1px solid #b8ae96}.report-entries-grid{border-collapse:collapse}`}</style><div className="section-head"><div><p className="eyebrow">{period} · DOCUMENT REVIEW</p><h2>{title}</h2><p className="subtle">Fikri Verify → Kevin Verify → James Approve</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="button secondary" href={'/api/document-review/'+type+'/'+id+'/preview'} target="_blank" rel="noopener noreferrer">{type==='billing'?'Preview Invoice':'Preview Report'}</a><Link className="button secondary" href="/admin">Back to Dashboard</Link></div></div>
- <section className="panel"><h3>{approved?'Approved by James':'Awaiting '+next.name+(entries.length===2?' approval':' verification')}</h3>
+ const pending=pendingDocumentReviewers(entries);
+ const signatures=documentVerificationSlots(entries);
+ const approving=user.id===documentReviewers[2].id;
+ return <AppShell profile={user} title="Document review"><style>{`.report-entries-grid th,.report-entries-grid td{border:1px solid #b8ae96}.report-entries-grid{border-collapse:collapse}`}</style><div className="section-head"><div><p className="eyebrow">{period} · DOCUMENT REVIEW</p><h2>{title}</h2><p className="subtle">Fikri and Kevin verify in either order. James approves after both.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="button secondary" href={'/api/document-review/'+type+'/'+id+'/preview'} target="_blank" rel="noopener noreferrer">{type==='billing'?'Preview Invoice':'Preview Report'}</a><Link className="button secondary" href="/admin">Back to Dashboard</Link></div></div>
+ <section className="panel"><h3>{documentReviewStatus(entries.length,Boolean(approved),entries.map(entry=>entry.user_id))}</h3>
  <div className="table-wrap"><table className="table report-entries-grid">
   <thead><tr><th>Verified by Fikri</th><th>Verified by Kevin</th><th>Approved by James</th></tr></thead>
   <tbody><tr>{[0,1,2].map(i => {
-   const timestamp = i < 2 ? entries[i]?.verified_at : approved?.approved_at;
+   const timestamp = i < 2 ? signatures[i]?.verified_at : approved?.approved_at;
    return <td key={i}>
-    <SignatureImage signature={i < 2 ? entries[i]?.signature : approved?.signature}/>
+    <SignatureImage signature={i < 2 ? signatures[i]?.signature : approved?.signature}/>
     {i === 2 && approved && <img src={companySealDataUrl} alt="Company seal" style={{width:55,height:55,objectFit:'contain'}}/>}
     <div style={{borderTop:"1px solid #555",marginTop:8,maxWidth:210}}/>
     <p className="subtle">{timestamp ? new Date(timestamp).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'})+' MYT' : 'Pending'}</p>
    </td>;
   })}</tr></tbody>
  </table></div>
- {!approved&&next.id===user.id&&<form action={advanceDocumentReview}><input type="hidden" name="type" value={type}/><input type="hidden" name="id" value={id}/><SubmitButton pendingText={entries.length===2?'Approving…':'Verifying…'}>{entries.length===2?'Approve & send to Accounts':'Verify & forward to '+documentReviewers[entries.length+1].name}</SubmitButton></form>}
+ {!approved&&pending.some(reviewer=>reviewer.id===user.id)&&<form action={advanceDocumentReview}><input type="hidden" name="type" value={type}/><input type="hidden" name="id" value={id}/><SubmitButton pendingText={approving?'Approving…':'Verifying…'}>{approving?'Approve & send to Accounts':'Verify'}</SubmitButton></form>}
  {approved && <DocumentDeliveryStatus key={type+':'+id} type={type} id={id} />}
  </section>
  <section className="panel"><h3>Report entries</h3><div className="table-wrap"><table className="table report-entries-grid">

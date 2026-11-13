@@ -9,7 +9,7 @@ import { ensureUtilityMonth } from "./utility-months";
 type BillingClient = Awaited<ReturnType<typeof createClient>>;
 type RunFields = Pick<BillingRunSummary, "id" | "kind" | "period" | "issue_date" | "total">;
 type RunRow = RunFields & { created_at: string; snapshot: BillingSnapshot };
-type VerificationCountRow = { document_id: string; entries: unknown[] | null };
+type VerificationCountRow = { document_id: string; entries: {user_id:string}[] | null };
 
 const runFields = "id,kind,period,issue_date,created_at,total";
 const runDetailFields = "id,kind,period,issue_date,created_at,total,snapshot";
@@ -26,7 +26,7 @@ async function readSettings(db: BillingClient) {
 async function readRunDetails(db: BillingClient, ids: string[], includeVerificationSignatures = false) {
   const approvals = new Map<string, BillingApproval>();
   const mailById = new Map<string, BillingMailState>();
-  const verificationCount = new Map<string, number>();
+  const verifiedBy = new Map<string, string[]>();
   if (ids.length) {
     const [approvalRows, mail, verifications] = await Promise.all([
       db.from("billing_run_approvals").select(includeVerificationSignatures ? `${approvalFields},verifications` : approvalFields).in("run_id", ids),
@@ -39,10 +39,10 @@ async function readRunDetails(db: BillingClient, ids: string[], includeVerificat
     }
     for (const row of (mail.data ?? []) as BillingMailState[]) mailById.set(row.run_id, row);
     for (const row of (verifications.data ?? []) as VerificationCountRow[]) {
-      verificationCount.set(row.document_id, row.entries?.length ?? 0);
+      verifiedBy.set(row.document_id, row.entries?.map(entry => entry.user_id) ?? []);
     }
   }
-  return { approvals, mailById, verificationCount };
+  return { approvals, mailById, verifiedBy };
 }
 
 function summarizeRun(row: RunFields, details: Awaited<ReturnType<typeof readRunDetails>>): BillingRunSummary {
@@ -52,7 +52,8 @@ function summarizeRun(row: RunFields, details: Awaited<ReturnType<typeof readRun
     period: row.period,
     issue_date: row.issue_date,
     total: row.total,
-    verifiedCount: details.verificationCount.get(row.id) ?? 0,
+    verifiedCount: details.verifiedBy.get(row.id)?.length ?? 0,
+    verifiedBy: details.verifiedBy.get(row.id) ?? [],
     approved: validBillingApproval(details.approvals.get(row.id)) !== null,
     mail: details.mailById.get(row.id) ?? null,
   };
@@ -134,7 +135,7 @@ export async function loadBillingPreviewData(photosLoaded = false) {
   const details = await readRunDetails(db, runs.map(row => row.id), true);
   const signedRuns = runs.map(row => ({
     ...row,
-    verifiedCount: details.verificationCount.get(row.id) ?? 0,
+    verifiedCount: details.verifiedBy.get(row.id)?.length ?? 0,
     mail: details.mailById.get(row.id) ?? null,
     snapshot: withBillingApproval(row.snapshot, details.approvals.get(row.id)),
   }));

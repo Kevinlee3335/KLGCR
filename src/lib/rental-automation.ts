@@ -8,7 +8,7 @@ export function automaticRentalDecision(config:BillingConfig,clock:{date:string;
  return scheduleDecision({...config,holidays,reviewedUntil:year+'-12-31'},clock);
 }
 
-// A saved monthly pack enters the normal Fikri -> Kevin -> James review queue.
+// A saved monthly pack enters the document review queue for Fikri and Kevin.
 // The unique (kind, period) constraint makes concurrent cron/dashboard retries safe.
 export async function ensureDueRentalInvoice(clock=malaysiaClock()){
  const db=createAdminClient();
