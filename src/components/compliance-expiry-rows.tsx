@@ -18,6 +18,7 @@ export type ExpiryFollowUp = {
 };
 
 const previewCount = 3;
+const foggingPosition = 5;
 const typeLabels = { certificate_license: "Cert & License", servicing: "Servicing", agreement: "Agreement" };
 const dateFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
 
@@ -32,8 +33,13 @@ function expiryLabel({ stage, days_remaining: days }: ExpiryFollowUp) {
 export function ComplianceExpiryRows({ records }: { records: ExpiryFollowUp[] }) {
   const [expanded, setExpanded] = useState(false);
   const rowsId = useId();
-  const visibleRecords = expanded ? records : records.slice(0, previewCount);
-  const moreCount = records.length - previewCount;
+  const foggingRecords = records.filter(record => record.title.trim().toLowerCase() === "fogging activity");
+  const otherRecords = records.filter(record => !foggingRecords.includes(record));
+  const previewRecords = otherRecords.slice(0, previewCount);
+  const visibleRecords = expanded
+    ? [...otherRecords.slice(0, foggingPosition - 1), ...foggingRecords, ...otherRecords.slice(foggingPosition - 1)]
+    : previewRecords;
+  const moreCount = records.length - previewRecords.length;
   const ToggleIcon = expanded ? ChevronUp : ChevronDown;
 
   return <>
