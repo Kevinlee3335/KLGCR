@@ -38,7 +38,13 @@ function fixture() {
   latest['!rows'] = [...Array(5).fill({}), { hidden: true }];
   utils.book_append_sheet(workbook, utils.aoa_to_sheet(rows), 'CERT & LICENSE (01102026)');
   utils.book_append_sheet(workbook, latest, 'CERT & LICENSE (12112026)');
-  utils.book_append_sheet(workbook, utils.aoa_to_sheet(rows), 'SERVICING (12112026)');
+  const servicing = utils.aoa_to_sheet([
+    ...rows,
+    [4, 'Yearly Services of Standby Genset', 'C.S Machinery'],
+    [null, '1st Inspection', null, '01/04/2026', 'First inspection note'],
+    [null, '2nd Inspection', null, '01/08/2026', 'Second inspection note'],
+  ]);
+  utils.book_append_sheet(workbook, servicing, 'SERVICING (12112026)');
   utils.book_append_sheet(workbook, utils.aoa_to_sheet(rows), 'AGREEMENT RENEWAL');
   workbook.Workbook = { Names: [
     { Name: '_xlnm.Print_Area', Sheet: 1, Ref: "'CERT & LICENSE (12112026)'!$A$1:$F$6" },
@@ -101,5 +107,19 @@ describe('compliance Excel print', () => {
       { title: live.title, template_row: 4, next_due_date: '2026-10-01', notes: 'Prior period' },
       { title: live.title, template_row: 6, next_due_date: '2027-10-02', notes: 'Current period' },
     ]);
+  });
+
+  it('matches the renamed standby genset to the exact servicing period under the original workbook heading', () => {
+    const result = buildCompliancePrint(fixture(), 'servicing', [{
+      title: 'Service of Standby Genset',
+      next_due_date: '2026-08-01',
+      notes: 'Updated second inspection note',
+      template_row: null,
+    }]);
+    expect(result.unmapped).toEqual([]);
+    const sheet = read(result.bytes, { type: 'buffer' }).Sheets[result.sheetName];
+    expect(sheet.B7.v).toBe('Yearly Services of Standby Genset');
+    expect(sheet.E8.v).toBe('First inspection note');
+    expect(sheet.E9.v).toBe('Updated second inspection note');
   });
 });

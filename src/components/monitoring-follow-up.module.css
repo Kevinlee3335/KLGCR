@@ -14,6 +14,10 @@
   outline-offset: -2px;
 }
 
+.expandFooter {
+  justify-content: center;
+}
+
 @media (max-width: 600px) {
   .mobileRows {
     display: block;
