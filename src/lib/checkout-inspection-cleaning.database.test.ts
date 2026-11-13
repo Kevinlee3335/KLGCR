@@ -22,7 +22,7 @@ it('routes a cleaner-reported defect through maintenance and completes cleaning 
  grant usage on schema public,storage,auth to authenticated;grant select,insert,update on all tables in schema public to authenticated;grant select,insert on storage.objects to authenticated;`);
  await db.exec(readFileSync('supabase/migrations/20261030033750_checkout_room_inspection_and_bulk_assign.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261105140000_checkout_inspection_and_cleaning.sql','utf8'));
- await db.exec(readFileSync('supabase/migrations/20261113071638_checkout_cleaner_report_defect.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261113083812_checkout_cleaner_report_defect.sql','utf8'));
  await db.exec("set role authenticated;set app.uid='00000000-0000-4000-8000-000000000001'");
  const room='00000000-0000-4000-8000-000000000010';
  await db.query("select submit_ab_checkout_inspection($1,'A','987',2,'test','{}',$2::jsonb)",[room,JSON.stringify([{description:'Window handle broken',photos:[]}])]);
