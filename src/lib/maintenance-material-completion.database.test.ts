@@ -93,7 +93,7 @@ beforeAll(async () => {
     "20261003045000_maintenance_team_report_visibility",
     "20261029030124_material_request_additional_items",
     "20261029041959_material_request_item_approval",
-    "20261113045638_maintenance_material_completion_approval",
+    "20261113050433_maintenance_material_completion_approval",
   ]) {
     await db.exec(migration(name));
   }
