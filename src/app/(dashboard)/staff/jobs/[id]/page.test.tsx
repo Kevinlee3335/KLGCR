@@ -6,8 +6,8 @@ vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: 
 vi.mock("@/components/job-workflow-actions", () => ({ JobWorkflowActions: () => null }));
 
 function query(result: unknown) {
-  const builder = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), single: vi.fn(), not: vi.fn(), limit: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
-  for (const method of ["select", "eq", "order", "single", "not", "limit"] as const) builder[method].mockReturnValue(builder);
+  const builder = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), single: vi.fn(), not: vi.fn(), limit: vi.fn(), like: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
+  for (const method of ["select", "eq", "order", "single", "not", "limit", "like"] as const) builder[method].mockReturnValue(builder);
   return builder;
 }
 
@@ -32,6 +32,7 @@ describe("Staff Job Detail", () => {
     queries.set("maintenance_jobs", query({ data: job, error: null }));
     queries.set("material_requests", query({ data: [], error: null }));
     queries.set("appointments", query({ data: [], error: null }));
+    queries.set("job_status_history", query({ data: [], error: null }));
   });
 
   it("shows complaint reporter data without exposing email", async () => {
@@ -54,5 +55,16 @@ describe("Staff Job Detail", () => {
     queries.set("maintenance_jobs", query({ data: { ...job, complaint: { ...job.complaint, reporter_name: null, reporter_phone: null, complainant_name: null, complainant_contact: null, availability_date: null, availability_time: null, room_access_permission: null } }, error: null }));
     const html = renderToStaticMarkup(await StaffJob({ params: Promise.resolve({ id: job.id }), searchParams: Promise.resolve({}) }));
     expect(html).toContain("Reporter Information"); expect(html).not.toContain("Maintenance Appointment");
+  });
+
+  it("shows the recorded Admin follow-up status, full remark and Malaysia timestamp", async () => {
+    const history = query({ data: [{ id: 3, new_status: "in_progress", note: "Admin follow-up: Resident reported the seal is still leaking.", created_at: "2026-10-16T06:14:35Z" }], error: null });
+    queries.set("job_status_history", history);
+    const html = renderToStaticMarkup(await StaffJob({ params: Promise.resolve({ id: job.id }), searchParams: Promise.resolve({}) }));
+    expect(html).toContain("Admin follow-up: Resident reported the seal is still leaking.");
+    expect(html).toContain("In Progress");
+    expect(html).toMatch(/16 Oct 2026 · 02:14:35\s*pm MYT/i);
+    expect(history.eq).toHaveBeenCalledWith("job_id", job.id);
+    expect(history.like).toHaveBeenCalledWith("note", "Admin follow-up: %");
   });
 });
