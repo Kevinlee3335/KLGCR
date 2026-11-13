@@ -206,6 +206,19 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
   background: var(--follow-up-control-hover) !important;
   border-color: #bfa15b !important;
 }
+.checkout-controls .content :is(.button, .button-link, .button-secondary, .secondary-button):not(.danger, .button-danger, .danger-button, .delete-calendar-event),
+.checkout-controls .content .painting-update[open] > summary {
+  background: #fff9eb !important;
+  color: #624919 !important;
+  border-color: #c9ad70 !important;
+  box-shadow: none;
+}
+
+.checkout-controls .content :is(.button, .button-link, .button-secondary, .secondary-button):not(.danger, .button-danger, .danger-button, .delete-calendar-event):hover:not(:disabled),
+.checkout-controls .content .painting-update[open] > summary:hover {
+  background: #f1e3bf !important;
+}
+
 :is(.button.danger, .button-danger, .delete-calendar-event) {
   background: #fff8f7 !important;
   color: var(--premium-danger) !important;
@@ -387,4 +400,8 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
     margin-top: 10px;
     font-size: 1.7rem;
   }
+}
+
+.checkout-controls {
+  display: contents;
 }

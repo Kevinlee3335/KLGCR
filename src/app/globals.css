@@ -3956,14 +3956,6 @@ button.calendar-item {
 
 .checkout-overview .button {
   min-height: 44px;
-  background: #fff9eb;
-  color: #624919;
-  box-shadow: none;
-}
-
-.checkout-overview .button:hover:not(:disabled) {
-  background: #f1e3bf;
-  color: #624919;
 }
 
 .checkout-overview-actions .button {
