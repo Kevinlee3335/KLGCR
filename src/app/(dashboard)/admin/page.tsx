@@ -9,6 +9,7 @@ import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
 import { PaymentMailFollowUp } from "@/components/payment-mail-follow-up";
 import { PoApprovalQueue } from "@/components/po-approval-queue";
 import { SupplierMailSummary } from "@/components/supplier-mail-summary";
+import { UnifiInvoiceFollowUp } from "@/components/unifi-invoice-follow-up";
 import { UnifiReviewFollowUp } from "@/components/unifi-review-follow-up";
 import { loadAdminDashboardWorkload } from "@/lib/admin-dashboard-workload";
 import { unresolvedTenantNoShows, type TenantNoShowNotification } from "@/lib/admin-notifications";
@@ -186,6 +187,7 @@ export default async function AdminPage() {
     <Suspense fallback={null}><DocumentReviewQueue userId={profile.id}/></Suspense>
     {isAdmin && <Suspense fallback={null}><ComplianceReviewFollowUp userId={profile.id}/></Suspense>}
     {isAdmin && <Suspense fallback={null}><UnifiReviewFollowUp userId={profile.id}/></Suspense>}
+    {isAdmin && <Suspense fallback={null}><UnifiInvoiceFollowUp/></Suspense>}
     <Suspense fallback={null}><SupplierMailSummary/></Suspense>
     <Suspense fallback={<DashboardSummaryLoading/>}>
       <DashboardContent name={profile.full_name} summary={summary}>
