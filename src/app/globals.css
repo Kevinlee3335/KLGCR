@@ -3956,6 +3956,14 @@ button.calendar-item {
 
 .checkout-overview .button {
   min-height: 44px;
+  background: #fff9eb;
+  color: #624919;
+  box-shadow: none;
+}
+
+.checkout-overview .button:hover:not(:disabled) {
+  background: #f1e3bf;
+  color: #624919;
 }
 
 .checkout-overview-actions .button {
@@ -3965,16 +3973,6 @@ button.calendar-item {
   gap: 8px;
   padding: 10px 16px;
   text-align: center;
-}
-
-.checkout-overview .button:is(.secondary, .button-secondary) {
-  background: #fff9eb;
-  color: #624919;
-  box-shadow: none;
-}
-
-.checkout-overview .button:is(.secondary, .button-secondary):hover:not(:disabled) {
-  background: #f1e3bf;
 }
 
 @media (max-width: 600px) {
