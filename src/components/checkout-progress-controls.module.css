@@ -60,9 +60,9 @@
 }
 
 .blocks button[aria-pressed="true"] {
-  border-color: #b79950;
-  background: linear-gradient(135deg, #29251c, #101111);
-  color: #f6df9d;
+  border-color: #a17c33;
+  background: #ebd4a1;
+  color: #624919;
 }
 
 .field {
@@ -109,8 +109,8 @@
   min-height: 44px;
   border-color: #b79950;
   border-radius: 9px;
-  background: linear-gradient(135deg, #29251c, #101111);
-  color: #f6df9d;
+  background: #fff9eb;
+  color: #624919;
   font-size: 13px;
   cursor: pointer;
   white-space: normal;
@@ -118,8 +118,8 @@
 }
 
 .toolbar .assignButton:hover:not(:disabled) {
-  background: linear-gradient(135deg, #403521, #191919);
-  color: #fff0bc;
+  background: #f1e3bf;
+  color: #624919;
 }
 
 .toolbar .assignButton:disabled {
