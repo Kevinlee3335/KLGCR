@@ -2,6 +2,12 @@ export function malaysiaDate(value: Date | string = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
 }
 
+export function monitoringReviewCutoff(today: string) {
+  const tomorrow = new Date(`${today}T00:00:00+08:00`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  return tomorrow.toISOString();
+}
+
 export function monitoringDueLabel(reviewAt: string | null, today: string) {
   if (!reviewAt) return "Review date required";
   const date = malaysiaDate(reviewAt);

@@ -2,7 +2,7 @@ import { ArrowUpRight, Clock3 } from "lucide-react";
 import styles from "./monitoring-follow-up.module.css";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { malaysiaDate, monitoringDueLabel } from "@/lib/monitoring-follow-up";
+import { malaysiaDate, monitoringDueLabel, monitoringReviewCutoff } from "@/lib/monitoring-follow-up";
 
 type MonitoringJob = {
   id: string; job_no: string; room_no: string; description: string;
@@ -14,12 +14,10 @@ export async function MonitoringFollowUp() {
   const db = await createClient();
   const today = malaysiaDate();
   // Include the whole local calendar day, even when the review time is later today.
-  const tomorrow = new Date(`${today}T00:00:00+08:00`);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const { data, error } = await db.from("maintenance_jobs")
     .select("id,job_no,room_no,description,monitoring_note,monitoring_review_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)")
     .eq("status", "under_monitoring")
-    .or(`monitoring_review_at.lt.${tomorrow.toISOString()},monitoring_review_at.is.null`)
+    .or(`monitoring_review_at.lt.${monitoringReviewCutoff(today)},monitoring_review_at.is.null`)
     .order("monitoring_review_at", { ascending: true, nullsFirst: true });
   const jobs = (data ?? []) as unknown as MonitoringJob[];
   if (!error && jobs.length === 0) return null;
