@@ -15,7 +15,7 @@ const defectOptions: { area: string; items: [string, string[]][] }[] = [
 type Entry = { area: string; item: string; issue: string; other: string };
 const blank = (): Entry => ({ area: "Room", item: "", issue: "", other: "" });
 
-export function CheckoutDefectPicker({ name, required = false }: { name: string; required?: boolean }) {
+export function CheckoutDefectPicker({ name, required = false, allowNoDefect = required }: { name: string; required?: boolean; allowNoDefect?: boolean }) {
   const [noDefect, setNoDefect] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([blank()]);
   const update = (index: number, values: Partial<Entry>) => setEntries((current) => current.map((entry, i) => i === index ? { ...entry, ...values } : entry));
@@ -24,21 +24,21 @@ export function CheckoutDefectPicker({ name, required = false }: { name: string;
     .map((entry) => ({ description: entry.item === "Other" || entry.issue === "Other" ? entry.other.trim() : entry.area + " · " + entry.item + " · " + entry.issue }));
   return <div className="checkout-defect-picker">
     <input type="hidden" name={name} value={JSON.stringify(noDefect ? [{description:"No Defect"}] : validEntries)} required={required} />
-    {required && <label><input type="checkbox" checked={noDefect} onChange={e=>setNoDefect(e.target.checked)}/> No Defect — skip maintenance; select a cleaner next</label>}
+    {allowNoDefect && <label><input type="checkbox" checked={noDefect} onChange={e=>setNoDefect(e.target.checked)}/> No Defect — skip maintenance; select a cleaner next</label>}
     {!noDefect && entries.map((entry, index) => {
       const area = defectOptions.find((option) => option.area === entry.area) || defectOptions[0];
       const item = area.items.find(([label]) => label === entry.item);
       const needsOther = entry.item === "Other" || entry.issue === "Other";
       return <fieldset key={index} className="defect-picker-row">
         <legend>Defect {index + 1}</legend>
-        <select value={entry.area} onChange={(event) => update(index, { area: event.target.value, item: "", issue: "", other: "" })}>
+        <select aria-label="Defect area" value={entry.area} onChange={(event) => update(index, { area: event.target.value, item: "", issue: "", other: "" })}>
           {areaOptions.map((value) => <option key={value} value={value}>{value}</option>)}
         </select>
-        <select value={entry.item} onChange={(event) => update(index, { item: event.target.value, issue: "", other: "" })} required={required}>
+        <select aria-label="Defect item" value={entry.item} onChange={(event) => update(index, { item: event.target.value, issue: "", other: "" })} required={required}>
           <option value="">Select defect item</option>
           {area.items.map(([label]) => <option key={label} value={label}>{label}</option>)}
         </select>
-        <select value={entry.issue} onChange={(event) => update(index, { issue: event.target.value, other: "" })} required={required} disabled={!item}>
+        <select aria-label="Defect issue" value={entry.issue} onChange={(event) => update(index, { issue: event.target.value, other: "" })} required={required} disabled={!item}>
           <option value="">Select issue</option>
           {item?.[1].map((value) => <option key={value} value={value}>{value}</option>)}
         </select>

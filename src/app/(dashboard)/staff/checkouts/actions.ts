@@ -2,6 +2,7 @@
 import { MAX_EVIDENCE_PHOTOS, EVIDENCE_TYPES, MAX_EVIDENCE_BYTES, validateEvidenceFiles } from "@/lib/photo-limits";
 import { signCheckoutPhotoUploads } from "@/lib/checkout-photo-uploads";
 import { checkoutProgress,isRepairDefect } from "@/lib/checkouts";
+import { z } from "zod";
 import { revalidatePath } from "next/cache";import { redirect } from "next/navigation";import { requireRole } from "@/lib/auth";import { createAppNotifications, notifyActiveAdmins } from "@/lib/app-notifications";import { createClient } from "@/lib/supabase/server";
 function go(id:string,e?:string):never {return redirect(`/staff/checkouts/${id}${e?`?error=${encodeURIComponent(e)}`:""}`)}
 async function photo(db:Awaited<ReturnType<typeof createClient>>,id:string,user:string,file:File,kind:"completion"|"cleaning",defectId?:string){if(!file.size)throw new Error("Upload at least one completion photo.");if(file.size>10485760||!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("Use a JPG, PNG or WebP photo up to 10 MB.");const path=`${id}/${kind}/${crypto.randomUUID()}.${file.name.split(".").pop()||"jpg"}`;const up=await db.storage.from("checkout-evidence").upload(path,file,{contentType:file.type});if(up.error)throw up.error;const row=await db.from("checkout_photos").insert({checkout_room_id:id,defect_id:defectId||null,kind,storage_path:path,uploaded_by:user});if(row.error)throw row.error;}
@@ -32,6 +33,49 @@ export async function completeCleaning(id:string,data:FormData){
  if(error||!room)go(id,error?.message||"Room is no longer awaiting cleaning.");
  try{await notifyActiveAdmins({type:"checkout_completed",title:"Room ready for occupancy",body:`${room.reference_no||"Check-out room"} — Room ${room.room_no} is ready for occupancy.`,href:`/admin/checkouts/${id}`,entityId:id});}catch(error){console.error("Unable to notify administrators",error);}
  revalidatePath(`/staff/checkouts/${id}`);revalidatePath("/staff/checkouts");revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/admin/checkouts");go(id);
+}
+
+
+const reportedDefects = z.array(z.object({
+ description: z.string().trim().min(1).max(2000).refine(description => isRepairDefect({ description })),
+})).min(1).max(20);
+
+export async function reportCleaningDefects(id: string, data: FormData) {
+ await requireRole(["cleaner"]);
+ let payload: unknown;
+ try {
+  payload = JSON.parse(String(data.get("cleanerDefects") || "[]"));
+ } catch {
+  go(id, "Select the defects again and retry.");
+ }
+ const defects = reportedDefects.safeParse(payload);
+ if (!defects.success) go(id, "Select 1 to 20 valid defects to report.");
+
+ const db = await createClient();
+ const { data: room, error } = await db.rpc("report_checkout_cleaning_defects", {
+  p_room: id,
+  p_descriptions: defects.data.map(defect => defect.description),
+ });
+ if (error || !room) go(id, error?.message || "Unable to report the defects. Please try again.");
+
+ try {
+  await notifyActiveAdmins({
+   type: "checkout_assigned",
+   title: "Cleaner reported a check-out room defect",
+   body: `${room.reference_no} · Room ${room.room_no} is awaiting maintenance assignment.`,
+   href: `/admin/checkouts/${id}`,
+   entityId: id,
+   deferPush: true,
+  });
+ } catch (error) {
+  console.error("Unable to notify administrators about cleaning defects", error);
+ }
+
+ revalidatePath("/staff/checkouts");
+ revalidatePath(`/staff/checkouts/${id}`);
+ revalidatePath("/admin/checkouts");
+ revalidatePath(`/admin/checkouts/${id}`);
+ redirect("/staff/checkouts?defectReported=1");
 }
 
 

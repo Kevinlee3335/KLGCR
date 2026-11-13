@@ -18,13 +18,96 @@ async function upload(db:Awaited<ReturnType<typeof createClient>>, roomId:string
  const saved=await db.from("checkout_photos").insert({checkout_room_id:roomId,defect_id:defectId||null,kind,storage_path:path,uploaded_by:actor}); if(saved.error)throw saved.error; return path;
 }
 export async function createCheckout(data:FormData){const actor=await requireRole(["admin"]);const db=await createClient();const block=String(data.get("block"));const room=String(data.get("room")||"").trim();const selectedDefects=pickedDefects(data.get("checkoutDefects"));const legacyDefects=String(data.get("defects")||"").trim();const defects=selectedDefects.length?selectedDefects.join("\n"):legacyDefects;if(!block||!room||!defects)redirect("/admin/checkouts?error=Block%2C+room+and+UTMSPACE+defects+are+required");const {data:r,error}=await db.from("checkout_rooms").insert({block_id:Number(block),room_no:room,utmspace_defects:defects,created_by:actor.id}).select("id").single();if(error||!r)redirect(`/admin/checkouts?error=${encodeURIComponent(error?.message||"Unable to create record")}`);const rows=defects.split(/\n+/).map(x=>x.replace(/^[-•\d.)\s]+/,"").trim()).filter(Boolean).map(description=>({checkout_room_id:r.id,description,source:"utmspace",created_by:actor.id}));const result=await db.from("checkout_defects").insert(rows);if(result.error)go(r.id,result.error.message);await history(db,r.id,actor.id,"record_created","UTMSPACE check-out defects imported",undefined,"second_inspection");revalidatePath("/admin/checkouts");go(r.id);}
-export async function completeInspection(id:string,data:FormData){const actor=await requireRole(["admin"]);const db=await createClient();const {data:inspectionRoom}=await db.from("checkout_rooms").select("id").is("deleted_at",null).is("deleted_at",null).eq("id",id).eq("status","second_inspection").maybeSingle();if(!inspectionRoom)go(id,"Room is no longer awaiting inspection.");const notes=String(data.get("notes")||"").trim();const selectedDefects=pickedDefects(data.get("newDefects"));const extra=String(data.get("newDefect")||"").trim();const assignee=String(data.get("assignee")||"");if(!assignee)go(id,"Assign maintenance staff before sending for rectification.");const {data:validAssignee}=await db.from("profiles").select("id").eq("id",assignee).eq("role","maintenance_staff").eq("is_active",true).is("deleted_at",null).maybeSingle();if(!validAssignee)go(id,"Select an active maintenance staff member.");const newDefects=selectedDefects.length?selectedDefects:(extra?[extra]:[]);if(newDefects.length){const x=await db.from("checkout_defects").insert(newDefects.map(description=>({checkout_room_id:id,description,source:"second_inspection",created_by:actor.id})));if(x.error)go(id,x.error.message);}try{const paths=data.getAll("photoPaths");if(paths.length){
- const prefix=id+"/inspection/";
- if(paths.length>20||new Set(paths).size!==paths.length||paths.some(p=>typeof p!=="string"||!p.startsWith(prefix)||!/^[0-9a-f-]{36}\.(jpg|png|webp)$/i.test(p.slice(prefix.length))))throw new Error("Attach up to 20 valid inspection photos.");
- const {data:objects,error:photoError}=await db.storage.from("checkout-evidence").list(id+"/inspection",{limit:1000});
- if(photoError||paths.some(p=>!objects?.some(o=>o.name===String(p).slice(prefix.length)&&Number(o.metadata?.size)>0)))throw new Error("Photo upload is incomplete. Retry before completing inspection.");
- const result=await db.from("checkout_photos").insert(paths.map(storage_path=>({checkout_room_id:id,kind:"inspection",storage_path,uploaded_by:actor.id})));if(result.error)throw result.error;
- }else{const files=data.getAll("photos").filter((f):f is File=>f instanceof File&&f.size>0);if(files.length>20)throw new Error("Maximum 20 inspection photos.");for(const f of files)await upload(db,id,actor.id,f,"inspection");}}catch(e){go(id,e instanceof Error?e.message:"Photo upload failed");}const u=await db.from("checkout_rooms").update({inspection_notes:notes||null,assigned_to:assignee,status:"rectification"}).is("deleted_at",null).eq("id",id).eq("status","second_inspection").select("id").maybeSingle();if(u.error||!u.data)go(id,u.error?.message||"Room is no longer awaiting inspection.");await history(db,id,actor.id,"inspection_completed",notes,"second_inspection","rectification");revalidatePath(`/admin/checkouts/${id}`);go(id);}
+export async function completeInspection(id: string, data: FormData) {
+ return assignCheckoutForRepair(id, data, true);
+}
+
+export async function assignCleanerReportedCheckout(id: string, data: FormData) {
+ return assignCheckoutForRepair(id, data, false);
+}
+
+async function assignCheckoutForRepair(id: string, data: FormData, includesInspection: boolean) {
+ const actor = await requireRole(["admin"]);
+ const db = await createClient();
+ const { data: room } = await db.from("checkout_rooms")
+  .select("id,reference_no,room_no").is("deleted_at", null).eq("id", id).eq("status", "second_inspection").maybeSingle();
+ if (!room) go(id, "Room is no longer awaiting maintenance assignment.");
+
+ const assignee = String(data.get("assignee") || "");
+ if (!assignee) go(id, "Assign maintenance staff before sending for rectification.");
+ const { data: validAssignee } = await db.from("profiles").select("id").eq("id", assignee)
+  .eq("role", "maintenance_staff").eq("is_active", true).is("deleted_at", null).maybeSingle();
+ if (!validAssignee) go(id, "Select an active maintenance staff member.");
+
+ const notes = includesInspection ? String(data.get("notes") || "").trim() : "";
+ if (includesInspection) {
+  const selected = pickedDefects(data.get("newDefects"));
+  const extra = String(data.get("newDefect") || "").trim();
+  const newDefects = selected.length ? selected : extra ? [extra] : [];
+  if (newDefects.length) {
+   const { error } = await db.from("checkout_defects").insert(newDefects.map(description => ({
+    checkout_room_id: id, description, source: "second_inspection", created_by: actor.id,
+   })));
+   if (error) go(id, error.message);
+  }
+  try {
+   const paths = data.getAll("photoPaths");
+   if (paths.length) {
+    const prefix = id + "/inspection/";
+    if (paths.length > 20 || new Set(paths).size !== paths.length || paths.some(
+     p => typeof p !== "string" || !p.startsWith(prefix) || !/^[0-9a-f-]{36}\.(jpg|png|webp)$/i.test(p.slice(prefix.length)),
+    )) throw new Error("Attach up to 20 valid inspection photos.");
+    const { data: objects, error: photoError } = await db.storage.from("checkout-evidence").list(id + "/inspection", { limit: 1000 });
+    if (photoError || paths.some(p => !objects?.some(o => o.name === String(p).slice(prefix.length) && Number(o.metadata?.size) > 0))) {
+     throw new Error("Photo upload is incomplete. Retry before completing inspection.");
+    }
+    const { error } = await db.from("checkout_photos").insert(paths.map(storage_path => ({
+     checkout_room_id: id, kind: "inspection", storage_path, uploaded_by: actor.id,
+    })));
+    if (error) throw error;
+   } else {
+    const files = data.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+    if (files.length > 20) throw new Error("Maximum 20 inspection photos.");
+    for (const file of files) await upload(db, id, actor.id, file, "inspection");
+   }
+  } catch (error) {
+   go(id, error instanceof Error ? error.message : "Photo upload failed");
+  }
+ } else {
+  const { data: defect, error } = await db.from("checkout_defects").select("id")
+   .eq("checkout_room_id", id).eq("source", "cleaner").eq("status", "open").limit(1).maybeSingle();
+  if (error || !defect) go(id, error?.message || "This room has no open cleaner-reported defects.");
+ }
+
+ const { data: assigned, error } = await db.from("checkout_rooms").update({
+  ...(includesInspection ? { inspection_notes: notes || null } : {}),
+  assigned_to: assignee,
+  status: "rectification",
+ }).is("deleted_at", null).eq("id", id).eq("status", "second_inspection").select("id").maybeSingle();
+ if (error || !assigned) go(id, error?.message || "Room is no longer awaiting maintenance assignment.");
+
+ await history(db, id, actor.id, includesInspection ? "inspection_completed" : "maintenance_assigned",
+  notes, "second_inspection", "rectification");
+ if (!includesInspection) {
+  try {
+   await createAppNotifications({
+    recipientIds: [assignee],
+    type: "checkout_assigned",
+    title: "New check-out room for rectification",
+    body: `${room.reference_no} · Room ${room.room_no} was assigned to you after a cleaner reported a defect.`,
+    href: `/staff/checkouts/${id}`,
+    entityId: id,
+    deferPush: true,
+   });
+  } catch (error) {
+   console.error("Unable to notify maintenance about the check-out room", error);
+  }
+  revalidatePath("/staff/checkouts");
+  revalidatePath("/admin/checkouts");
+ }
+ revalidatePath(`/admin/checkouts/${id}`);
+ go(id);
+}
 export async function handToCleaning(id:string,data:FormData){const actor=await requireRole(["admin"]);if(!["mary","fikri"].includes(actor.username)&&!actor.is_super_admin)go(id,"Cleaner assignment is handled by Mary, Fikri or Super Admin.");const cleaner=String(data.get("cleaner")||"");if(!cleaner)go(id,"Select a Cleaner / Housekeeping user.");const db=await createClient();const {data:room,error:roomError}=await db.from("checkout_rooms").select("reference_no,room_no,utmspace_defects,status,cleaner_id,defects:checkout_defects(description,status)").is("deleted_at",null).is("deleted_at",null).eq("id",id).single();if(roomError||!room)go(id,roomError?.message||"Check-out room not found.");const progress=checkoutProgress(room.defects||[]);if(room.cleaner_id||!((room.status==="second_inspection"&&progress.total===0&&!isRepairDefect({description:room.utmspace_defects}))||(room.status==="verification"&&progress.remaining===0)))go(id,"Room is not ready for housekeeping.");const {data:validCleaner}=await db.from("profiles").select("id").eq("id",cleaner).eq("role","cleaner").eq("is_active",true).maybeSingle();if(!validCleaner)go(id,"Select an active cleaner.");const roomInfo=room as {reference_no:string|null;room_no:string};const u=await db.from("checkout_rooms").update({cleaner_id:cleaner,status:"cleaning"}).is("deleted_at",null).eq("id",id).eq("status",room.status).is("cleaner_id",null).select("id").maybeSingle();if(u.error||!u.data)go(id,u.error?.message||"Room stage changed. Refresh and try again.");await history(db,id,actor.id,"handed_to_housekeeping",undefined,room.status,"cleaning");try{await createAppNotifications({recipientIds:[cleaner],type:"checkout_assigned",title:"New check-out room for cleaning",body:`${roomInfo.reference_no||"Check-out room"} — Room ${roomInfo.room_no} is ready for cleaning.`,href:`/staff/checkouts/${id}`,entityId:id});}catch(error){console.error("Unable to notify cleaner about check-out room",error);}revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/staff/checkouts");go(id);}
 export async function markReady(id:string,data:FormData){const pax=Number(data.get("pax"));if(!Number.isInteger(pax)||pax<1||pax>20)go(id,"Enter a room capacity between 1 and 20 pax.");const actor=await requireRole(["admin"]);const notes=String(data.get("notes")||"");const db=await createClient();const {data:readyDefects,error:readyError}=await db.from("checkout_defects").select("description,status").eq("checkout_room_id",id);if(readyError)go(id,readyError.message);if(checkoutProgress(readyDefects||[]).remaining)go(id,"Complete all repair defects before final verification.");const u=await db.from("checkout_rooms").update({status:"ready_for_occupancy",occupancy_pax:pax,ready_at:new Date().toISOString()}).is("deleted_at",null).eq("id",id).eq("status","verification").not("cleaner_id","is",null).select("id").maybeSingle();if(u.error||!u.data)go(id,u.error?.message||"Room is not awaiting final verification.");await history(db,id,actor.id,"room_verified_ready",notes,"verification","ready_for_occupancy");revalidatePath(`/admin/checkouts/${id}`);go(id);}
 export type BatchCheckoutInput={blockId:number;roomNo:string;defects:string[]};

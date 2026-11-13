@@ -8,9 +8,9 @@ vi.mock("@/lib/app-notifications",()=>({createAppNotifications:state.notificatio
 vi.mock("@/lib/supabase/server",()=>({createClient:async()=>({rpc:async(name:string,args:{p_room:string})=>{if(name!=="complete_checkout_cleaning")throw new Error("Unexpected RPC");const r=state.tables.checkout_rooms.find(r=>r.id===args.p_room&&r.cleaner_id===state.actor.id&&r.status==="cleaning");if(!r)return {data:null,error:{message:"Room is no longer assigned"}};r.status="ready_for_occupancy";r.ready_at="now";state.tables.checkout_history.push({checkout_room_id:r.id,actor_id:state.actor.id,action:"cleaning_completed",from_status:"cleaning",to_status:"ready_for_occupancy"});return {data:r,error:null}},storage:{from:()=>({upload:async()=>({error:null}),list:async()=>({data:state.objects,error:null})})},from:(table:string)=>{
  const rows=state.tables[table]||[],filters:((r:any)=>boolean)[]=[];let patch:any=null,insert:any=null;
  const result=()=>{if(insert){state.tables[table]??=[];state.tables[table].push(...(Array.isArray(insert)?insert:[insert]));return {data:null,error:null}}const matches=rows.filter(r=>filters.every(f=>f(r)));if(patch)matches.forEach(r=>Object.assign(r,patch));return {data:matches.map(r=>table==="checkout_rooms"?{...r,defects:state.tables.checkout_defects.filter(d=>d.checkout_room_id===r.id)}:r),error:null}};
- const q:any={select:()=>q,or:()=>q,update:(p:any)=>{patch=p;return q},insert:(p:any)=>{insert=p;return q},eq:(k:string,v:any)=>{filters.push(r=>r[k]===v);return q},is:(k:string,v:any)=>{filters.push(r=>r[k]===v);return q},not:(k:string,_op:string,v:any)=>{filters.push(r=>r[k]!==v);return q},in:(k:string,v:any[])=>{filters.push(r=>v.includes(r[k]));return q},single:async()=>{const r=result();return {...r,data:r.data?.[0]||null}},maybeSingle:async()=>{const r=result();return {...r,data:r.data?.[0]||null}},then:(resolve:any)=>Promise.resolve(result()).then(resolve)};return q;
+ const q:any={select:()=>q,limit:()=>q,or:()=>q,update:(p:any)=>{patch=p;return q},insert:(p:any)=>{insert=p;return q},eq:(k:string,v:any)=>{filters.push(r=>r[k]===v);return q},is:(k:string,v:any)=>{filters.push(r=>r[k]===v);return q},not:(k:string,_op:string,v:any)=>{filters.push(r=>r[k]!==v);return q},in:(k:string,v:any[])=>{filters.push(r=>v.includes(r[k]));return q},single:async()=>{const r=result();return {...r,data:r.data?.[0]||null}},maybeSingle:async()=>{const r=result();return {...r,data:r.data?.[0]||null}},then:(resolve:any)=>Promise.resolve(result()).then(resolve)};return q;
  }})}));
-import {handToCleaning,markReady,completeInspection} from "@/app/(dashboard)/admin/checkouts/actions";
+import {assignCleanerReportedCheckout,handToCleaning,markReady,completeInspection} from "@/app/(dashboard)/admin/checkouts/actions";
 import {completeRectification,completeCleaning} from "@/app/(dashboard)/staff/checkouts/actions";
 import {checkoutProgress} from "./checkouts";
 function form(values:Record<string,string|string[]>={},photo=false){const f=new FormData();for(const [k,v]of Object.entries(values))for(const x of Array.isArray(v)?v:[v])f.append(k,x);if(photo)f.append("photo",new File(["photo"],"evidence.jpg",{type:"image/jpeg"}));return f}
@@ -64,7 +64,7 @@ it("rejects missing direct uploads without marking a defect complete",async()=>{
 
 it("Admin manual inspection preserves seven signed-upload photos and assigns maintenance",async()=>{
  room().status="second_inspection";
- state.tables.profiles.push({id:"tech",role:"maintenance_staff",is_active:true,full_name:"Abdullah"});
+ state.tables.profiles.push({id:"tech",role:"maintenance_staff",is_active:true,full_name:"Abdullah",deleted_at:null});
  const f=form({assignee:"tech",notes:"Inspection confirmed"});
  for(let i=0;i<7;i++){const name=crypto.randomUUID()+".jpg";state.objects.push({name,metadata:{size:10}});f.append("photoPaths","room/inspection/"+name);}
  await expect(completeInspection("room",f)).rejects.toThrow("/admin/checkouts/room");
@@ -72,8 +72,21 @@ it("Admin manual inspection preserves seven signed-upload photos and assigns mai
  expect(state.tables.checkout_photos).toHaveLength(7);expect(state.tables.checkout_photos.every(p=>p.kind==="inspection")).toBe(true);
 });
 it("Admin manual inspection does not assign when any uploaded photo is missing",async()=>{
- room().status="second_inspection";state.tables.profiles.push({id:"tech",role:"maintenance_staff",is_active:true,full_name:"Abdullah"});
+ room().status="second_inspection";state.tables.profiles.push({id:"tech",role:"maintenance_staff",is_active:true,full_name:"Abdullah",deleted_at:null});
  const f=form({assignee:"tech",photoPaths:"room/inspection/"+crypto.randomUUID()+".jpg"});
  await expect(completeInspection("room",f)).rejects.toThrow("incomplete");
  expect(room().status).toBe("second_inspection");expect(state.tables.checkout_photos).toHaveLength(0);
+});
+
+it("assigns a cleaner-reported defect without a new inspection and preserves the original notes", async () => {
+ Object.assign(room(), { status: "second_inspection", assigned_to: null, inspection_notes: "Original inspection" });
+ state.tables.checkout_defects[0].source = "cleaner";
+ state.tables.profiles.push({ id: "tech", role: "maintenance_staff", is_active: true, deleted_at: null });
+
+ await expect(assignCleanerReportedCheckout("room", form({ assignee: "tech" }))).rejects.toThrow("/admin/checkouts/room");
+
+ expect(room()).toMatchObject({ status: "rectification", assigned_to: "tech", inspection_notes: "Original inspection" });
+ expect(state.tables.checkout_photos).toHaveLength(0);
+ expect(state.tables.checkout_history[0].action).toBe("maintenance_assigned");
+ expect(state.notifications).toHaveBeenCalledWith(expect.objectContaining({ recipientIds: ["tech"] }));
 });
