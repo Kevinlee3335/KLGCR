@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ['pdfjs-dist'],
+  serverExternalPackages: ['pdfjs-dist', 'imapflow'],
   outputFileTracingIncludes: {
     "/api/cron/billing-mail": ["./public/billing/logo.jpg"],
     "/admin/document-review/*/*": ["./public/billing/logo.jpg", "./public/billing/receipt-letterhead.png", "./src/lib/finance-fonts/*.ttf"],

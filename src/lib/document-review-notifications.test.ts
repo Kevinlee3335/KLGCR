@@ -12,6 +12,11 @@ it('pushes only to the assigned reviewer with a stable notification tag',async()
  expect(m.push).toHaveBeenCalledWith(expect.objectContaining({recipientIds:['fikri'],strict:true,requireSubscription:true,tag:'document-review-event'}));
  expect(m.updates[0]).toMatchObject({delivered_at:expect.any(String),locked_until:null,last_error:null});
 });
+it('claims TM Unifi review alerts through their invoice-specific workflow',async()=>{
+ m.events[0].document_type='unifi_invoice';
+ await dispatchDocumentReviewPushes('doc');
+ expect(m.claim).toHaveBeenCalledWith('claim_unifi_invoice_review_push',{event_id:'event',token:expect.any(String)});
+});
 it('does not send a superseded or concurrently leased request',async()=>{
  m.claim.mockResolvedValue({data:false,error:null});await dispatchDocumentReviewPushes();expect(m.push).not.toHaveBeenCalled();expect(m.updates).toEqual([]);
 });
