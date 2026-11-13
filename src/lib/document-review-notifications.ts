@@ -1,6 +1,11 @@
 import {createAdminClient} from './supabase/admin';
 import {sendPushNotifications} from './push';
 
+const reviewPushClaim = {
+ compliance: 'claim_compliance_review_push',
+ unifi_invoice: 'claim_unifi_invoice_review_push',
+} as const;
+
 // Database triggers queue a bell alert and one phone delivery per review stage.
 // Leases prevent duplicate submissions; failed pushes remain available for retry.
 export async function dispatchDocumentReviewPushes(documentId?:string,recipientId?:string){
@@ -12,7 +17,8 @@ export async function dispatchDocumentReviewPushes(documentId?:string,recipientI
  if(due.error)throw Error('Unable to load document phone notifications');
  for(const event of due.data||[]){
   const token=crypto.randomUUID();
-  const claim=await db.rpc(event.document_type==='compliance'?'claim_compliance_review_push':'claim_document_review_push',{event_id:event.id,token});
+  const claimFunction = reviewPushClaim[event.document_type as keyof typeof reviewPushClaim] ?? 'claim_document_review_push';
+  const claim=await db.rpc(claimFunction,{event_id:event.id,token});
   if(claim.error)throw Error('Unable to claim document phone notification');
   if(!claim.data)continue;
   try{

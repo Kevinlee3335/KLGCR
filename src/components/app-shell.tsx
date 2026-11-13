@@ -6,7 +6,7 @@ import { NotificationBell } from "./notification-bell";
 import { MobileNavigationDrawer, ShellLink } from "./shell-navigation";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
-import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench, type LucideIcon } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FileText, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench, type LucideIcon } from "lucide-react";
 
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
@@ -56,16 +56,20 @@ const adminNavGroups: AdminNavGroup[] = [
       ["Quotations", "/admin/quotations", FileBarChart],
       ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],
     ] as const },
-    { label: "Documents & Reports", Icon: FolderOpen, links: adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)) },
+    { label: "Documents & Reports", Icon: FolderOpen, links: [
+      ...adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)),
+      ["TM Unifi Invoices", "/admin/unifi-invoices", FileText],
+    ] },
     { label: "System", Icon: Settings, links: adminNav.filter(([label]) => ["Notifications", "Users", "Settings"].includes(label)) },
 ];
 
-function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, canVerifyPayments = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; canVerifyPayments?: boolean }) {
+function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isAdmin = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; isAdmin?: boolean }) {
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
   const renderGroup = ({ label, Icon, links }: AdminNavGroup) => {
-    const groupClass = `admin-nav-group${links.some(([item]) => active(item)) ? " is-active" : ""}`;
+    const visibleLinks = links.filter(([item]) => item !== "TM Unifi Invoices" || isAdmin);
+    const groupClass = `admin-nav-group${visibleLinks.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
-    const submenu = <div className="admin-nav-group-links">{links.map(([item, href, LinkIcon, linkLabel]) => <ShellLink key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></ShellLink>)}</div>;
+    const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) => <ShellLink key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></ShellLink>)}</div>;
     return mobile
       ? <details key={label} className={groupClass}><summary>{heading}</summary>{submenu}</details>
       : <div key={label} className={groupClass}><button type="button" className="admin-nav-group-trigger" aria-label={`${label} submenu`}>{heading}</button>{submenu}</div>;
@@ -77,7 +81,7 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, can
     {adminNavGroups.slice(2).map(renderGroup)}
     {superAdmin&&<ShellLink href="/admin/super-admin" aria-current={active("Super Admin Control Center") ? "page" : undefined}><Settings size={18}/><span>Super Admin Control Center</span></ShellLink>}
     <ShellLink href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></ShellLink>
-    {canVerifyPayments ? renderGroup({
+    {isAdmin ? renderGroup({
       label: "Rental & Utilities",
       Icon: FileBarChart,
       links: [
@@ -98,7 +102,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
   return <div className={`shell ${isStaff ? "staff-shell" : "admin-shell"}`}>
     <aside className="sidebar">
       <Brand/>
-      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} canVerifyPayments={profile.role === "admin"}/>}
+      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
       <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><ShellLink className="change-password-link" href="/account">Change Password</ShellLink><LogoutForm/></div>
     </aside>
 
@@ -113,7 +117,7 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <MobileNavigationDrawer>
       <aside className="mobile-drawer" aria-label="Full navigation menu">
         <div className="mobile-drawer-heading"><Brand/><span>Menu</span></div>
-        {isStaff ? <nav className="nav mobile-drawer-nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} canVerifyPayments={profile.role === "admin"}/>}
+        {isStaff ? <nav className="nav mobile-drawer-nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
         <div className="mobile-drawer-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><LogoutForm/></div>
       </aside>
     </MobileNavigationDrawer>
