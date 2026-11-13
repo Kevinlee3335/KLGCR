@@ -19,9 +19,12 @@ export async function ComplianceReviewFollowUp({ userId }: { userId: string }) {
   const stage = stageForReviewer(userId);
   if (!stage) return null;
   const db = await createClient();
-  const { data, count, error } = await db.from("compliance_cycle_documents")
+  const query = db.from("compliance_cycle_documents")
     .select("id,cycle_id,kind,file_name,cycle:compliance_cycles!inner(record_id,record:compliance_records!inner(title,location))", { count: "exact" })
-    .eq("review_stage", stage).order("created_at").limit(12);
+    .order("created_at").limit(12);
+  const { data, count, error } = await (stage === "james"
+    ? query.eq("review_stage", stage)
+    : query.in("review_stage", ["verification", stage]));
   if (error || !count) return null;
   const documents = (data ?? []) as unknown as ReviewRow[];
   return (

@@ -1,3 +1,4 @@
+import { canReviewDocumentStage } from "@/lib/document-review-status";
 import Link from "next/link";
 import { ArrowUpRight, Check, ChevronDown, FileText, FolderOpen, Link2, Mail, RotateCw, Search, Upload } from "lucide-react";
 import { SubmitButton } from "@/components/submit-button";
@@ -52,7 +53,7 @@ export function DocumentList({
           : source?.email;
         const emailPath = source && exactEmail ? archiveEmailPath({ ...source, email: exactEmail }) : null;
         const delivery = deliveries.get(document.id);
-        const canReview = reviewerStage && document.review_stage === reviewerStage;
+        const canReview = canReviewDocumentStage(document.review_stage, reviewerStage);
         const canRetry = reviewerStage === "james" && delivery && ["pending", "failed", "blocked", "uncertain"].includes(delivery.status);
         const timeline = [
           document.fikri_verified_at && `Fikri verified ${timestampLabel(document.fikri_verified_at)}`,

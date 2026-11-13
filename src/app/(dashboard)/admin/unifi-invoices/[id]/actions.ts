@@ -6,13 +6,14 @@ import { after } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { dispatchDocumentReviewPushes } from "@/lib/document-review-notifications";
+import { documentReviewerForStage, documentReviewStages } from "@/lib/document-review-status";
 import { dispatchUnifiInvoiceMail } from "@/lib/unifi-invoice-mail";
-import { advanceUnifiInvoiceReview, getUnifiInvoice, unifiInvoicePath, unifiPendingStages, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { advanceUnifiInvoiceReview, getUnifiInvoice, unifiInvoicePath } from "@/lib/unifi-invoices";
 import { canManageUnifiInvoiceEmail } from "../display";
 
 const reviewInput = z.object({
   id: z.string().uuid(),
-  stage: z.enum(unifiPendingStages),
+  stage: z.enum(documentReviewStages),
 });
 
 export async function reviewUnifiInvoice(form: FormData) {
@@ -22,7 +23,7 @@ export async function reviewUnifiInvoice(form: FormData) {
 
   const { id, stage } = parsed.data;
   const path = `${unifiInvoicePath}/${id}`;
-  if (unifiReviewerForStage[stage].id !== profile.id) redirect(`${path}?error=review`);
+  if (documentReviewerForStage[stage].id !== profile.id) redirect(`${path}?error=review`);
   try {
     await advanceUnifiInvoiceReview(id, stage, profile.id);
   } catch {

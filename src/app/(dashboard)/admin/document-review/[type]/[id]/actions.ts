@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { scheduleBillingMail } from "@/lib/billing-mail";
 import { dispatchDocumentReviewPushes } from "@/lib/document-review-notifications";
-import { isDocumentReviewTarget } from "@/lib/document-review-status";
+import { isDocumentReviewTarget, pendingDocumentReviewers } from "@/lib/document-review-status";
 import { documentReviewers, documentVerification } from "@/lib/document-review";
 import { deliverGymReport } from "@/lib/gym-report-delivery";
 import { signatureSchema } from "@/lib/purchase-orders/signature";
@@ -29,14 +29,14 @@ export async function advanceDocumentReview(form: FormData) {
   if (!isDocumentReviewTarget(type, id)) throw Error("Invalid document");
 
   const entries = await documentVerification(type, id);
-  const assigned = documentReviewers[entries.length];
-  if (assigned?.id !== user.id) throw Error("This document is awaiting another reviewer.");
+  if (!pendingDocumentReviewers(entries).some(reviewer => reviewer.id === user.id)) throw Error("This document is awaiting another reviewer.");
+  const approving = user.id === documentReviewers[2].id;
 
   const session = await createClient();
   const sendReviewPushes = () => dispatchDocumentReviewPushes(id)
     .catch(() => console.error("Document phone notification pending retry"));
 
-  if (entries.length < 2) {
+  if (!approving) {
     const verified = await session.rpc("verify_document", { p_type: type, p_id: id });
     if (verified.error) throw Error(verified.error.message);
     scheduleReviewWork(sendReviewPushes);
@@ -78,7 +78,7 @@ export async function advanceDocumentReview(form: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/members/report-approvals");
   revalidatePath(reviewPath);
-  if (entries.length === 2) {
+  if (approving) {
     console.info("Document approval saved", { type, durationMs: Math.round(performance.now() - startedAt) });
   }
   redirect(reviewPath);

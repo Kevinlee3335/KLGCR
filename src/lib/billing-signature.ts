@@ -1,4 +1,5 @@
 import type {Verification} from './document-review';
+import {documentVerificationSlots} from './document-review-status';
 import {signaturePhotoBounds} from './signature-image-layout';
 import {companySealDataUrl} from './company-seal';
 import type {BillingSnapshot} from './billing-preview';
@@ -11,7 +12,8 @@ export function billingSignatureSvg(snapshot:BillingSnapshot,box?:{x:number;y:nu
  if(!approved&&verifications===undefined)return '';
  if(approval?.verifications?.length===2||verifications!==undefined){
    const verified=approved?approval?.verifications||[]:verifications||[];
-   const slots=[{name:'Verified by Fikri',date:verified[0]?.verified_at,signature:verified[0]?.signature},{name:'Verified by Kevin',date:verified[1]?.verified_at,signature:verified[1]?.signature},{name:'Approved by James',date:approved?approval?.approved_at:undefined,signature:approved&&parsed.success?parsed.data:undefined}];
+   const [fikri,kevin]=documentVerificationSlots(verified);
+   const slots=[{name:'Verified by Fikri',date:fikri?.verified_at,signature:fikri?.signature},{name:'Verified by Kevin',date:kevin?.verified_at,signature:kevin?.signature},{name:'Approved by James',date:approved?approval?.approved_at:undefined,signature:approved&&parsed.success?parsed.data:undefined}];
    const blocks=slots.map((slot,i)=>{
      const valid=signatureSchema.safeParse(slot.signature);
      const x=i*600;

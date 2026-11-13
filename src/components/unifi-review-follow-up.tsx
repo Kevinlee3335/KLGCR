@@ -1,9 +1,10 @@
 import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiLine } from "@/app/(dashboard)/admin/unifi-invoices/display";
-import { listUnifiInvoices, unifiInvoicePath, unifiPendingStages, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { documentReviewerStage } from "@/lib/document-review-status";
+import { listUnifiInvoices, unifiInvoicePath } from "@/lib/unifi-invoices";
 import { DashboardActionFollowUp } from "./dashboard-action-follow-up";
 
 export async function UnifiReviewFollowUp({ userId }: { userId: string }) {
-  const stage = unifiPendingStages.find(item => unifiReviewerForStage[item].id === userId);
+  const stage = documentReviewerStage(userId);
   if (!stage) return null;
 
   const invoices = await listUnifiInvoices(stage).catch(() => []);

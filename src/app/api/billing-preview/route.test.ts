@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 const mocks=vi.hoisted(()=>({profile:null as null|{id:string;role:string;full_name:string},db:vi.fn()}));
 vi.mock('@/lib/auth',()=>({getSessionProfile:async()=>mocks.profile}));
 vi.mock('@/lib/supabase/server',()=>({createClient:mocks.db}));
+import { documentReviewers } from "@/lib/document-review-status";
 import { GET,POST } from './route';
 describe('billing preview authorization',()=>{
  beforeEach(()=>{vi.stubEnv('BILLING_DISABLED','false');vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('VERCEL_GIT_COMMIT_REF','feature/rental-utility-billing-test');mocks.profile=null;mocks.db.mockClear()});
@@ -51,7 +52,7 @@ describe('deferred meter photos',()=>{
 });
 
 describe('confirmed utilities submission',()=>{
- it('uses the live Malaysia date and notifies Fikri only after the pack is saved',async()=>{
+ it('uses the live Malaysia date and schedules reviewer notifications only after the pack is saved',async()=>{
   const {dispatchDocumentReviewPushes}=await import('@/lib/document-review-notifications');
   const {configSchema,defaultBillingConfig,malaysiaClock}=await import('@/lib/billing-preview');
   const config=configSchema.parse({...defaultBillingConfig,...(await import('@/lib/billing-preview-fixture.json')).default});
@@ -156,7 +157,7 @@ describe("on-demand billing views", () => {
     { run_id: otherPackId, approved_by_user: "another-user", approved_at: "2026-11-11T01:20:00Z", signature },
    ],
    billing_mail_dispatch: [mail],
-   document_verifications: [{ document_id: packId, entries: [{}, {}] }],
+   document_verifications: [{ document_id: packId, entries: [{ user_id: documentReviewers[0].id }, { user_id: documentReviewers[1].id }] }],
   };
   mocks.db.mockResolvedValue({ from: (table: string) => table === "billing_preview_runs" ? { select: selectRuns } : {
    select() { return this; },
@@ -169,8 +170,8 @@ describe("on-demand billing views", () => {
   expect(selectRuns.mock.calls[0][0]).not.toContain("snapshot");
   const { runs } = await response.json();
   expect(runs).toEqual([
-   { ...fields, verifiedCount: 2, approved: true, mail },
-   { ...fields, id: otherPackId, verifiedCount: 0, approved: false, mail: null },
+   { ...fields, verifiedCount: 2, verifiedBy: documentReviewers.slice(0, 2).map(reviewer => reviewer.id), approved: true, mail },
+   { ...fields, id: otherPackId, verifiedCount: 0, verifiedBy: [], approved: false, mail: null },
   ]);
  });
 
@@ -180,7 +181,7 @@ describe("on-demand billing views", () => {
  ])("loads the selected frozen pack and its recorded signature via %s", async (selector, expectedFilters) => {
   await setup();
   const { BILLING_APPROVER_ID } = await import("@/lib/billing-approval");
-  const verifications = [{ user_id: "fikri" }, { user_id: "kevin" }];
+  const verifications = [documentReviewers[1], documentReviewers[0]].map(reviewer => ({ user_id: reviewer.id }));
   const approval = {
    run_id: packId, approved_by_user: BILLING_APPROVER_ID, approved_by: "James",
    approved_at: "2026-11-11T01:20:00Z", signature, verifications,
@@ -209,7 +210,7 @@ describe("on-demand billing views", () => {
   expect(response.status).toBe(200);
   expect(filtered).toEqual(expectedFilters);
   expect(await response.json()).toEqual({
-   pack: { ...fields, verifiedCount: 2, approved: true, mail, snapshot: { ...snapshot, approval } },
+   pack: { ...fields, verifiedCount: 2, verifiedBy: verifications.map(entry => entry.user_id), approved: true, mail, snapshot: { ...snapshot, approval } },
   });
  });
 

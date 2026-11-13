@@ -2,10 +2,11 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {BillingPanel} from './billing-panel';
 import {configSchema,defaultBillingConfig} from '@/lib/billing-preview';
+import {documentReviewers} from '@/lib/document-review-status';
 import fixture from '@/lib/billing-preview-fixture.json';
 afterEach(()=>{cleanup();vi.unstubAllGlobals()});
 const financeResponse=()=>new Response(JSON.stringify({accounts:[],message:'Connected'}));
-it('saves confirmed readings before submitting to Fikri, then shows the persistent review status',async()=>{
+it('saves confirmed readings before submitting for verification, then shows the persistent review status',async()=>{
  const config=configSchema.parse({...defaultBillingConfig,...fixture});
  const state={config,photosLoaded:true,revision:4,pendingPackCount:0,clock:{date:'2026-11-02',time:'17:00'}};
  const run={id:'new-pack',kind:'utility',period:config.utilityPeriod,issue_date:'2026-11-02',total:50,verifiedCount:0,approved:false,mail:null,snapshot:{kind:'utility',period:config.utilityPeriod,issueDate:'2026-11-02',total:50,lines:[],testMode:true,createdBy:'Kevin'}};
@@ -21,15 +22,20 @@ it('saves confirmed readings before submitting to Fikri, then shows the persiste
  }));
  render(<BillingPanel initialData={state}/>);
  fireEvent.click(screen.getByRole('button',{name:'Utility readings'}));
- fireEvent.click(screen.getByRole('button',{name:'Submit to Fikri for Verification'}));
- await screen.findByText(/Submitted · Pending Fikri Verification/);
+ fireEvent.click(screen.getByRole('button',{name:'Submit for Verification'}));
+ await screen.findByText(/Submitted · Pending Fikri and Kevin Verification/);
  expect(actions).toEqual([expect.objectContaining({action:'save',revision:4}),{action:'submit',kind:'utility',period:config.utilityPeriod}]);
  expect(await screen.findByRole('link',{name:'Open review status'})).toHaveAttribute('href','/admin/document-review/billing/new-pack');
- expect(screen.getByText(/Invoice date:.*Pending Fikri Verification/)).toBeInTheDocument();
+ expect(screen.getByText(/Invoice date:.*Pending Fikri and Kevin Verification/)).toBeInTheDocument();
 });
-it.each([[0,'Pending Fikri Verification'],[1,'Pending Kevin Verification'],[2,'Pending James Approval']])('loads reviewer stage %i from saved data',async(count,label)=>{
+it.each([
+ [[], 'Pending Fikri and Kevin Verification'],
+ [[documentReviewers[0].id], 'Pending Kevin Verification'],
+ [[documentReviewers[1].id], 'Pending Fikri Verification'],
+ [[documentReviewers[1].id, documentReviewers[0].id], 'Pending James Approval'],
+] as const)('loads the review status for signatures %j',async(verifiedBy,label)=>{
  const config=configSchema.parse({...defaultBillingConfig,...fixture});
- const run={id:'pack',kind:'utility',period:config.utilityPeriod,issue_date:'2026-11-02',total:0,verifiedCount:Number(count),approved:false,mail:null};
+ const run={id:'pack',kind:'utility',period:config.utilityPeriod,issue_date:'2026-11-02',total:0,verifiedCount:verifiedBy.length,verifiedBy,approved:false,mail:null};
  const fetcher=vi.fn(async(url:string)=>url.startsWith('/api/finance')?financeResponse():new Response(JSON.stringify({runs:[run]})));
  vi.stubGlobal("fetch",fetcher);
  render(<BillingPanel initialData={{config,revision:1,pendingPackCount:0,clock:{date:'2026-11-02',time:'17:00'}}}/>);

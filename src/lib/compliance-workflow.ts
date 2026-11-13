@@ -1,4 +1,4 @@
-import { documentReviewers } from '@/lib/document-review-status';
+import { documentReviewerForStage } from '@/lib/document-review-status';
 
 export const complianceRecordTypes = ['certificate_license', 'servicing', 'agreement'] as const;
 export const complianceDocumentKinds = ['quotation', 'invoice', 'service_report', 'certificate', 'agreement'] as const;
@@ -23,11 +23,7 @@ export const complianceDocumentLabels: Record<ComplianceDocumentKind, string> = 
   agreement: 'Signed agreement',
 };
 
-export const complianceReviewers = {
-  fikri: documentReviewers[0],
-  kevin: documentReviewers[1],
-  james: documentReviewers[2],
-} as const;
+export const complianceReviewers = documentReviewerForStage;
 
 export function complianceRecordPath(recordId: string) {
   return compliancePath + '/records/' + recordId;

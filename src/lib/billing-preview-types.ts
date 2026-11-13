@@ -16,6 +16,7 @@ export type BillingRunSummary = {
   issue_date: string;
   total: number;
   verifiedCount: number;
+  verifiedBy?: string[];
   approved: boolean;
   mail: BillingMailState | null;
 };

@@ -6,8 +6,9 @@ import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
+import { canReviewDocumentStage, documentReviewerStage } from "@/lib/document-review-status";
 import { getUnifiInvoiceDelivery } from "@/lib/unifi-invoice-mail";
-import { getUnifiInvoice, isUnifiPendingStage, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { getUnifiInvoice, isUnifiPendingStage, unifiInvoicePath } from "@/lib/unifi-invoices";
 import { canManageUnifiInvoiceEmail, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "../display";
 import styles from "../unifi-invoices.module.css";
 import { retryUnifiInvoiceEmail, reviewUnifiInvoice } from "./actions";
@@ -26,7 +27,8 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
 
   const stage = invoice.review_stage;
   const reviewPending = isUnifiPendingStage(stage);
-  const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
+  const reviewer = documentReviewerStage(profile.id);
+  const canReview = canReviewDocumentStage(stage, reviewer);
   const delivery = stage === "approved" ? await getUnifiInvoiceDelivery(id).catch(() => null) : null;
   const canCheckDelivery = delivery !== null && delivery.status !== "sent" && canManageUnifiInvoiceEmail(profile);
   const month = formatUnifiBillingMonth(invoice.period);
@@ -78,10 +80,10 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
           </ol>}
           {canReview && <form action={reviewUnifiInvoice}>
             <input type="hidden" name="id" value={invoice.id} />
-            <input type="hidden" name="stage" value={stage} />
-            <SubmitButton className={`${controls.button} ${controls.primary}`} pendingText={stage === "james" ? "Approving…" : "Verifying…"}>
+            <input type="hidden" name="stage" value={reviewer} />
+            <SubmitButton className={`${controls.button} ${controls.primary}`} pendingText={reviewer === "james" ? "Approving…" : "Verifying…"}>
               <Check className={controls.icon} aria-hidden="true" />
-              {stage === "james" ? "Approve and email Joey" : `Verify & pass to ${stage === "fikri" ? "Kevin" : "James"}`}
+              {reviewer === "james" ? "Approve and email Joey" : "Verify invoice"}
             </SubmitButton>
           </form>}
         </section>

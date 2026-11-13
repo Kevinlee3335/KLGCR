@@ -1,6 +1,7 @@
+import { documentReviewerForStage } from "@/lib/document-review-status";
 import type { Profile } from "@/lib/types";
 import type { UnifiInvoiceDelivery } from "@/lib/unifi-invoice-mail";
-import { unifiReviewerForStage, type UnifiInvoiceStage } from "@/lib/unifi-invoices";
+import type { UnifiInvoiceStage } from "@/lib/unifi-invoices";
 
 const billingMonthFormat = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric", timeZone: "UTC" });
 const malaysiaDate = new Intl.DateTimeFormat("en-GB", {
@@ -41,7 +42,8 @@ export function compareUnifiInvoicePeriodAndLine(
 export function unifiReviewLabel(stage: UnifiInvoiceStage) {
   if (stage === "approved") return "Approved by James";
   if (stage === "archived") return "Archived";
-  const reviewer = unifiReviewerForStage[stage].name;
+  if (stage === "verification") return "Pending Fikri and Kevin verification";
+  const reviewer = documentReviewerForStage[stage].name;
   return `Pending ${reviewer} ${stage === "james" ? "approval" : "verification"}`;
 }
 
@@ -58,6 +60,6 @@ export function unifiEmailLabel(delivery: UnifiInvoiceDelivery | null | undefine
 }
 
 export function canManageUnifiInvoiceEmail(profile: Pick<Profile, "id" | "is_super_admin" | "username">) {
-  return profile.id === unifiReviewerForStage.james.id
+  return profile.id === documentReviewerForStage.james.id
     || (profile.is_super_admin && profile.username === "kevinlee3335");
 }

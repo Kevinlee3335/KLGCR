@@ -1,16 +1,10 @@
 import { createHash } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
-import { documentReviewers } from './document-review-status';
+import type { DocumentReviewStage } from './document-review-status';
 import { createAdminClient } from './supabase/admin';
 
 export const unifiInvoicePath = '/admin/unifi-invoices';
-export const unifiPendingStages = ['fikri', 'kevin', 'james'] as const;
-export const unifiReviewerForStage = {
-  fikri: documentReviewers[0],
-  kevin: documentReviewers[1],
-  james: documentReviewers[2],
-} as const;
-export type UnifiPendingStage = typeof unifiPendingStages[number];
+export type UnifiPendingStage = DocumentReviewStage | 'verification';
 export type UnifiInvoiceStage = UnifiPendingStage | 'approved' | 'archived';
 
 export function isUnifiPendingStage(stage: UnifiInvoiceStage): stage is UnifiPendingStage {
@@ -130,11 +124,13 @@ async function unifiAccountLines(db: AdminClient) {
   return new Map(result.data.map(row => [row.account_number as string, row.line_number as number]));
 }
 
-export async function listUnifiInvoices(stage?: UnifiInvoiceStage): Promise<UnifiInvoice[]> {
+export async function listUnifiInvoices(reviewer?: DocumentReviewStage): Promise<UnifiInvoice[]> {
   const db = createAdminClient();
   const query = db.from('unifi_invoices').select(invoiceFields)
     .order('period', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false });
-  const [result, lines] = await Promise.all([stage ? query.eq('review_stage', stage) : query, unifiAccountLines(db)]);
+  if (reviewer === 'james') query.eq('review_stage', reviewer);
+  else if (reviewer) query.in('review_stage', ['verification', reviewer]);
+  const [result, lines] = await Promise.all([query, unifiAccountLines(db)]);
   if (result.error) throw Error('Unable to load TM Unifi invoices.');
   return result.data.map(row => ({ ...row, line_number: lines.get(row.account_number ?? '') ?? null })) as UnifiInvoice[];
 }
@@ -159,7 +155,7 @@ export async function downloadUnifiInvoice(id: string): Promise<{ bytes: Uint8Ar
   return { bytes: new Uint8Array(await data.arrayBuffer()), fileName: invoice.data.file_name };
 }
 
-export async function advanceUnifiInvoiceReview(id: string, expectedStage: UnifiPendingStage, actorId: string): Promise<UnifiPendingStage | 'approved'> {
+export async function advanceUnifiInvoiceReview(id: string, expectedStage: DocumentReviewStage, actorId: string): Promise<UnifiPendingStage | 'approved'> {
   const result = await createAdminClient().rpc('advance_unifi_invoice_review', {
     p_invoice_id: id,
     p_expected_stage: expectedStage,
