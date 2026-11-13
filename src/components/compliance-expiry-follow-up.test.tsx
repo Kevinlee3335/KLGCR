@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
@@ -8,7 +8,7 @@ import { ComplianceExpiryFollowUp } from "./compliance-expiry-follow-up";
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-it("shows both expiry milestones and the ongoing follow-up with their record links", async () => {
+it("shows three reminders until expanded and retains the expiry milestones and record links", async () => {
   rpc.mockResolvedValue({ error: null, data: [
     { cycle_id: "old", record_id: "fire", title: "Fire extinguisher", record_type: "certificate_license", location: "Block D", due_date: "2026-10-10", days_remaining: -2, stage: "daily" },
     { cycle_id: "today", record_id: "lift", title: "Lift servicing", record_type: "servicing", location: "Block A", due_date: "2026-10-15", days_remaining: 3, stage: "daily" },
@@ -21,10 +21,35 @@ it("shows both expiry milestones and the ongoing follow-up with their record lin
   expect(screen.getByText("Overdue 2 days")).toBeTruthy();
   expect(screen.getByText("Due in 3 days")).toBeTruthy();
   expect(screen.getByText("15 days before")).toBeTruthy();
+  expect(screen.queryByText("One month before")).toBeNull();
+  expect(screen.getAllByRole("link", { name: "Follow up" })).toHaveLength(3);
+  expect(screen.getByText("Upcoming").textContent).toBe("3 Upcoming");
+
+  const toggle = screen.getByRole("button", { name: "Show 1 more" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(screen.getByRole("button", { name: "Show less" })).toBe(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getAllByRole("link", { name: "Follow up" })).toHaveLength(4);
   expect(screen.getByText("One month before")).toBeTruthy();
   const contractRow = screen.getByRole("row", { name: /Maintenance agreement/ });
   expect(within(contractRow).getByRole("link", { name: "Follow up" }).getAttribute("href"))
     .toBe("/admin/cert-servicing/records/contract");
+  expect(screen.getByText("Upcoming").textContent).toBe("3 Upcoming");
+
+  fireEvent.click(toggle);
+  expect(screen.getByRole("button", { name: "Show 1 more" }).getAttribute("aria-expanded")).toBe("false");
+  expect(screen.getAllByRole("link", { name: "Follow up" })).toHaveLength(3);
+});
+
+it("omits the toggle when all reminders fit in the preview", async () => {
+  rpc.mockResolvedValue({ error: null, data: [
+    { cycle_id: "old", record_id: "fire", title: "Fire extinguisher", record_type: "certificate_license", location: "Block D", due_date: "2026-10-10", days_remaining: -2, stage: "daily" },
+  ] });
+
+  render(await ComplianceExpiryFollowUp());
+  expect(screen.getByRole("link", { name: "Follow up" })).toBeTruthy();
+  expect(screen.queryByRole("button")).toBeNull();
 });
 
 it("hides the follow-up when there are no outstanding reminders for the date", async () => {

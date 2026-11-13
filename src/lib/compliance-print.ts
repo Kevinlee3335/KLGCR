@@ -186,11 +186,15 @@ export function inspectComplianceTemplate(bytes: Buffer) {
   return selected;
 }
 
-function titleKey(value: string) {
-  return value.normalize('NFKC').toLowerCase()
+function titleKey(value: string, kind: CompliancePrintKind) {
+  const key = value.normalize('NFKC').toLowerCase()
     .replace(/\((?:monthly|quarterly|quaterly|weekly|yearly|annual|annually)\)/g, '')
     .replace(/\bservices\b/g, 'service').replace(/&/g, ' and ')
     .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  // The original servicing workbook keeps the old genset heading.
+  return kind === 'servicing' && key === 'yearly service of standby genset'
+    ? 'service of standby genset'
+    : key;
 }
 
 function displayDate(iso: string) {
@@ -221,10 +225,10 @@ function mergeAnchor(sheet: WorkSheet, address: string) {
 function matchingRow(sheet: WorkSheet, kind: CompliancePrintKind, record: CompliancePrintRecord, header: number, end: number, date1904: boolean) {
   const row = record.template_row;
   if (row !== null) return Number.isInteger(row) && row > header && row <= end ? row : null;
-  const key = titleKey(record.title);
+  const key = titleKey(record.title, kind);
   if (!key) return null;
   const matches: number[] = [];
-  for (let i = header + 1; i <= end; i++) if (titleKey(cellText(sheet, i, 'B')) === key) matches.push(i);
+  for (let i = header + 1; i <= end; i++) if (titleKey(cellText(sheet, i, 'B'), kind) === key) matches.push(i);
   if (matches.length !== 1) return null;
   const titleRow = matches[0];
   if (kind !== 'servicing') return titleRow;
