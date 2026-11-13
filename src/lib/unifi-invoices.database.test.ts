@@ -9,6 +9,7 @@ const invoiceId = '00000000-0000-4000-8000-000000000001';
 const secondInvoiceId = '00000000-0000-4000-8000-000000000002';
 const migration = readFileSync('supabase/migrations/20261113050205_unifi_invoice_review.sql', 'utf8');
 const archiveMigration = readFileSync('supabase/migrations/20261113063516_archive_historical_unifi_invoices.sql', 'utf8');
+const deliveryMigration = readFileSync('supabase/migrations/20261113065818_unifi_invoice_delivery.sql', 'utf8');
 
 async function setupUnifiDatabase(db: PGlite) {
   await db.exec(`
@@ -89,6 +90,67 @@ it('restricts the TM Unifi archive and advances only the assigned reviewer, queu
     expect(finalEvents.every(row => row.href === '/admin/unifi-invoices/' + invoiceId)).toBe(true);
     await db.exec('reset role;');
     expect((await db.query('select * from public.app_notifications where entity_id = $1', [invoiceId])).rows).toHaveLength(3);
+  } finally {
+    await db.close();
+  }
+}, 20000);
+
+it('queues approved invoices once, preserves history, and leases delivery exclusively', async () => {
+  const db = new PGlite();
+  try {
+    await setupUnifiDatabase(db);
+    await db.exec(archiveMigration);
+    const archivedId = '00000000-0000-4000-8000-000000000003';
+    const insert = (id: string, hash: string, stage = 'fikri') => db.query(
+      `insert into public.unifi_invoices(id, period, source, file_name, content_hash, size_bytes, review_stage)
+       values ($1, '2026-11', 'webmail', 'Invoice.pdf', $2, 251, $3)`, [id, hash.repeat(64), stage],
+    );
+    const review = async (id: string) => {
+      await db.query("select public.advance_unifi_invoice_review($1, 'fikri', $2)", [id, fikri.id]);
+      await db.query("select public.advance_unifi_invoice_review($1, 'kevin', $2)", [id, kevin.id]);
+      return db.query("select public.advance_unifi_invoice_review($1, 'james', $2)", [id, james.id]);
+    };
+
+    await insert(archivedId, 'c', 'archived');
+    await insert(invoiceId, 'a');
+    await review(invoiceId);
+    await db.exec(deliveryMigration);
+    await db.exec('set role authenticated;');
+    await expect(db.query('select * from public.unifi_invoice_delivery')).rejects.toThrow('permission denied');
+    await expect(db.query('select public.claim_unifi_invoice_delivery($1, gen_random_uuid())', [invoiceId]))
+      .rejects.toThrow('permission denied');
+    await db.exec('reset role; set role service_role;');
+
+    await insert(secondInvoiceId, 'b');
+    const jobs = async () => (await db.query('select invoice_id, status from public.unifi_invoice_delivery order by invoice_id')).rows;
+    expect(await jobs()).toEqual([{ invoice_id: invoiceId, status: 'pending' }]);
+    await review(secondInvoiceId);
+    await db.query("update public.unifi_invoices set review_stage = 'approved' where id = $1", [secondInvoiceId]);
+    expect(await jobs()).toEqual([
+      { invoice_id: invoiceId, status: 'pending' },
+      { invoice_id: secondInvoiceId, status: 'pending' },
+    ]);
+
+    const firstClaim = '00000000-0000-4000-8000-000000000004';
+    const retryClaim = '00000000-0000-4000-8000-000000000005';
+    const claim = async (id: string, token: string) => (await db.query(
+      'select public.claim_unifi_invoice_delivery($1, $2) as previous_status', [id, token],
+    )).rows;
+    expect(await claim(archivedId, firstClaim)).toEqual([{ previous_status: null }]);
+    expect(await claim(secondInvoiceId, firstClaim)).toEqual([{ previous_status: 'pending' }]);
+    expect(await claim(secondInvoiceId, retryClaim)).toEqual([{ previous_status: null }]);
+    await db.query("update public.unifi_invoice_delivery set locked_until = now() - interval '1 second' where invoice_id = $1", [secondInvoiceId]);
+    expect(await claim(secondInvoiceId, retryClaim)).toEqual([{ previous_status: 'sending' }]);
+
+    const send = async (token: string) => (await db.query(
+      `update public.unifi_invoice_delivery
+       set status = 'sent', sent_at = now(), locked_until = null, claim_token = null
+       where invoice_id = $1 and status = 'sending' and claim_token = $2 returning status`,
+      [secondInvoiceId, token],
+    )).rows;
+    expect(await send(firstClaim)).toEqual([]);
+    expect(await send(retryClaim)).toEqual([{ status: 'sent' }]);
+    expect(await claim(secondInvoiceId, firstClaim)).toEqual([{ previous_status: null }]);
   } finally {
     await db.close();
   }
