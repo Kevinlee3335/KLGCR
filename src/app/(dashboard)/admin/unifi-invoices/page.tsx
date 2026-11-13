@@ -3,9 +3,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { requireRole } from "@/lib/auth";
+import { listUnifiInvoiceDeliveries } from "@/lib/unifi-invoice-mail";
 import { isUnifiPendingStage, listUnifiInvoices, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
 import { getUnifiWebmailConnectionStatus } from "@/lib/unifi-webmail-connection";
-import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiReviewLabel } from "./display";
+import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "./display";
 import styles from "./unifi-invoices.module.css";
 
 export default async function UnifiInvoicesPage({ searchParams }: {
@@ -17,7 +18,9 @@ export default async function UnifiInvoicesPage({ searchParams }: {
     listUnifiInvoices().catch(() => null),
     canConnectWebmail ? getUnifiWebmailConnectionStatus().catch(() => null) : null,
   ]);
-  const approved = invoices?.filter(invoice => invoice.review_stage === "approved").length ?? 0;
+  const approvedIds = invoices?.filter(invoice => invoice.review_stage === "approved").map(invoice => invoice.id) ?? [];
+  const deliveries = approvedIds.length ? await listUnifiInvoiceDeliveries(approvedIds).catch(() => null) : null;
+  const approved = approvedIds.length;
   const archived = invoices?.filter(invoice => invoice.review_stage === "archived").length ?? 0;
   const sortedInvoices = invoices?.slice().sort(compareUnifiInvoicePeriodAndLine);
   const syncedCount = typeof query.synced === "string" && /^\d+$/.test(query.synced) ? Number(query.synced) : null;
@@ -66,6 +69,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                 <tbody>
                   {sortedInvoices?.map(invoice => {
                     const stage = invoice.review_stage;
+                    const delivery = deliveries?.get(invoice.id);
                     const reviewPending = isUnifiPendingStage(stage);
                     const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
                     const month = formatUnifiBillingMonth(invoice.period);
@@ -82,7 +86,14 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                         <td className={styles.identifier}>{invoice.due_date
                           ? <time dateTime={invoice.due_date}>{formatUnifiDate(invoice.due_date)}</time>
                           : "—"}</td>
-                        <td><span className={reviewPending ? styles.pending : styles[stage]}>{unifiReviewLabel(stage)}</span></td>
+                        <td>
+                          <div className={styles.statusStack}>
+                            <span className={reviewPending ? styles.pending : styles[stage]}>{unifiReviewLabel(stage)}</span>
+                            {stage === "approved" && <span className={delivery?.status === "sent" ? styles.approved : styles.pending}>
+                              {unifiEmailLabel(delivery)}
+                            </span>}
+                          </div>
+                        </td>
                         <td>
                           <Link href={`${unifiInvoicePath}/${invoice.id}`} className={`${controls.button} ${canReview ? controls.primary : controls.secondary} ${controls.small}`} aria-label={`${canReview ? "Review" : "Open"} ${month} invoice · ${line}`}>
                             {canReview ? "Review" : "Open"} <ArrowUpRight size={15} aria-hidden="true" />

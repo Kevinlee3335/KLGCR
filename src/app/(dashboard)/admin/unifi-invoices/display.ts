@@ -1,3 +1,5 @@
+import type { Profile } from "@/lib/types";
+import type { UnifiInvoiceDelivery } from "@/lib/unifi-invoice-mail";
 import { unifiReviewerForStage, type UnifiInvoiceStage } from "@/lib/unifi-invoices";
 
 const billingMonthFormat = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -41,4 +43,21 @@ export function unifiReviewLabel(stage: UnifiInvoiceStage) {
   if (stage === "archived") return "Archived";
   const reviewer = unifiReviewerForStage[stage].name;
   return `Pending ${reviewer} ${stage === "james" ? "approval" : "verification"}`;
+}
+
+const emailLabels = {
+  pending: "Email queued",
+  sending: "Sending email",
+  sent: "Email sent to Joey",
+  failed: "Email failed",
+  uncertain: "Email confirmation pending",
+} satisfies Record<UnifiInvoiceDelivery["status"], string>;
+
+export function unifiEmailLabel(delivery: UnifiInvoiceDelivery | null | undefined) {
+  return delivery ? emailLabels[delivery.status] : "Email status unavailable";
+}
+
+export function canManageUnifiInvoiceEmail(profile: Pick<Profile, "id" | "is_super_admin" | "username">) {
+  return profile.id === unifiReviewerForStage.james.id
+    || (profile.is_super_admin && profile.username === "kevinlee3335");
 }

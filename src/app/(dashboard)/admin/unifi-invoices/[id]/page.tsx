@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FileText, Printer } from "lucide-react";
+import { ArrowLeft, Check, FileText, Printer, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -6,10 +6,13 @@ import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
+import { getUnifiInvoiceDelivery } from "@/lib/unifi-invoice-mail";
 import { getUnifiInvoice, isUnifiPendingStage, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
-import { formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiReviewLabel } from "../display";
+import { canManageUnifiInvoiceEmail, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "../display";
 import styles from "../unifi-invoices.module.css";
-import { reviewUnifiInvoice } from "./actions";
+import { retryUnifiInvoiceEmail, reviewUnifiInvoice } from "./actions";
+
+export const maxDuration = 60;
 
 const invoiceId = z.string().uuid();
 export default async function UnifiInvoicePage({ params, searchParams }: {
@@ -24,6 +27,8 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
   const stage = invoice.review_stage;
   const reviewPending = isUnifiPendingStage(stage);
   const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
+  const delivery = stage === "approved" ? await getUnifiInvoiceDelivery(id).catch(() => null) : null;
+  const canCheckDelivery = delivery !== null && delivery.status !== "sent" && canManageUnifiInvoiceEmail(profile);
   const month = formatUnifiBillingMonth(invoice.period);
   const line = formatUnifiLine(invoice.line_number);
   const pdfUrl = `/api/unifi-invoices/${invoice.id}/pdf`;
@@ -41,6 +46,7 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
         </Link>
         {query.saved === "1" && <p className="success" role="status">Review saved.</p>}
         {query.error === "review" && <p className="error" role="alert">Unable to save the review. Refresh and check the assigned reviewer.</p>}
+        {query.error === "email" && <p className="error" role="alert">Unable to check email delivery. Refresh and try again.</p>}
         <section className="panel" aria-labelledby="unifi-invoice-heading">
           <div className={styles.detailHeader}>
             <div>
@@ -75,10 +81,31 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
             <input type="hidden" name="stage" value={stage} />
             <SubmitButton className={`${controls.button} ${controls.primary}`} pendingText={stage === "james" ? "Approving…" : "Verifying…"}>
               <Check className={controls.icon} aria-hidden="true" />
-              {stage === "james" ? "Approve invoice" : `Verify & pass to ${stage === "fikri" ? "Kevin" : "James"}`}
+              {stage === "james" ? "Approve and email Joey" : `Verify & pass to ${stage === "fikri" ? "Kevin" : "James"}`}
             </SubmitButton>
           </form>}
         </section>
+        {stage === "approved" && <section className="panel" aria-labelledby="unifi-email-delivery">
+          <div className={styles.detailHeader}>
+            <div>
+              <h2 className={styles.panelTitle} id="unifi-email-delivery">Email to Joey</h2>
+              {delivery?.sent_at && <p className={styles.description}>
+                Sent <time dateTime={delivery.sent_at}>{formatUnifiDateTime(delivery.sent_at)}</time>
+              </p>}
+            </div>
+            <span className={delivery?.status === "sent" ? styles.approved : styles.pending}>
+              {unifiEmailLabel(delivery)}
+            </span>
+          </div>
+          {delivery?.error && <p className={styles.description}>{delivery.error}</p>}
+          {canCheckDelivery && <form action={retryUnifiInvoiceEmail} className={styles.emailAction}>
+            <input type="hidden" name="id" value={invoice.id} />
+            <SubmitButton className={`${controls.button} ${controls.secondary}`} pendingText="Checking email…">
+              <RefreshCw className={controls.icon} aria-hidden="true" />
+              {delivery.status === "failed" ? "Retry email" : "Check email"}
+            </SubmitButton>
+          </form>}
+        </section>}
         <section className="panel" aria-labelledby="unifi-invoice-preview">
           <div className={styles.detailHeader}>
             <div className={styles.heading}>
