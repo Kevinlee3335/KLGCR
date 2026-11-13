@@ -7,7 +7,7 @@ vi.mock('@/lib/operational-evidence-compression',()=>({prepareOperationalEvidenc
 import { CompleteJobForm } from './complete-job-form';
 beforeAll(()=>{URL.createObjectURL=vi.fn(()=> 'blob:test');URL.revokeObjectURL=vi.fn();});
 beforeEach(()=>{vi.clearAllMocks();mocks.prepare.mockImplementation(async(_jobId,files:Array<{type:string}>)=>({uploads:files.map((_,i)=>({path:`photo-${i}`,token:'token'}))}));mocks.upload.mockResolvedValue({error:null});mocks.complete.mockResolvedValue({error:'Test saved'});mocks.preparePhotos.mockImplementation(async(files:File[])=>files);});
-function addAndSubmit(count:number){render(<CompleteJobForm jobId="job" returnTo="/staff/tasks"/>);fireEvent.change(screen.getByLabelText('Upload Photos'),{target:{files:Array.from({length:count},(_,i)=>new File(['data'],`${i}.jpg`,{type:'image/jpeg'}))}});fireEvent.change(screen.getByRole('textbox'),{target:{value:'Completed repair'}});fireEvent.submit(screen.getByRole('button',{name:'Confirm completion'}).closest('form')!);}
+function addAndSubmit(count:number,onPendingApproval=vi.fn()){render(<CompleteJobForm jobId="job" returnTo="/staff/tasks" onPendingApproval={onPendingApproval}/>);fireEvent.change(screen.getByLabelText('Upload Photos'),{target:{files:Array.from({length:count},(_,i)=>new File(['data'],`${i}.jpg`,{type:'image/jpeg'}))}});fireEvent.change(screen.getByRole('textbox'),{target:{value:'Completed repair'}});fireEvent.submit(screen.getByRole('button',{name:'Confirm completion'}).closest('form')!);}
 it('prepares 20 original photos in one action and submits their paths in selection order',async()=>{
   addAndSubmit(20);
   await waitFor(()=>expect(mocks.complete).toHaveBeenCalledTimes(1));
@@ -46,4 +46,16 @@ it('starts three transfers together, waits for active requests, and retains the 
   expect(mocks.complete).not.toHaveBeenCalled();
   expect(screen.getByText('7 / 20 photos selected')).toBeInTheDocument();
   expect(screen.getByRole('textbox')).toHaveValue('Completed repair');
+});
+
+it.each(['prepare', 'complete'] as const)('reports a pending approval found by %s and keeps the selected evidence', async (step) => {
+  const onPendingApproval = vi.fn();
+  mocks[step].mockResolvedValueOnce({ pendingApproval: true });
+  addAndSubmit(1, onPendingApproval);
+  await waitFor(() => expect(onPendingApproval).toHaveBeenCalledTimes(1));
+  expect(mocks.upload).toHaveBeenCalledTimes(step === 'prepare' ? 0 : 1);
+  expect(mocks.complete).toHaveBeenCalledTimes(step === 'prepare' ? 0 : 1);
+  expect(screen.getByRole('button', { name: 'Confirm completion' })).toBeEnabled();
+  expect(screen.getByRole('textbox')).toHaveValue('Completed repair');
+  expect(screen.getByText('1 / 20 photos selected')).toBeInTheDocument();
 });

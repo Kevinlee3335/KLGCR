@@ -2,15 +2,14 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   role: vi.fn(),
-  job: vi.fn(),
-  eq: vi.fn(),
+  rpc: vi.fn(),
   sign: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    from: () => ({ select: () => ({ eq: mocks.eq }) }),
+    rpc: mocks.rpc,
     storage: { from: () => ({ createSignedUploadUrl: mocks.sign }) },
   }),
 }));
@@ -20,17 +19,15 @@ import { prepareCompletionUploads } from "./actions";
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.role.mockResolvedValue({ id: "staff-1" });
-  mocks.eq.mockReturnValue({ eq: mocks.eq, maybeSingle: mocks.job });
-  mocks.job.mockResolvedValue({ data: { id: "job-1" } });
+  mocks.rpc.mockResolvedValue({ data: false, error: null });
   mocks.sign.mockResolvedValue({ data: { token: "signed-token" } });
 });
 
-it("checks assignment once and prepares signed upload URLs in selection order", async () => {
+it("checks assignment and material approval once before signing uploads in selection order", async () => {
   const descriptors = ["image/webp", "image/png", "image/jpeg"].map(type => ({ type, size: 100 }));
   const result = await prepareCompletionUploads("job-1", descriptors);
   expect(mocks.role).toHaveBeenCalledExactlyOnceWith(["maintenance_staff"]);
-  expect(mocks.eq.mock.calls).toEqual([["id", "job-1"], ["assigned_to", "staff-1"]]);
-  expect(mocks.job).toHaveBeenCalledTimes(1);
+  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("has_pending_job_material_approval", { p_job_id: "job-1" });
   expect(mocks.sign).toHaveBeenCalledTimes(3);
   expect(result.uploads?.map(({ path }) => path.slice(path.lastIndexOf(".")))).toEqual([".webp", ".png", ".jpg"]);
   expect(result.uploads?.every(({ path }) => path.startsWith("job-1/completion/"))).toBe(true);
@@ -38,8 +35,14 @@ it("checks assignment once and prepares signed upload URLs in selection order", 
 
 it("rejects invalid photos and prevents signing for an unassigned job", async () => {
   expect(await prepareCompletionUploads("job-1", [{ type: "image/jpeg", size: NaN }])).toHaveProperty("error");
-  expect(mocks.job).not.toHaveBeenCalled();
-  mocks.job.mockResolvedValue({ data: null });
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  mocks.rpc.mockResolvedValue({ error: { message: "Job not found or cannot be completed" } });
   expect(await prepareCompletionUploads("job-1", [{ type: "image/jpeg", size: 100 }])).toHaveProperty("error");
+  expect(mocks.sign).not.toHaveBeenCalled();
+});
+
+it("does not sign uploads for a job with a pending material approval", async () => {
+  mocks.rpc.mockResolvedValue({ data: true, error: null });
+  expect(await prepareCompletionUploads("job-1", [{ type: "image/jpeg", size: 100 }])).toEqual({ pendingApproval: true });
   expect(mocks.sign).not.toHaveBeenCalled();
 });

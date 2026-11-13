@@ -13,13 +13,21 @@ import { notifyActiveAdmins } from "@/lib/app-notifications";
 import { staffJobReturnTo } from "@/lib/staff-job-return";
 
 const requiredNote = z.string().trim().min(1, "A note is required.").max(5000, "The note is too long.");
+const pendingApprovalMessage = "Material request is still pending approval";
 type CompletionUpload = { type: string; size: number };
-type CompletionResult = { error?: string; returnTo?: string };
+type MaterialApprovalResult = { error?: string; pendingApproval?: boolean };
+type CompletionResult = MaterialApprovalResult & { returnTo?: string };
+type CompletionUploadsResult = MaterialApprovalResult & { uploads?: { path: string; token: string }[] };
 
-function completionPhotoPath(jobId: string, value: FormDataEntryValue) {
-  if (typeof value !== "string") return null;
-  const match = new RegExp(`^${jobId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/completion/[0-9a-f-]{36}\\.(jpg|png|webp)$`, "i").exec(value);
-  return match ? value : null;
+async function getMaterialApproval(supabase: Awaited<ReturnType<typeof createClient>>, jobId: string) {
+  const { data, error } = await supabase.rpc("has_pending_job_material_approval", { p_job_id: jobId });
+  if (error || typeof data !== "boolean") return { error: error?.message || "Unable to check material approval." };
+  return { pendingApproval: data };
+}
+
+export async function checkJobMaterialApproval(jobId: string) {
+  await requireRole(["maintenance_staff"]);
+  return getMaterialApproval(await createClient(), jobId);
 }
 
 /**
@@ -27,8 +35,8 @@ function completionPhotoPath(jobId: string, value: FormDataEntryValue) {
  * signed URL. This avoids sending multi-megabyte camera photos through the
  * Server Action request, which can make Vercel return a blank client error.
  */
-export async function prepareCompletionUploads(jobId: string, files: CompletionUpload[]) {
-  const staff = await requireRole(["maintenance_staff"]);
+export async function prepareCompletionUploads(jobId: string, files: CompletionUpload[]): Promise<CompletionUploadsResult> {
+  await requireRole(["maintenance_staff"]);
   if (!Array.isArray(files) || !files.length || files.length > MAX_EVIDENCE_PHOTOS) {
     return { error: "Attach between 1 and 20 photos." };
   }
@@ -38,13 +46,8 @@ export async function prepareCompletionUploads(jobId: string, files: CompletionU
   }
 
   const supabase = await createClient();
-  const { data: job, error: jobError } = await supabase
-    .from("maintenance_jobs")
-    .select("id")
-    .eq("id", jobId)
-    .eq("assigned_to", staff.id)
-    .maybeSingle();
-  if (jobError || !job) return { error: "This assigned job could not be verified." };
+  const approval = await getMaterialApproval(supabase, jobId);
+  if (approval.error || approval.pendingApproval) return approval;
 
   const storage = supabase.storage.from("maintenance-evidence");
   try {
@@ -59,14 +62,6 @@ export async function prepareCompletionUploads(jobId: string, files: CompletionU
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Unable to prepare the completion photo upload." };
   }
-}
-
-async function saveCompletionPhotoRecords(supabase: Awaited<ReturnType<typeof createClient>>, jobId: string, staffId: string, data: FormData) {
-  const rawPaths = data.getAll("completionPhotoPaths");
-  const paths = rawPaths.map((value) => completionPhotoPath(jobId, value)).filter((path): path is string => Boolean(path));
-  if (!paths.length || paths.length > MAX_EVIDENCE_PHOTOS || paths.length !== rawPaths.length || new Set(paths).size !== paths.length) throw new Error("Attach between 1 and 20 valid completion photos.");
-  const { error } = await supabase.from("maintenance_job_photos").insert(paths.map((storage_path) => ({ job_id: jobId, storage_path, uploaded_by: staffId })));
-  if (error) throw new Error(`Unable to save completion photo: ${error.message}`);
 }
 
 async function runJobRpc(id: string, rpc: string, parameters: Record<string, unknown>, success: string, returnValue: unknown) {
@@ -89,15 +84,20 @@ export async function completeJob(id: string, data: FormData) {
   const returnTo = staffJobReturnTo(data.get("returnTo"));
   const result = requiredNote.safeParse(data.get("actionTaken"));
   if (!result.success) return { error: result.error.issues[0]?.message || "Action taken is required." } satisfies CompletionResult;
-  const staff = await requireRole(["maintenance_staff"]);
-  const supabase = await createClient();
-  try {
-    await saveCompletionPhotoRecords(supabase, id, staff.id, data);
-  } catch (photoError) {
-    const message = photoError instanceof Error ? photoError.message : "Unable to save completion photo.";
-    return { error: message } satisfies CompletionResult;
+  await requireRole(["maintenance_staff"]);
+  const paths = data.getAll("completionPhotoPaths");
+  if (!paths.length || paths.length > MAX_EVIDENCE_PHOTOS || !paths.every((path) => typeof path === "string")) {
+    return { error: "Attach between 1 and 20 valid completion photos." } satisfies CompletionResult;
   }
-  const { error } = await supabase.rpc("complete_assigned_job", { p_job_id: id, p_action_taken: result.data });
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("complete_assigned_job", {
+    p_job_id: id,
+    p_action_taken: result.data,
+    p_photo_paths: paths,
+  });
+  if (error?.code === "P0001" && error.message === pendingApprovalMessage) {
+    return { pendingApproval: true } satisfies CompletionResult;
+  }
   if (error) return { error: error.message } satisfies CompletionResult;
 
   // Do not keep staff waiting for email and push delivery after the job is safely completed.

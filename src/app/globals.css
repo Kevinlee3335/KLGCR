@@ -643,6 +643,19 @@ p {
   padding: 13px;
   resize: vertical;
 }
+.job-completion-dialog {
+  width: min(440px, calc(100% - 32px));
+  color: var(--ink);
+}
+.job-completion-dialog::backdrop {
+  background: #18181666;
+}
+.job-completion-dialog p {
+  line-height: 1.5;
+}
+.job-completion-error {
+  grid-column: 1 / -1;
+}
 .upload-placeholder {
   display: grid;
   gap: 4px;

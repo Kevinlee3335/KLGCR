@@ -8,7 +8,7 @@ import { useState, type FormEvent } from "react";
 import { completeJob, prepareCompletionUploads } from "@/app/(dashboard)/staff/jobs/actions";
 import { createClient } from "@/lib/supabase/client";
 
-export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: string }) {
+export function CompleteJobForm({ jobId, returnTo, onPendingApproval }: { jobId: string; returnTo: string; onPendingApproval: () => void }) {
   const [photos, setPhotos] = useState<File[]>([]);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -33,6 +33,10 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
       const files = await prepareOperationalEvidencePhotos(photos);
       setProgress("Preparing photo uploads…");
       const prepared = await prepareCompletionUploads(jobId, files.map(({ type, size }) => ({ type, size })));
+      if (prepared.pendingApproval) {
+        onPendingApproval();
+        return;
+      }
       if (!prepared.uploads || prepared.uploads.length !== files.length) {
         throw new Error(prepared.error || "Unable to prepare the completion photo upload.");
       }
@@ -53,6 +57,10 @@ export function CompleteJobForm({ jobId, returnTo }: { jobId: string; returnTo: 
       formData.delete("completionPhotos");
       setProgress("Saving completion…");
       const result = await completeJob(jobId, formData);
+      if (result?.pendingApproval) {
+        onPendingApproval();
+        return;
+      }
       if (result?.error) {
         setError(result.error);
         return;
