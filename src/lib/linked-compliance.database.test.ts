@@ -106,7 +106,7 @@ beforeAll(async () => {
     update public.unifi_invoices set review_stage = 'archived' where source_message_id = 'roundcube:inbox:55';
     select public.advance_unifi_invoice_review('90000000-0000-4000-8000-000000000003','fikri','${fikri}');
   `);
-  await db.exec(readFileSync('supabase/migrations/20261113064746_parallel_document_verification.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261113071407_parallel_document_verification.sql', 'utf8'));
   await db.exec(`
     insert into public.supplier_mail_documents(id,company,content_hash,file_name,folder,storage_path,size_bytes)
       values('${invoice}','sigma',repeat('b',64),'Invoice.pdf','Invoice','sigma/invoice.pdf',100);
