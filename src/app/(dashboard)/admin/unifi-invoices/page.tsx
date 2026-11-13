@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { requireRole } from "@/lib/auth";
-import { listUnifiInvoices, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { isUnifiPendingStage, listUnifiInvoices, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
 import { getUnifiWebmailConnectionStatus } from "@/lib/unifi-webmail-connection";
 import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiReviewLabel } from "./display";
 import styles from "./unifi-invoices.module.css";
@@ -18,6 +18,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
     canConnectWebmail ? getUnifiWebmailConnectionStatus().catch(() => null) : null,
   ]);
   const approved = invoices?.filter(invoice => invoice.review_stage === "approved").length ?? 0;
+  const archived = invoices?.filter(invoice => invoice.review_stage === "archived").length ?? 0;
   const sortedInvoices = invoices?.slice().sort(compareUnifiInvoicePeriodAndLine);
   const syncedCount = typeof query.synced === "string" && /^\d+$/.test(query.synced) ? Number(query.synced) : null;
 
@@ -36,12 +37,13 @@ export default async function UnifiInvoicesPage({ searchParams }: {
               <span className={styles.icon}><FileText size={22} aria-hidden="true" /></span>
               <div>
                 <h2 id="unifi-invoice-list">TM Unifi invoices</h2>
-                <p>Fikri Verify → Kevin Verify → James Approve</p>
+                <p>New invoices follow Fikri Verify → Kevin Verify → James Approve</p>
               </div>
             </div>
             {invoices && <dl className={styles.counts}>
-              <div><dt>Pending</dt><dd>{invoices.length - approved}</dd></div>
+              <div><dt>Pending</dt><dd>{invoices.length - approved - archived}</dd></div>
               <div><dt>Approved</dt><dd>{approved}</dd></div>
+              <div><dt>Archived</dt><dd>{archived}</dd></div>
             </dl>}
           </header>
           {!invoices ? (
@@ -64,8 +66,8 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                 <tbody>
                   {sortedInvoices?.map(invoice => {
                     const stage = invoice.review_stage;
-                    const isApproved = stage === "approved";
-                    const canReview = !isApproved && unifiReviewerForStage[stage].id === profile.id;
+                    const reviewPending = isUnifiPendingStage(stage);
+                    const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
                     const month = formatUnifiBillingMonth(invoice.period);
                     const line = formatUnifiLine(invoice.line_number);
                     return (
@@ -80,7 +82,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                         <td className={styles.identifier}>{invoice.due_date
                           ? <time dateTime={invoice.due_date}>{formatUnifiDate(invoice.due_date)}</time>
                           : "—"}</td>
-                        <td><span className={isApproved ? styles.approved : styles.pending}>{unifiReviewLabel(stage)}</span></td>
+                        <td><span className={reviewPending ? styles.pending : styles[stage]}>{unifiReviewLabel(stage)}</span></td>
                         <td>
                           <Link href={`${unifiInvoicePath}/${invoice.id}`} className={`${controls.button} ${canReview ? controls.primary : controls.secondary} ${controls.small}`} aria-label={`${canReview ? "Review" : "Open"} ${month} invoice · ${line}`}>
                             {canReview ? "Review" : "Open"} <ArrowUpRight size={15} aria-hidden="true" />

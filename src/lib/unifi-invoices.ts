@@ -11,7 +11,11 @@ export const unifiReviewerForStage = {
   james: documentReviewers[2],
 } as const;
 export type UnifiPendingStage = typeof unifiPendingStages[number];
-export type UnifiInvoiceStage = UnifiPendingStage | 'approved';
+export type UnifiInvoiceStage = UnifiPendingStage | 'approved' | 'archived';
+
+export function isUnifiPendingStage(stage: UnifiInvoiceStage): stage is UnifiPendingStage {
+  return stage !== 'approved' && stage !== 'archived';
+}
 
 export type UnifiInvoice = {
   id: string;
@@ -155,12 +159,12 @@ export async function downloadUnifiInvoice(id: string): Promise<{ bytes: Uint8Ar
   return { bytes: new Uint8Array(await data.arrayBuffer()), fileName: invoice.data.file_name };
 }
 
-export async function advanceUnifiInvoiceReview(id: string, expectedStage: UnifiPendingStage, actorId: string): Promise<UnifiInvoiceStage> {
+export async function advanceUnifiInvoiceReview(id: string, expectedStage: UnifiPendingStage, actorId: string): Promise<UnifiPendingStage | 'approved'> {
   const result = await createAdminClient().rpc('advance_unifi_invoice_review', {
     p_invoice_id: id,
     p_expected_stage: expectedStage,
     p_actor_id: actorId,
   });
   if (result.error || !result.data) throw Error('Unable to save this review. Refresh and check the current reviewer.');
-  return result.data as UnifiInvoiceStage;
+  return result.data as UnifiPendingStage | 'approved';
 }
