@@ -38,6 +38,7 @@ export function compareUnifiInvoicePeriodAndLine(
 
 export function unifiReviewLabel(stage: UnifiInvoiceStage) {
   if (stage === "approved") return "Approved by James";
+  if (stage === "archived") return "Archived";
   const reviewer = unifiReviewerForStage[stage].name;
   return `Pending ${reviewer} ${stage === "james" ? "approval" : "verification"}`;
 }

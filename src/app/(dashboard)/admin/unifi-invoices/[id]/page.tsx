@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
-import { getUnifiInvoice, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
+import { getUnifiInvoice, isUnifiPendingStage, unifiInvoicePath, unifiReviewerForStage } from "@/lib/unifi-invoices";
 import { formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiReviewLabel } from "../display";
 import styles from "../unifi-invoices.module.css";
 import { reviewUnifiInvoice } from "./actions";
@@ -22,8 +22,8 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
   if (!invoice) notFound();
 
   const stage = invoice.review_stage;
-  const approved = stage === "approved";
-  const canReview = !approved && unifiReviewerForStage[stage].id === profile.id;
+  const reviewPending = isUnifiPendingStage(stage);
+  const canReview = reviewPending && unifiReviewerForStage[stage].id === profile.id;
   const month = formatUnifiBillingMonth(invoice.period);
   const line = formatUnifiLine(invoice.line_number);
   const pdfUrl = `/api/unifi-invoices/${invoice.id}/pdf`;
@@ -46,7 +46,7 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
             <div>
               <h2 className={styles.panelTitle} id="unifi-invoice-heading">{month} invoice</h2>
             </div>
-            <span className={approved ? styles.approved : styles.pending}>{unifiReviewLabel(stage)}</span>
+            <span className={reviewPending ? styles.pending : styles[stage]}>{unifiReviewLabel(stage)}</span>
           </div>
           <dl className={styles.metadata}>
             <div><dt>Line</dt><dd className={styles.identifier}>{line}</dd></div>
@@ -59,7 +59,7 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
               ? <time dateTime={invoice.due_date}>{formatUnifiDate(invoice.due_date)}</time>
               : "—"}</dd></div>
           </dl>
-          <ol className={styles.steps} aria-label="Invoice review history">
+          {stage !== "archived" && <ol className={styles.steps} aria-label="Invoice review history">
             {history.map(step => (
               <li key={step.title}>
                 {step.at ? <Check size={17} aria-hidden="true" /> : <span className={styles.emptyStep} aria-hidden="true" />}
@@ -69,7 +69,7 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
                 </div>
               </li>
             ))}
-          </ol>
+          </ol>}
           {canReview && <form action={reviewUnifiInvoice}>
             <input type="hidden" name="id" value={invoice.id} />
             <input type="hidden" name="stage" value={stage} />

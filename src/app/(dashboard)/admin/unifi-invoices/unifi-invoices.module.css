@@ -64,6 +64,7 @@
 
 .counts {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   margin: 0;
 }
@@ -140,7 +141,8 @@
 }
 
 .pending,
-.approved {
+.approved,
+.archived {
   display: inline-flex;
   padding: 5px 9px;
   border-radius: 6px;
@@ -156,6 +158,11 @@
 .approved {
   background: #e8f1e5;
   color: #285c38;
+}
+
+.archived {
+  background: #eeeae0;
+  color: #554e40;
 }
 
 .uploadForm {
