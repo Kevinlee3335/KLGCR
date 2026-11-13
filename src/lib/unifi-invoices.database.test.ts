@@ -8,7 +8,7 @@ const [fikri, kevin, james] = documentReviewers;
 const invoiceId = '00000000-0000-4000-8000-000000000001';
 const secondInvoiceId = '00000000-0000-4000-8000-000000000002';
 const migration = readFileSync('supabase/migrations/20261113050205_unifi_invoice_review.sql', 'utf8');
-const archiveMigration = readFileSync('supabase/migrations/20261113062947_archive_historical_unifi_invoices.sql', 'utf8');
+const archiveMigration = readFileSync('supabase/migrations/20261113063516_archive_historical_unifi_invoices.sql', 'utf8');
 
 async function setupUnifiDatabase(db: PGlite) {
   await db.exec(`
