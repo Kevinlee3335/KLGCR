@@ -405,3 +405,27 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 .checkout-controls {
   display: contents;
 }
+
+.checkout-cleaning-actions,
+.checkout-cleaning-report form {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.checkout-cleaning-report {
+  width: 100%;
+}
+.checkout-cleaning-report > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.checkout-cleaning-report form {
+  margin-top: 12px;
+}
+.checkout-cleaning-report .checkout-defect-picker {
+  width: 100%;
+}
+.checkout-cleaning-report .defect-picker-row {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
