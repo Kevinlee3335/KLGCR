@@ -1,3 +1,12 @@
+create table public.flex_inspection_mail_config (
+  id boolean primary key default true check (id),
+  recipients jsonb not null check (jsonb_typeof(recipients) = 'object')
+);
+
+alter table public.flex_inspection_mail_config enable row level security;
+revoke all on public.flex_inspection_mail_config from public, anon, authenticated, service_role;
+grant select on public.flex_inspection_mail_config to service_role;
+
 create table public.flex_inspection_reviews (
   period text primary key references public.flex_inspections(period),
   kevin_verified_at timestamptz,

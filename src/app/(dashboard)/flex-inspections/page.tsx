@@ -28,14 +28,14 @@ export default async function FlexInspectionsPage({
     : currentPeriod;
   const preview = isFlexPreview();
   const reviewer = flexReviewer(profile);
-  const recipients = reviewer ? flexInspectionMailRecipients() : null;
 
-  const [groups, inspection] = await Promise.all([
-    loadFlexGroups(),
+  const [groups, inspection, recipients] = await Promise.all([
+    loadFlexGroups().catch(() => null),
     preview ? Promise.resolve({
       period, revision: 0, exceptions: {}, inspectionDate: null, inspectedByName: null, completedAt: null,
-    }) : loadFlexInspection(period),
-  ]).catch(() => [null, null] as const);
+    }) : loadFlexInspection(period).catch(() => null),
+    reviewer ? flexInspectionMailRecipients().catch(() => null) : null,
+  ]);
   const review = inspection?.completedAt ? await loadFlexReview(period).catch(() => null) : emptyFlexReview;
 
   return (

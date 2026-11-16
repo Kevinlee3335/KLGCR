@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const flexAddress = z.string().trim().max(254).email().regex(/^[a-z0-9._%+-]+@flex\.com$/i);
 const recipientSchema = z.object({
@@ -8,13 +9,21 @@ const recipientSchema = z.object({
 
 export type FlexInspectionMailRecipients = z.infer<typeof recipientSchema>;
 
-export function flexInspectionMailRecipients(): FlexInspectionMailRecipients | null {
+export async function flexInspectionMailRecipients(): Promise<FlexInspectionMailRecipients | null> {
   const setting = process.env.KLGCR_FLEX_MAIL_RECIPIENTS;
-  if (!setting) return null;
-  try {
-    const result = recipientSchema.safeParse(JSON.parse(setting));
-    return result.success ? result.data : null;
-  } catch {
-    return null;
+  let recipients: unknown;
+  if (setting !== undefined) {
+    try {
+      recipients = JSON.parse(setting);
+    } catch {
+      return null;
+    }
+  } else if (process.env.VERCEL_ENV === "production") {
+    const { data, error } = await createAdminClient().from("flex_inspection_mail_config")
+      .select("recipients").eq("id", true).maybeSingle();
+    if (error) throw Error("Unable to load the Flex mail recipients.");
+    recipients = data?.recipients;
   }
+  const result = recipientSchema.safeParse(recipients);
+  return result.success ? result.data : null;
 }

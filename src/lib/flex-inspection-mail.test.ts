@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   gateway: vi.fn(),
   inspection: vi.fn(),
   render: vi.fn(),
+  config: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
@@ -32,7 +33,12 @@ beforeEach(() => {
   vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", JSON.stringify({ to: pinnedRecipient, cc }));
   mocks.admin.mockImplementation(() => ({
     rpc: mocks.claim,
-    from: () => ({
+    from: (table: string) => ({
+      select: (columns: string) => ({
+        eq: (key: string, value: boolean) => ({
+          maybeSingle: () => mocks.config({ table, columns, key, value }),
+        }),
+      }),
       update: (value: Record<string, unknown>) => {
         mocks.update(value);
         const query = {
@@ -58,6 +64,22 @@ beforeEach(() => {
       ? { ok: true, sender, capabilities: ["combinedPdf", "cc", "idempotency"] }
       : { ok: true, status: "sent", sender, to: pinnedRecipient, cc, sentAt, key },
   );
+});
+
+it("loads the exact approved To and CC from private production settings", async () => {
+  vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", undefined);
+  mocks.config.mockResolvedValue({
+    data: { recipients: { to: pinnedRecipient, cc } }, error: null,
+  });
+
+  await dispatchFlexInspectionMail(period);
+
+  expect(mocks.config).toHaveBeenCalledWith({
+    table: "flex_inspection_mail_config", columns: "recipients", key: "id", value: true,
+  });
+  expect(mocks.gateway).toHaveBeenCalledWith(expect.objectContaining({
+    action: "flex-inspection-send", to: pinnedRecipient, cc,
+  }), 25_000);
 });
 
 afterEach(() => vi.unstubAllEnvs());

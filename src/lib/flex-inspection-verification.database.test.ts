@@ -58,7 +58,7 @@ async function setup(db: PGlite) {
   `);
   for (const migration of [
     "20261116045750_flex_monthly_inspections.sql",
-    "20261116071000_flex_inspection_verification.sql",
+    "20261116074019_flex_inspection_verification.sql",
   ]) {
     await db.exec(readFileSync("supabase/migrations/" + migration, "utf8"));
   }
@@ -84,11 +84,14 @@ it("verifies completed months in either order and exclusively claims mail after 
     )).rows[0];
 
     await db.exec("set role authenticated;");
+    await expect(db.query("select * from public.flex_inspection_mail_config")).rejects.toThrow("permission denied");
     await expect(db.query("select * from public.flex_inspection_reviews")).rejects.toThrow("permission denied");
     await expect(verify(currentMonth, kevin.id)).rejects.toThrow("permission denied");
     await expect(queue(fikri.id)).rejects.toThrow("permission denied");
     await expect(claim(currentMonth, firstToken)).rejects.toThrow("permission denied");
     await db.exec("reset role; set role service_role;");
+    expect((await db.query("select id from public.flex_inspection_mail_config")).rows).toEqual([]);
+    await expect(db.query("insert into public.flex_inspection_mail_config(recipients) values ('{}')")).rejects.toThrow("permission denied");
 
     expect(await queue(kevin.id)).toEqual([currentMonth, earlierMonth]);
     expect(await queue(fikri.id)).toEqual([currentMonth, earlierMonth]);

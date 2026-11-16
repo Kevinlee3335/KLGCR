@@ -92,9 +92,13 @@ async function sendInspectionReport(period: string, recipients: FlexInspectionMa
 
 export async function dispatchFlexInspectionMail(period: string) {
   if (process.env.VERCEL_ENV !== "production" || !isFlexPeriod(period)) return;
-  const recipients = flexInspectionMailRecipients();
+  const recipients = await flexInspectionMailRecipients();
   if (!recipients) return;
 
+  return dispatchFlexInspectionMailTo(period, recipients);
+}
+
+async function dispatchFlexInspectionMailTo(period: string, recipients: FlexInspectionMailRecipients) {
   const db = createAdminClient();
   const token = randomUUID();
   const { data, error } = await db.rpc("claim_flex_inspection_mail", {
@@ -113,7 +117,9 @@ export async function dispatchFlexInspectionMail(period: string) {
 }
 
 export async function retryQueuedFlexInspectionMail() {
-  if (process.env.VERCEL_ENV !== "production" || !flexInspectionMailRecipients()) return;
+  if (process.env.VERCEL_ENV !== "production") return;
+  const recipients = await flexInspectionMailRecipients();
+  if (!recipients) return;
 
   const result = await createAdminClient().from(deliveryTable).select("period")
     .not("kevin_verified_at", "is", null).not("fikri_verified_at", "is", null)
@@ -123,7 +129,7 @@ export async function retryQueuedFlexInspectionMail() {
 
   for (const { period } of result.data) {
     try {
-      await dispatchFlexInspectionMail(period);
+      await dispatchFlexInspectionMailTo(period, recipients);
     } catch {
       console.error("Queued Flex inspection email needs review", { period });
     }
