@@ -1,4 +1,4 @@
-import {appendReplyInstructions, MANAGEMENT_EMAIL, renderEmailBody} from './email-layout';
+import {buildEmailContent, MANAGEMENT_EMAIL} from './email-layout';
 
 export const COMMON_EMAIL_FOOTER = `KLG Campus Residence Management
 
@@ -73,8 +73,6 @@ If further information or an appointment is required, our Management Office will
 Thank you for your patience and cooperation.
 
 Best regards,
-KLG Campus Residence Management
-
 ${COMMON_EMAIL_FOOTER}`,
   };
 }
@@ -98,8 +96,6 @@ Please contact the KLG Campus Residence Management Office to arrange a new maint
 Thank you for your cooperation.
 
 Best regards,
-KLG Campus Residence Management
-
 ${COMMON_EMAIL_FOOTER}`,
   };
 }
@@ -120,8 +116,6 @@ Completed On: ${completedAt}
 Thank you for your cooperation.
 
 Best regards,
-KLG Campus Residence Management
-
 ${COMMON_EMAIL_FOOTER}`,
   };
 }
@@ -129,8 +123,7 @@ ${COMMON_EMAIL_FOOTER}`,
 /** Best-effort server-side delivery. Transactional workflows never depend on email delivery. */
 export async function sendTransactionalEmail(to: string | null | undefined, message: TransactionalMessage, options?: {timeoutMs:number}) {
   if (!to?.trim()) return { sent: false as const, reason: "disabled_or_missing_recipient" as const };
-  const html = renderEmailBody(message);
-  const text = appendReplyInstructions(message.text);
+  const { text, html } = buildEmailContent(message);
   const gmailEndpoint = process.env.KLGCR_GMAIL_WEB_APP_URL;
   const gmailSecret = process.env.KLGCR_GMAIL_WEB_APP_SECRET;
   if (gmailEndpoint && gmailSecret) {
