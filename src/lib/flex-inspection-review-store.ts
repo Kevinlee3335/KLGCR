@@ -3,7 +3,7 @@ import { emptyFlexReview, type FlexMailStatus, type FlexReview, type FlexReviewe
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/lib/types";
 
-type ReviewRow = {
+export type FlexReviewRow = {
   kevin_verified_at: string | null;
   fikri_verified_at: string | null;
   status: FlexMailStatus;
@@ -20,7 +20,7 @@ export function isFlexPreview() {
   return process.env.VERCEL_ENV === "preview";
 }
 
-export function toFlexReview(row: ReviewRow | null): FlexReview {
+export function toFlexReview(row: FlexReviewRow | null): FlexReview {
   if (!row) return emptyFlexReview;
   return {
     kevinVerifiedAt: row.kevin_verified_at,
@@ -33,7 +33,7 @@ export function toFlexReview(row: ReviewRow | null): FlexReview {
 
 export async function loadFlexReview(period: string): Promise<FlexReview> {
   const { data, error } = await createAdminClient().from("flex_inspection_reviews")
-    .select("kevin_verified_at,fikri_verified_at,status,sent_at,error").eq("period", period).maybeSingle<ReviewRow>();
+    .select("kevin_verified_at,fikri_verified_at,status,sent_at,error").eq("period", period).maybeSingle<FlexReviewRow>();
   if (error) throw Error("Unable to load Flex verification.");
   return toFlexReview(data);
 }
