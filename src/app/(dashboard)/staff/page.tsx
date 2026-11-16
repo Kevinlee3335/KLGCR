@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { ArrowUpRight, DoorOpen } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { Dashboard } from "@/components/dashboard";
 import { JobList } from "@/components/phase2-ui";
 import { StaffMonitoringFollowUp } from "@/components/staff-monitoring-follow-up";
+import followUpStyles from "@/components/monitoring-follow-up.module.css";
 import { createClient } from "@/lib/supabase/server";
 import { malaysiaDate } from "@/lib/monitoring-follow-up";
 import { getStaffMonitoringFollowUps } from "@/lib/staff-monitoring-follow-up";
@@ -28,11 +30,13 @@ export default async function StaffPage() {
   if (profile.role === "cleaner") return <CleanerDashboard profile={profile}/>;
   const supabase = await createClient();
   const today = malaysiaDate();
-  const [statusResult, recentResult, appointmentResult, followUps] = await Promise.all([
+  const [statusResult, recentResult, appointmentResult, followUps, checkoutResult] = await Promise.all([
     supabase.from("maintenance_jobs").select("status").eq("assigned_to", profile.id),
     supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false }).limit(5),
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,complaint:complaints!complaint_id(room_no,category,complainant_contact,availability_date,availability_time,room_access_permission,block:blocks!block_id(code))").eq("appointment_date",today).not("status","in",'("completed","cancelled","no_show")').order("appointment_date").order("appointment_time").limit(10),
     getStaffMonitoringFollowUps(supabase, profile.id, today),
+    supabase.from("checkout_rooms").select("id", { count: "exact", head: true })
+      .eq("assigned_to", profile.id).eq("status", "rectification").is("deleted_at", null),
   ]);
   const statuses = statusResult.data || [];
   const jobs = (recentResult.data || []) as unknown as JobRow[];
@@ -51,10 +55,25 @@ export default async function StaffPage() {
   const rows = jobs.map((job) => ({ ...job, appointments: job.complaint?.id ? appointmentsByComplaint.get(job.complaint.id) || [] : [] }));
   const blocks = profile.blocks?.map((block) => `Block ${block.code}`).join(" & ");
   const count = (status: string) => statuses.filter((row) => row.status === status).length;
+  const pendingCheckouts = checkoutResult.count ?? 0;
   const appointments=(appointmentResult.data||[]) as unknown as Array<{id:string;job_id:string|null;appointment_date:string;appointment_time:string;status:string;complaint:{room_no:string;category:string;complainant_contact:string|null;room_access_permission:string|null;block:{code:string}|null}|null}>;
 
   return <AppShell profile={profile} title="My Dashboard">
     <Dashboard kind="staff" name={profile.full_name} blocks={blocks} values={[count("assigned"), count("in_progress"), count("pending_material"), count("completed")]} hrefs={["/staff/tasks?status=assigned", "/staff/tasks?status=in_progress", "/staff/tasks?status=pending_material", "/staff/tasks?status=completed"]}/>
+    {(pendingCheckouts > 0 || checkoutResult.error) && <section className={followUpStyles.panel} aria-labelledby="staff-checkout-rooms">
+      <header className={followUpStyles.header}>
+        <div className={followUpStyles.heading}>
+          <span className={followUpStyles.icon}><DoorOpen size={20} aria-hidden="true"/></span>
+          <div>
+            <h2 id="staff-checkout-rooms">Check-out Rooms</h2>
+            {checkoutResult.error
+              ? <p role="alert">Unable to load your assigned room count.</p>
+              : <p>{pendingCheckouts} {pendingCheckouts === 1 ? "room" : "rooms"} assigned to you for rectification.</p>}
+          </div>
+        </div>
+        <Link className={followUpStyles.action} href="/staff/checkouts">Open assigned rooms <ArrowUpRight size={15} aria-hidden="true"/></Link>
+      </header>
+    </section>}
     <StaffMonitoringFollowUp {...followUps} today={today}/>
     <section className="panel" style={{marginTop:24}}>
       <div className="section-head"><div><h2>Today&apos;s Appointments</h2><p className="subtle">Scheduled maintenance visits across the maintenance team.</p></div><Link className="text-link" href="/staff/calendar">Open Calendar</Link></div>

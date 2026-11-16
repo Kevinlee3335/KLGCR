@@ -6,14 +6,19 @@ vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: 
 vi.mock("@/components/dashboard", () => ({ Dashboard: () => <div>Dashboard loaded</div> }));
 
 function query(result: unknown) {
-  const builder = { select: vi.fn(), order: vi.fn(), limit: vi.fn(), eq: vi.fn(), not: vi.fn(), in: vi.fn(), or: vi.fn(), like: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
-  for (const method of ["select", "order", "limit", "eq", "not", "in", "or", "like"] as const) builder[method].mockReturnValue(builder);
+  const builder = { select: vi.fn(), order: vi.fn(), limit: vi.fn(), eq: vi.fn(), is: vi.fn(), not: vi.fn(), in: vi.fn(), or: vi.fn(), like: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
+  for (const method of ["select", "order", "limit", "eq", "is", "not", "in", "or", "like"] as const) builder[method].mockReturnValue(builder);
   return builder;
 }
 
 const jobQueries: ReturnType<typeof query>[] = [];
 let jobQueryIndex = 0;
-vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn().mockResolvedValue({ from: vi.fn((table: string) => table === "maintenance_jobs" ? jobQueries[jobQueryIndex++] : query({ data: [], error: null })) }) }));
+let checkoutQuery: ReturnType<typeof query>;
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn().mockResolvedValue({ from: vi.fn((table: string) => {
+  if (table === "maintenance_jobs") return jobQueries[jobQueryIndex++];
+  if (table === "checkout_rooms") return checkoutQuery;
+  return query({ data: [], error: null });
+}) }) }));
 
 import StaffPage from "./page";
 
@@ -27,6 +32,7 @@ const returnedJob = {
 describe("staff dashboard", () => {
   beforeEach(() => {
     jobQueryIndex = 0;
+    checkoutQuery = query({ count: 0, error: null });
     jobQueries.splice(0, jobQueries.length, query({ data: [{ status: "assigned" }], error: null }),
       query({ data: [], error: null }), query({ data: [], error: null }), query({ data: [], error: null }));
   });
@@ -35,7 +41,18 @@ describe("staff dashboard", () => {
     const html = renderToStaticMarkup(await StaffPage());
     expect(html).toContain("Dashboard loaded");
     expect(html).not.toContain("Monitoring Follow-up");
+    expect(html).not.toContain("Open assigned rooms");
     for (const jobQuery of jobQueries) expect(jobQuery.select.mock.calls.flat().join()).not.toContain("appointment_required");
+  });
+
+  it("shows an entry to active checkout repairs for the signed-in maintenance user", async () => {
+    checkoutQuery = query({ count: 4, error: null });
+    const html = renderToStaticMarkup(await StaffPage());
+    expect(html).toContain('href="/staff/checkouts"');
+    expect(html).toContain("4 rooms assigned to you for rectification.");
+    expect(checkoutQuery.eq).toHaveBeenCalledWith("assigned_to", "staff");
+    expect(checkoutQuery.eq).toHaveBeenCalledWith("status", "rectification");
+    expect(checkoutQuery.is).toHaveBeenCalledWith("deleted_at", null);
   });
 
   it("shows due monitoring work and the current Admin return with its remark and timestamp", async () => {

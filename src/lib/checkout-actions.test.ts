@@ -70,12 +70,19 @@ it("Admin manual inspection preserves seven signed-upload photos and assigns mai
  await expect(completeInspection("room",f)).rejects.toThrow("/admin/checkouts/room");
  expect(room().status).toBe("rectification");expect(room().assigned_to).toBe("tech");
  expect(state.tables.checkout_photos).toHaveLength(7);expect(state.tables.checkout_photos.every(p=>p.kind==="inspection")).toBe(true);
+ expect(state.notifications).toHaveBeenCalledExactlyOnceWith({
+  recipientIds:["tech"],type:"checkout_assigned",title:"New check-out room for rectification",
+  body:"TEST · Room TEST was assigned to you after inspection.",href:"/staff/checkouts/room",entityId:"room",deferPush:true,
+ });
+ await expect(completeInspection("room",f)).rejects.toThrow("no%20longer%20awaiting%20maintenance%20assignment");
+ expect(state.notifications).toHaveBeenCalledTimes(1);
 });
 it("Admin manual inspection does not assign when any uploaded photo is missing",async()=>{
  room().status="second_inspection";state.tables.profiles.push({id:"tech",role:"maintenance_staff",is_active:true,full_name:"Abdullah",deleted_at:null});
  const f=form({assignee:"tech",photoPaths:"room/inspection/"+crypto.randomUUID()+".jpg"});
  await expect(completeInspection("room",f)).rejects.toThrow("incomplete");
  expect(room().status).toBe("second_inspection");expect(state.tables.checkout_photos).toHaveLength(0);
+ expect(state.notifications).not.toHaveBeenCalled();
 });
 
 it("assigns a cleaner-reported defect without a new inspection and preserves the original notes", async () => {

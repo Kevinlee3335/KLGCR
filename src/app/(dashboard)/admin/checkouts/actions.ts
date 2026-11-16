@@ -88,23 +88,23 @@ async function assignCheckoutForRepair(id: string, data: FormData, includesInspe
 
  await history(db, id, actor.id, includesInspection ? "inspection_completed" : "maintenance_assigned",
   notes, "second_inspection", "rectification");
- if (!includesInspection) {
-  try {
-   await createAppNotifications({
-    recipientIds: [assignee],
-    type: "checkout_assigned",
-    title: "New check-out room for rectification",
-    body: `${room.reference_no} · Room ${room.room_no} was assigned to you after a cleaner reported a defect.`,
-    href: `/staff/checkouts/${id}`,
-    entityId: id,
-    deferPush: true,
-   });
-  } catch (error) {
-   console.error("Unable to notify maintenance about the check-out room", error);
-  }
-  revalidatePath("/staff/checkouts");
-  revalidatePath("/admin/checkouts");
+ try {
+  const assignmentReason = includesInspection ? "after inspection" : "after a cleaner reported a defect";
+  await createAppNotifications({
+   recipientIds: [assignee],
+   type: "checkout_assigned",
+   title: "New check-out room for rectification",
+   body: `${room.reference_no} · Room ${room.room_no} was assigned to you ${assignmentReason}.`,
+   href: `/staff/checkouts/${id}`,
+   entityId: id,
+   deferPush: true,
+  });
+ } catch (error) {
+  console.error("Unable to notify maintenance about the check-out room", error);
  }
+ revalidatePath("/staff");
+ revalidatePath("/staff/checkouts");
+ revalidatePath("/admin/checkouts");
  revalidatePath(`/admin/checkouts/${id}`);
  go(id);
 }
@@ -146,7 +146,7 @@ export async function transferCheckoutTask(id:string,data:FormData){
  const {data:room,error}=await db.rpc("transfer_checkout_task",{p_room_id:id,p_assignee:assignee,p_expected_assignee:expected,p_reason:reason});
  if(error||!room)go(id,error?.message||"Unable to transfer this task.");
  try{await createAppNotifications({recipientIds:[assignee],type:"checkout_assigned",title:"Check-out repair task transferred to you",body:`${room.reference_no} — Room ${room.room_no}. ${reason}`,href:`/staff/checkouts/${id}`,entityId:id});}catch(error){console.error("Unable to notify new check-out assignee",error);}
- revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/admin/checkouts");revalidatePath("/staff/checkouts");revalidatePath(`/staff/checkouts/${id}`);go(id);
+ revalidatePath(`/admin/checkouts/${id}`);revalidatePath("/admin/checkouts");revalidatePath("/staff");revalidatePath("/staff/checkouts");revalidatePath(`/staff/checkouts/${id}`);go(id);
 }
 
 export async function transferCheckoutCleanerTask(id:string,data:FormData){
@@ -179,7 +179,7 @@ export async function bulkAssignCheckouts(ids:string[],assignee:string,kind:"mai
  const {data,error}=await db.rpc("bulk_assign_checkout_rooms",{p_ids:ids,p_assignee:assignee,p_kind:kind});
  if(error)return {error:error.message};
  try{await createAppNotifications({recipientIds:[assignee],type:"checkout_assigned",title:"Check-out rooms assigned",body:`${data} room(s) assigned for ${kind==="maintenance"?"rectification":"cleaning"}.`,href:"/staff/checkouts",entityId:ids[0]});}catch(error){console.error("Unable to notify worker",error);}
- revalidatePath("/admin/checkouts");revalidatePath("/staff/checkouts");
+ revalidatePath("/admin/checkouts");revalidatePath("/staff");revalidatePath("/staff/checkouts");
  return {count:Number(data)};
 }
 
