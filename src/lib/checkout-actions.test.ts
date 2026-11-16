@@ -4,7 +4,7 @@ const state=vi.hoisted(()=>({actor:{id:"admin",role:"admin",username:"mary"} as 
 vi.mock("@/lib/auth",()=>({requireRole:vi.fn(async(roles:string[])=>{if(!roles.includes(state.actor.role))throw new Error("Forbidden");return state.actor})}));
 vi.mock("next/navigation",()=>({redirect:(url:string)=>{throw new Error(url)}}));
 vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
-vi.mock("@/lib/app-notifications",()=>({createAppNotifications:state.notifications,notifyActiveAdmins:state.notifications}));
+vi.mock("@/lib/app-notifications",()=>({createAppNotifications:state.notifications,notifyActiveAdmins:state.notifications,pushAppNotification:state.notifications}));
 vi.mock("@/lib/supabase/server",()=>({createClient:async()=>({rpc:async(name:string,args:{p_room:string})=>{if(name!=="complete_checkout_cleaning")throw new Error("Unexpected RPC");const r=state.tables.checkout_rooms.find(r=>r.id===args.p_room&&r.cleaner_id===state.actor.id&&r.status==="cleaning");if(!r)return {data:null,error:{message:"Room is no longer assigned"}};r.status="ready_for_occupancy";r.ready_at="now";state.tables.checkout_history.push({checkout_room_id:r.id,actor_id:state.actor.id,action:"cleaning_completed",from_status:"cleaning",to_status:"ready_for_occupancy"});return {data:r,error:null}},storage:{from:()=>({upload:async()=>({error:null}),list:async()=>({data:state.objects,error:null})})},from:(table:string)=>{
  const rows=state.tables[table]||[],filters:((r:any)=>boolean)[]=[];let patch:any=null,insert:any=null;
  const result=()=>{if(insert){state.tables[table]??=[];state.tables[table].push(...(Array.isArray(insert)?insert:[insert]));return {data:null,error:null}}const matches=rows.filter(r=>filters.every(f=>f(r)));if(patch)matches.forEach(r=>Object.assign(r,patch));return {data:matches.map(r=>table==="checkout_rooms"?{...r,defects:state.tables.checkout_defects.filter(d=>d.checkout_room_id===r.id)}:r),error:null}};
@@ -71,8 +71,8 @@ it("Admin manual inspection preserves seven signed-upload photos and assigns mai
  expect(room().status).toBe("rectification");expect(room().assigned_to).toBe("tech");
  expect(state.tables.checkout_photos).toHaveLength(7);expect(state.tables.checkout_photos.every(p=>p.kind==="inspection")).toBe(true);
  expect(state.notifications).toHaveBeenCalledExactlyOnceWith({
-  recipientIds:["tech"],type:"checkout_assigned",title:"New check-out room for rectification",
-  body:"TEST · Room TEST was assigned to you after inspection.",href:"/staff/checkouts/room",entityId:"room",deferPush:true,
+  recipientIds:["tech"],title:"New check-out room for rectification",
+  body:"TEST · Room TEST was assigned to you after inspection.",href:"/staff/checkouts/room",deferPush:true,
  });
  await expect(completeInspection("room",f)).rejects.toThrow("no%20longer%20awaiting%20maintenance%20assignment");
  expect(state.notifications).toHaveBeenCalledTimes(1);

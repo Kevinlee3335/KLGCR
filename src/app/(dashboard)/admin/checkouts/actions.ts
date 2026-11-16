@@ -5,7 +5,7 @@ import { checkoutProgress,isRepairDefect } from "@/lib/checkouts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { createAppNotifications } from "@/lib/app-notifications";
+import { createAppNotifications, pushAppNotification } from "@/lib/app-notifications";
 import { createClient } from "@/lib/supabase/server";
 
 function go(id:string,error?:string):never {return redirect(`/admin/checkouts/${id}${error?`?error=${encodeURIComponent(error)}`:""}`)}
@@ -90,15 +90,19 @@ async function assignCheckoutForRepair(id: string, data: FormData, includesInspe
   notes, "second_inspection", "rectification");
  try {
   const assignmentReason = includesInspection ? "after inspection" : "after a cleaner reported a defect";
-  await createAppNotifications({
+  const alert = {
    recipientIds: [assignee],
-   type: "checkout_assigned",
    title: "New check-out room for rectification",
    body: `${room.reference_no} · Room ${room.room_no} was assigned to you ${assignmentReason}.`,
    href: `/staff/checkouts/${id}`,
-   entityId: id,
    deferPush: true,
-  });
+  };
+  if (includesInspection) {
+   // The database records the bell notification with the inspection assignment.
+   await pushAppNotification(alert);
+  } else {
+   await createAppNotifications({ ...alert, type: "checkout_assigned", entityId: id });
+  }
  } catch (error) {
   console.error("Unable to notify maintenance about the check-out room", error);
  }
