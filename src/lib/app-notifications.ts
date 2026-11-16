@@ -50,7 +50,11 @@ export async function createAppNotifications(input: NotificationInput) {
     })),
   );
   if (error) throw new Error(`Unable to create notification: ${error.message}`);
-  const send = () => sendPushNotifications({ recipientIds, title: input.title, body: input.body, href: input.href, expiresAt: input.expiresAt });
+  await pushAppNotification({ ...input, recipientIds });
+}
+
+export async function pushAppNotification(input: Pick<NotificationInput, "recipientIds" | "title" | "body" | "href" | "expiresAt" | "deferPush">) {
+  const send = () => sendPushNotifications({ recipientIds: input.recipientIds, title: input.title, body: input.body, href: input.href, expiresAt: input.expiresAt });
   if (input.deferPush) {
     try {
       after(async () => {

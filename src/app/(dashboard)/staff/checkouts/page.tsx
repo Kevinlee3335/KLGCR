@@ -1,2 +1,48 @@
-import Link from "next/link";import {AppShell} from "@/components/app-shell";import {requireRole} from "@/lib/auth";import {checkoutStatusLabel,type CheckoutRoom} from "@/lib/checkouts";import {createClient} from "@/lib/supabase/server";
-export default async function Page({searchParams}:{searchParams:Promise<{defectReported?:string}>}){const {defectReported}=await searchParams;const profile=await requireRole(["maintenance_staff","cleaner"]);const db=await createClient();const column=profile.role==="cleaner"?"cleaner_id":"assigned_to";const {data,error}=await db.from("checkout_rooms").select("id,reference_no,room_no,utmspace_defects,inspection_notes,status,assigned_to,cleaner_id,created_at,ready_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name),cleaner:profiles!cleaner_id(full_name)").is("deleted_at",null).eq(column,profile.id).order("updated_at",{ascending:false});const rows=(data||[]) as unknown as CheckoutRoom[];return <AppShell profile={profile} title="Check-out Rooms">{["fadhil","ariffin"].includes(profile.username)&&<Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>}{profile.username==="abdullah"&&<Link className="button secondary" href="/admin/checkouts/painting">Painting List</Link>}<div className="section-head"><div><p className="eyebrow">Room turnover</p><h2>{profile.role==="cleaner"?"Housekeeping handovers":"Assigned rectifications"}</h2><p className="subtle">A dedicated workflow, separate from resident maintenance complaints.</p></div></div>{profile.role==="cleaner"&&defectReported==="1"&&<p className="success" role="status">Defect reported. The room is awaiting maintenance assignment.</p>}<section className="panel list-panel">{error&&<p className="error">{error.message}</p>}<div className="mobile-cards" style={{display:"grid"}}>{rows.map(r=><Link className="panel record-card" href={`/staff/checkouts/${r.id}`} key={r.id}><div className="record-head"><strong>{r.reference_no}</strong><span className={`status-badge status-${r.status}`}>{checkoutStatusLabel[r.status]}</span></div><h3>Block {r.block?.code} · Room {r.room_no}</h3><p>{r.utmspace_defects}</p></Link>)}</div>{!rows.length&&<div className="empty"><strong>No rooms assigned</strong><span>New handovers will appear here.</span></div>}</section></AppShell>}
+import Link from "next/link";
+import { AppShell } from "@/components/app-shell";
+import { requireRole } from "@/lib/auth";
+import { checkoutStatusLabel, type CheckoutRoom } from "@/lib/checkouts";
+import { createClient } from "@/lib/supabase/server";
+
+export default async function Page({ searchParams }: { searchParams: Promise<{ defectReported?: string }> }) {
+  const { defectReported } = await searchParams;
+  const profile = await requireRole(["maintenance_staff", "cleaner"]);
+  const db = await createClient();
+  const isCleaner = profile.role === "cleaner";
+  const column = isCleaner ? "cleaner_id" : "assigned_to";
+  const { data, error } = await db.from("checkout_rooms")
+    .select("id,reference_no,room_no,utmspace_defects,status,block:blocks!block_id(code)")
+    .is("deleted_at", null).eq(column, profile.id).order("updated_at", { ascending: false });
+  const rows = (data || []) as unknown as Pick<CheckoutRoom, "id" | "reference_no" | "room_no" | "utmspace_defects" | "status" | "block">[];
+  if (!isCleaner) {
+    // Keep the latest updates first within each group and surface rooms that still need repair.
+    rows.sort((first, second) => Number(second.status === "rectification") - Number(first.status === "rectification"));
+  }
+
+  return <AppShell profile={profile} title="Check-out Rooms">
+    {["fadhil", "ariffin"].includes(profile.username) && <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>}
+    {profile.username === "abdullah" && <Link className="button secondary" href="/admin/checkouts/painting">Painting List</Link>}
+    <div className="section-head">
+      <div>
+        <p className="eyebrow">Room turnover</p>
+        <h2>{isCleaner ? "Housekeeping handovers" : "Assigned rectifications"}</h2>
+        <p className="subtle">{isCleaner ? "A dedicated workflow, separate from resident maintenance complaints." : "Rooms awaiting repairs appear first."}</p>
+      </div>
+    </div>
+    {isCleaner && defectReported === "1" && <p className="success" role="status">Defect reported. The room is awaiting maintenance assignment.</p>}
+    <section className="panel list-panel">
+      {error && <p className="error" role="alert">{error.message}</p>}
+      <div className="mobile-cards" style={{ display: "grid" }}>
+        {rows.map((room) => <Link className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}>
+          <div className="record-head">
+            <strong>{room.reference_no}</strong>
+            <span className={`status-badge status-${room.status}`}>{checkoutStatusLabel[room.status]}</span>
+          </div>
+          <h3>Block {room.block?.code} · Room {room.room_no}</h3>
+          <p>{room.utmspace_defects}</p>
+        </Link>)}
+      </div>
+      {!error && !rows.length && <div className="empty"><strong>No rooms assigned</strong><span>New handovers will appear here.</span></div>}
+    </section>
+  </AppShell>;
+}
