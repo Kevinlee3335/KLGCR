@@ -46,7 +46,7 @@ export type FlexSaveResult =
   | { ok: false; message: string; code?: "conflict" };
 
 export function isFlexPeriod(period: string): boolean {
-  return /^[2-9]\d{3}-(0[1-9]|1[0-2])$/.test(period);
+  return typeof period === "string" && /^[2-9]\d{3}-(0[1-9]|1[0-2])$/.test(period);
 }
 
 export function isFlexReportType(report: string): report is FlexReportType {

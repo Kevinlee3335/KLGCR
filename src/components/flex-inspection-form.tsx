@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, X } from "lucide-react";
 import {
   FLEX_REMARK_MAX_LENGTH,
@@ -10,7 +10,9 @@ import {
   type FlexReportType,
   type FlexSaveInput,
 } from "@/lib/flex-inspection";
-import { saveFlexInspection } from "@/lib/flex-inspection-actions";
+import { downloadFlexPreviewReport, saveFlexInspection } from "@/lib/flex-inspection-actions";
+import type { FlexReview, FlexReviewer } from "@/lib/flex-inspection-review";
+import { FlexReviewPanel } from "./flex-review-panel";
 import styles from "./flex-inspection-form.module.css";
 
 type Block = FlexGroup["block"];
@@ -53,10 +55,13 @@ function formatLevel(level: number | null) {
   return level === null ? "Common areas" : "Level " + level;
 }
 
-export function FlexInspectionForm({ inspection, groups, today }: {
+export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null }: {
   inspection: FlexInspectionSnapshot;
   groups: FlexGroup[];
   today: string;
+  preview?: boolean;
+  review?: FlexReview | null;
+  reviewer?: FlexReviewer | null;
 }) {
   const { inspectionLocations, levelOptions, unitCount } = useMemo(() => organizeInspection(groups), [groups]);
   const [saved, setSaved] = useState(inspection);
@@ -72,8 +77,24 @@ export function FlexInspectionForm({ inspection, groups, today }: {
   const [message, setMessage] = useState("");
   const [needsReload, setNeedsReload] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
+  const [preparingPdf, setPreparingPdf] = useState<FlexReportType | null>(null);
+  const storageKey = `flex-preview-inspection-${inspection.period}`;
   const saving = useRef(false);
   const inspectionDateInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!preview) return;
+    try {
+      const value = sessionStorage.getItem(storageKey);
+      if (!value) return;
+      const snapshot: FlexInspectionSnapshot = JSON.parse(value);
+      setSaved(snapshot);
+      setExceptions(snapshot.exceptions);
+      setInspectionDate(snapshot.inspectionDate ?? "");
+    } catch {
+      // The preview remains usable when browser storage is disabled.
+    }
+  }, [preview, storageKey]);
 
   const completed = saved.completedAt !== null;
   const issueCount = Object.keys(exceptions).length;
@@ -138,6 +159,9 @@ export function FlexInspectionForm({ inspection, groups, today }: {
       }
       setSaved(result.inspection);
       setExceptions(result.inspection.exceptions);
+      if (preview) {
+        try { sessionStorage.setItem(storageKey, JSON.stringify(result.inspection)); } catch { /* Preview state remains on screen. */ }
+      }
       setShowMissing(false);
       setMessage(complete ? "Inspection completed. The three reports are ready." : "Draft saved.");
     } catch {
@@ -148,9 +172,37 @@ export function FlexInspectionForm({ inspection, groups, today }: {
     }
   }
 
+  async function downloadPreview(report: FlexReportType) {
+    if (!saved.inspectionDate || preparingPdf) return;
+    setPreparingPdf(report);
+    setError("");
+    try {
+      const result = await downloadFlexPreviewReport(report, {
+        period: saved.period, revision: saved.revision, exceptions: saved.exceptions,
+        inspectionDate: saved.inspectionDate, complete: true,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      const bytes = Uint8Array.from(atob(result.content), (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Flex-Preview-${report}-${saved.period}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError("The preview report could not be downloaded. Try again.");
+    } finally {
+      setPreparingPdf(null);
+    }
+  }
+
   return (
     <section className={styles.inspection} aria-label="Flex inspection checklist" aria-busy={pending !== null}>
       <div className={styles.controls}>
+        {preview ? <p className={styles.reportNote}>Trial version. This tab uses sample inspection records and simulates email delivery.</p> : null}
         <div className={styles.statusLine}>
           <div>
             <strong>Inspection checklist</strong>
@@ -163,13 +215,22 @@ export function FlexInspectionForm({ inspection, groups, today }: {
           <>
             <p className={styles.signedBy}>Inspected by {saved.inspectedByName} · {saved.inspectionDate}</p>
             <div className={styles.downloads} aria-label="Inspection reports">
-              {reportTypes.map((report) => (
+              {reportTypes.map((report) => preview ? (
+                <button type="button" className={styles.download} key={report}
+                  disabled={preparingPdf !== null} onClick={() => void downloadPreview(report)}>
+                  <Download aria-hidden="true" size={16} />
+                  {preparingPdf === report ? "Preparing PDF…" : `${FLEX_REPORT_LABELS[report]} PDF`}
+                </button>
+              ) : (
                 <a className={styles.download} key={report} href={"/api/flex-inspections/" + saved.period + "/" + report}>
                   <Download aria-hidden="true" size={16} />
                   {FLEX_REPORT_LABELS[report]} PDF
                 </a>
               ))}
             </div>
+            {error ? <p className={styles.error} role="alert">{error}</p> : null}
+            {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer} preview={preview} /> : null}
+            {review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
           </>
         ) : (
           <p className={styles.instructions}>All items start with ✓. Tap X for a fault and add a remark. Complete once you have checked both blocks.</p>

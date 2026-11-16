@@ -14,6 +14,8 @@ import { UnifiReviewFollowUp } from "@/components/unifi-review-follow-up";
 import { loadAdminDashboardWorkload } from "@/lib/admin-dashboard-workload";
 import { unresolvedTenantNoShows, type TenantNoShowNotification } from "@/lib/admin-notifications";
 import { requireRole } from "@/lib/auth";
+import { FLEX_INSPECTION_PATH } from "@/lib/flex-inspection";
+import { flexInspectionsAwaitingReview, flexReviewer, isFlexPreview } from "@/lib/flex-inspection-review-store";
 import { membershipEnabled } from "@/lib/membership";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -88,6 +90,23 @@ async function PurchaseOrderFollowUp({ supabase }: { supabase: DashboardClient }
   return error
     ? <section className="panel"><p role="alert">Unable to load purchase orders awaiting approval. Please refresh.</p></section>
     : <PoApprovalQueue orders={data || []} total={count || 0}/>;
+}
+
+async function FlexInspectionFollowUp({ userId }: { userId: string }) {
+  const rows = await flexInspectionsAwaitingReview(userId).catch(() => null);
+  if (!rows?.length) return null;
+  return <DashboardActionFollowUp
+    title="Flex Inspection Verification"
+    subtitle="Completed Flex inspections awaiting your verification."
+    count={rows.length}
+    items={rows.map(({ period, inspection_date }) => ({
+      id: period, name: period, detail: `Inspected on ${inspection_date}`,
+      href: `${FLEX_INSPECTION_PATH}?period=${period}`,
+    }))}
+    href={FLEX_INSPECTION_PATH}
+    action="Open inspection"
+    nameColumn="Inspection month"
+  />;
 }
 
 function loadCleanerQueue(supabase: DashboardClient) {
@@ -184,6 +203,7 @@ export default async function AdminPage() {
 
   return <AppShell profile={profile} title="Dashboard">
     {isPoApprover && <Suspense fallback={null}><PurchaseOrderFollowUp supabase={supabase}/></Suspense>}
+    {flexReviewer(profile) && !isFlexPreview() && <Suspense fallback={null}><FlexInspectionFollowUp userId={profile.id}/></Suspense>}
     <Suspense fallback={null}><DocumentReviewQueue userId={profile.id}/></Suspense>
     {isAdmin && <Suspense fallback={null}><ComplianceReviewFollowUp userId={profile.id}/></Suspense>}
     {isAdmin && <Suspense fallback={null}><UnifiReviewFollowUp userId={profile.id}/></Suspense>}

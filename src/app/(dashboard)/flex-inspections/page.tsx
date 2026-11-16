@@ -9,6 +9,8 @@ import {
   isFlexPeriod,
 } from "@/lib/flex-inspection";
 import { loadFlexGroups } from "@/lib/flex-inspection-catalog";
+import { emptyFlexReview } from "@/lib/flex-inspection-review";
+import { flexReviewer, isFlexPreview, loadFlexReview } from "@/lib/flex-inspection-review-store";
 import { loadFlexInspection } from "@/lib/flex-inspection-store";
 
 export default async function FlexInspectionsPage({
@@ -23,11 +25,15 @@ export default async function FlexInspectionsPage({
   const period = typeof requestedPeriod === "string" && isFlexPeriod(requestedPeriod) && requestedPeriod <= currentPeriod
     ? requestedPeriod
     : currentPeriod;
+  const preview = isFlexPreview();
 
   const [groups, inspection] = await Promise.all([
     loadFlexGroups(),
-    loadFlexInspection(period),
+    preview ? Promise.resolve({
+      period, revision: 0, exceptions: {}, inspectionDate: null, inspectedByName: null, completedAt: null,
+    }) : loadFlexInspection(period),
   ]).catch(() => [null, null] as const);
+  const review = inspection?.completedAt ? await loadFlexReview(period).catch(() => null) : emptyFlexReview;
 
   return (
     <AppShell profile={profile} title={FLEX_INSPECTION_TITLE}>
@@ -45,7 +51,8 @@ export default async function FlexInspectionsPage({
         </form>
       </div>
       {groups && inspection ? (
-        <FlexInspectionForm key={period} groups={groups} inspection={inspection} today={today} />
+        <FlexInspectionForm key={period} groups={groups} inspection={inspection} today={today}
+          preview={preview} reviewer={flexReviewer(profile)} review={review} />
       ) : (
         <section className="panel" role="alert">
           Unable to load the inspection. Reload this page to try again.

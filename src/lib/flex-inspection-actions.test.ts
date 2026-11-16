@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getSessionProfile } from "@/lib/auth";
-import { saveFlexInspection } from "@/lib/flex-inspection-actions";
+import { downloadFlexPreviewReport, saveFlexInspection } from "@/lib/flex-inspection-actions";
 import { loadFlexGroups } from "@/lib/flex-inspection-catalog";
 import { writeFlexInspection } from "@/lib/flex-inspection-store";
+import { generateFlexInspectionPdf } from "@/lib/flex-reports/generate";
 import { createClient } from "@/lib/supabase/server";
 import type { FlexSaveInput } from "@/lib/flex-inspection";
 import type { Profile } from "@/lib/types";
@@ -11,6 +12,7 @@ import type { Profile } from "@/lib/types";
 vi.mock("@/lib/auth", () => ({ getSessionProfile: vi.fn() }));
 vi.mock("@/lib/flex-inspection-catalog", () => ({ loadFlexGroups: vi.fn() }));
 vi.mock("@/lib/flex-inspection-store", () => ({ writeFlexInspection: vi.fn() }));
+vi.mock("@/lib/flex-reports/generate", () => ({ generateFlexInspectionPdf: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 const inspector: Profile = {
@@ -36,6 +38,7 @@ beforeEach(() => {
     sourceCell: "B1", units: [{ id: "unit-1", label: "1" }],
   }]);
 });
+afterEach(() => vi.unstubAllEnvs());
 
 it("allows a draft with a blank remark and rejects unauthorized or invalid submissions", async () => {
   vi.mocked(writeFlexInspection).mockResolvedValue(draftRecord);
@@ -72,4 +75,21 @@ it("takes the acting user's signature on completion and returns a conflict for a
   expect(writeFlexInspection).toHaveBeenLastCalledWith(
     { ...input, exceptions: { "unit-1": "Broken" } }, inspector, null,
   );
+});
+
+it("generates trial reports from trial data without writing an inspection or reading a saved signature", async () => {
+  vi.stubEnv("VERCEL_ENV", "preview");
+  vi.mocked(generateFlexInspectionPdf).mockResolvedValue(Buffer.from("%PDF-1.7"));
+  const complete = { ...draft, complete: true, exceptions: { "unit-1": "Trial fault" } };
+  expect(await saveFlexInspection(complete)).toMatchObject({
+    ok: true, inspection: { inspectedByName: "Trial Inspector", exceptions: complete.exceptions },
+  });
+  expect(await downloadFlexPreviewReport("exit-sign", complete)).toEqual({
+    ok: true, content: Buffer.from("%PDF-1.7").toString("base64"),
+  });
+  expect(generateFlexInspectionPdf).toHaveBeenCalledWith("exit-sign", expect.objectContaining({
+    period: draft.period, inspectedByName: "Trial Inspector",
+  }));
+  expect(writeFlexInspection).not.toHaveBeenCalled();
+  expect(createClient).not.toHaveBeenCalled();
 });

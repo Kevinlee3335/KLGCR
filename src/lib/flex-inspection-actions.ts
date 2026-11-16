@@ -6,11 +6,14 @@ import {
   FLEX_INSPECTION_ROLES,
   FLEX_REMARK_MAX_LENGTH,
   isFlexPeriod,
+  isFlexReportType,
   type FlexSaveInput,
   type FlexSaveResult,
 } from "@/lib/flex-inspection";
 import { loadFlexGroups } from "@/lib/flex-inspection-catalog";
+import { isFlexPreview } from "@/lib/flex-inspection-review-store";
 import { writeFlexInspection } from "@/lib/flex-inspection-store";
+import { generateFlexInspectionPdf } from "@/lib/flex-reports/generate";
 import { signatureSchema, type Signature } from "@/lib/purchase-orders/signature";
 import { createClient } from "@/lib/supabase/server";
 
@@ -66,6 +69,20 @@ export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSave
       return { ok: false, message: "The inspection contains an unknown equipment item. Reload the checklist." };
     }
 
+    if (isFlexPreview()) {
+      return {
+        ok: true,
+        inspection: {
+          period: details.period,
+          revision: details.revision + 1,
+          exceptions: details.exceptions,
+          inspectionDate: details.inspectionDate,
+          inspectedByName: details.complete ? "Trial Inspector" : null,
+          completedAt: details.complete ? new Date().toISOString() : null,
+        },
+      };
+    }
+
     let signature: Signature | null = null;
     if (details.complete) {
       const db = await createClient();
@@ -87,5 +104,20 @@ export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSave
     const message = typeof error === "object" && error && "message" in error ? error.message : undefined;
     console.error("Flex inspection could not be saved", message);
     return { ok: false, message: "Could not save the Flex inspection. Try again." };
+  }
+}
+
+export async function downloadFlexPreviewReport(report: string, input: FlexSaveInput) {
+  if (!isFlexPreview() || !isFlexReportType(report) || !input?.complete) {
+    return { ok: false as const, message: "This preview report is unavailable." };
+  }
+  const result = await saveFlexInspection(input);
+  if (!result.ok) return result;
+
+  try {
+    const pdf = await generateFlexInspectionPdf(report, result.inspection);
+    return { ok: true as const, content: Buffer.from(pdf).toString("base64") };
+  } catch {
+    return { ok: false as const, message: "The preview report could not be generated. Try again." };
   }
 }

@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { FlexGroup, FlexInspectionSnapshot } from "@/lib/flex-inspection";
+import { emptyFlexReview } from "@/lib/flex-inspection-review";
 import { FlexInspectionForm } from "./flex-inspection-form";
 
-const { save } = vi.hoisted(() => ({ save: vi.fn() }));
+const { save, verify } = vi.hoisted(() => ({ save: vi.fn(), verify: vi.fn() }));
 vi.mock("@/lib/flex-inspection-actions", () => ({ saveFlexInspection: save }));
+vi.mock("@/lib/flex-inspection-review-actions", () => ({ verifyFlexInspection: verify }));
 
 const inspection: FlexInspectionSnapshot = {
   period: "2026-11",
@@ -34,7 +36,11 @@ const groups: FlexGroup[] = [
 ];
 const today = "2026-11-16";
 
-beforeEach(() => save.mockReset());
+beforeEach(() => {
+  sessionStorage.clear();
+  save.mockReset();
+  verify.mockReset();
+});
 afterEach(cleanup);
 
 function markFault(unit: RegExp) {
@@ -114,4 +120,25 @@ it("saves a draft with a pending remark and preserves changes when a newer revis
   expect(screen.getByRole("textbox", { name: /DP 2\/2/ })).toHaveValue("Low pressure");
   expect(screen.getByRole("button", { name: "Reload saved inspection" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+});
+
+it("lets the trial simulate both verifications in either order, including after a reload", async () => {
+  const completed = {
+    ...inspection, revision: 1, inspectionDate: today, inspectedByName: "Trial Inspector",
+    completedAt: today + "T03:00:00Z",
+  };
+  save.mockResolvedValue({ ok: true, inspection: completed });
+  const trial = <FlexInspectionForm inspection={inspection} groups={groups} today={today} preview review={emptyFlexReview} />;
+  const first = render(trial);
+  fireEvent.click(screen.getByRole("button", { name: "Complete inspection" }));
+  await screen.findByRole("button", { name: "Emergency Light PDF" });
+  fireEvent.click(screen.getByRole("button", { name: "Verify as Fikri" }));
+  expect(screen.getByText(/both verifications are required/i)).toBeInTheDocument();
+  first.unmount();
+
+  render(trial);
+  expect(screen.queryByRole("button", { name: "Verify as Fikri" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Verify as Kevin" }));
+  expect(screen.getByText(/email is simulated/i)).toBeInTheDocument();
+  expect(verify).not.toHaveBeenCalled();
 });
