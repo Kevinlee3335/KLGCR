@@ -1,0 +1,196 @@
+.packages {
+  display: grid;
+  gap: 16px;
+}
+
+.monthField,
+.formFields label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: #69501f;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.monthField {
+  width: min(100%, 16rem);
+  margin: 16px 0;
+}
+
+.formFields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 16px 0;
+  padding: 0;
+  border: 0;
+}
+
+.uploadGrid,
+.invoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.uploadGrid > div {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e4d7b8;
+  border-radius: 10px;
+  background: #faf6eb;
+}
+
+.uploadGrid label,
+.invoiceGrid label:first-child {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.monthField input,
+.formFields input,
+.formFields select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #c9b482;
+  border-radius: 8px;
+  background: #fffcf5;
+  color: #443215;
+  font: inherit;
+  font-size: 16px;
+  color-scheme: light;
+}
+
+.formFields input[type="file"] {
+  padding: 4px;
+  font-size: 13px;
+}
+
+.action,
+.formFields input::file-selector-button {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #c9b482;
+  border-radius: 8px;
+  background: #fffcf5;
+  color: #69501f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  justify-self: start;
+  text-decoration: none;
+}
+
+.action svg {
+  flex-shrink: 0;
+}
+
+.formFields input::file-selector-button {
+  min-height: 36px;
+  margin-right: 8px;
+  background: #f0e6cf;
+}
+
+.primary {
+  border-color: #ae8535;
+  background: #e8c77e;
+  color: #3c2a0e;
+}
+
+.danger {
+  border-color: #dcb6a4;
+  background: #fff6f0;
+  color: #853d24;
+}
+
+.action:hover:not(:disabled),
+.monthField input:hover:not(:disabled),
+.formFields input:hover:not(:disabled),
+.formFields select:hover:not(:disabled),
+.formFields input:not(:disabled)::file-selector-button:hover {
+  border-color: #a9873b;
+  background: #f1e3bd;
+}
+
+.primary:hover:not(:disabled) {
+  background: #dfb965;
+}
+
+.danger:hover:not(:disabled) {
+  border-color: #bf7d64;
+  background: #fce8de;
+}
+
+.action:focus-visible,
+.monthField input:focus-visible,
+.formFields :is(input, select):focus-visible {
+  outline: 2px solid #866629;
+  outline-offset: 3px;
+}
+
+.action:disabled,
+.monthField input:disabled,
+.formFields :is(input, select):disabled {
+  border-color: #e2d7bf;
+  background: #f3eee2;
+  color: #766a51;
+  cursor: not-allowed;
+}
+
+.formFields input:disabled::file-selector-button {
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+@media (max-width: 600px) {
+  .monthField {
+    width: 100%;
+  }
+
+  .uploadGrid,
+  .invoiceGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formFields > .action {
+    justify-self: stretch;
+  }
+}
+
+.confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.confirmation input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #866629;
+}

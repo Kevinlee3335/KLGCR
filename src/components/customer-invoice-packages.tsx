@@ -2,8 +2,10 @@
 
 import {useEffect, useState, type FormEvent} from 'react';
 import Link from 'next/link';
+import {ExternalLink, FilePlus, FileText, RefreshCw, Send, Trash2} from 'lucide-react';
 import type {CustomerInvoiceCatalog} from '@/lib/billing-customer-invoices';
 import {MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE, MANUALLY_SENT_CUSTOMER_INVOICE_PERIOD} from '@/lib/billing-mail-settings';
+import styles from './customer-invoice-packages.module.css';
 
 const apiPath = '/api/billing-preview/customer-invoices';
 const emptySelection = {value: '', page: '', invoiceNo: ''};
@@ -123,29 +125,38 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
     } finally { setBusy(false); }
   }
 
-  return <>
+  return <div className={styles.packages}>
     <section className="panel">
       <h3>Customer invoice delivery</h3>
-      <label>Billing month <input type="month" value={period} disabled={busy} onChange={event => {
-        setCatalog(undefined);
-        setPeriod(event.target.value);
-        setSelection({rental: emptySelection, utility: emptySelection});
-        setEmail('');
-        setMessage('');
-        setReviewId(undefined);
-      }}/></label>
-      {manuallySent ? <p role="status">{MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE} Continue in <Link href="/admin/payment-verification">Payment Verification</Link>.</p>
+      <label className={styles.monthField}>
+        <span>Billing month</span>
+        <input type="month" value={period} disabled={busy} onChange={event => {
+          setCatalog(undefined);
+          setPeriod(event.target.value);
+          setSelection({rental: emptySelection, utility: emptySelection});
+          setEmail('');
+          setMessage('');
+          setReviewId(undefined);
+        }}/>
+      </label>
+      {manuallySent ? <p role="status">{MANUALLY_SENT_CUSTOMER_INVOICE_MESSAGE} Continue in <Link className={styles.action} href="/admin/payment-verification">Payment Verification</Link>.</p>
         : <p className="subtle">Upload the official PDF from Accounts. Choose the matching approved company invoices and their PDF page numbers. You can keep the same scan open for the next company.</p>}
       {!manuallySent && <form onSubmit={saveDraft}>
-        <fieldset disabled={busy || !catalog?.accounts.length}>
-          <label>Accounts PDF <input type="file" accept="application/pdf,.pdf" required onChange={event => setSource(event.target.files?.[0] || null)}/></label>
-          {sourceUrl && <p><a href={sourceUrl} target="_blank" rel="noreferrer">Open Accounts PDF</a></p>}
-          <label>Separate Accounts Utilities PDF, if supplied <input type="file" accept="application/pdf,.pdf" onChange={event => setUtilitySource(event.target.files?.[0] || null)}/></label>
-          {utilityUrl && <p><a href={utilityUrl} target="_blank" rel="noreferrer">Open separate Utilities PDF</a></p>}
+        <fieldset className={styles.formFields} disabled={busy || !catalog?.accounts.length}>
+          <div className={styles.uploadGrid}>
+            <div>
+              <label>Accounts PDF <input type="file" accept="application/pdf,.pdf" required onChange={event => setSource(event.target.files?.[0] || null)}/></label>
+              {sourceUrl && <a className={styles.action} href={sourceUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden="true"/> Open Accounts PDF</a>}
+            </div>
+            <div>
+              <label>Separate Accounts Utilities PDF, if supplied <input type="file" accept="application/pdf,.pdf" onChange={event => setUtilitySource(event.target.files?.[0] || null)}/></label>
+              {utilityUrl && <a className={styles.action} href={utilityUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden="true"/> Open separate Utilities PDF</a>}
+            </div>
+          </div>
           {(['rental', 'utility'] as const).map(kind => {
             const current = selection[kind];
             const url = kind === 'utility' && utilityUrl ? utilityUrl : sourceUrl;
-            return <div key={kind} className="form-grid">
+            return <div key={kind} className={styles.invoiceGrid}>
               <label>{labels[kind]} invoice <select value={current.value} onChange={event => select(kind, {...emptySelection, value: event.target.value})}>
                 <option value="">No {labels[kind]} invoice in this package</option>
                 {catalog?.accounts.filter(account => account.kind === kind).map(account =>
@@ -154,7 +165,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
               {current.value && <>
                 <label>Accounts PDF page <input type="number" min="1" max="500" required value={current.page} onChange={event => select(kind, {page: event.target.value})}/></label>
                 <label>Official Accounts invoice no. <input type="text" maxLength={70} placeholder="e.g. KH/2611-09" value={current.invoiceNo} onChange={event => select(kind, {invoiceNo: event.target.value})}/></label>
-                {url && Number(current.page) > 0 && <p><a href={`${url}#page=${Number(current.page)}`} target="_blank" rel="noreferrer">Open source page {current.page}</a></p>}
+                {url && Number(current.page) > 0 && <p><a className={styles.action} href={`${url}#page=${Number(current.page)}`} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden="true"/> Open source page {current.page}</a></p>}
               </>}
             </div>;
           })}
@@ -163,7 +174,7 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
             <label>Company email <input type="email" maxLength={254} required readOnly={Boolean(registered[0])} value={registered[0] || email} onChange={event => setEmail(event.target.value)}/></label>
             {selectedAccounts.some(account => !account.email) && <p className="subtle">Confirming the package registers this email for the selected company accounts that do not have an address yet.</p>}
           </>}
-          <button className="button" type="submit" disabled={!source || !selectedAccounts.length || registered.length > 1}>{busy ? 'Preparing…' : 'Prepare PDF draft'}</button>
+          <button className={`${styles.action} ${styles.primary}`} type="submit" disabled={!source || !selectedAccounts.length || registered.length > 1}><FilePlus size={16} aria-hidden="true"/>{busy ? 'Preparing…' : 'Prepare PDF draft'}</button>
         </fieldset>
       </form>}
       {!manuallySent && !catalog && period && <p className="subtle">Loading approved invoices…</p>}
@@ -177,12 +188,12 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
         const invoiceNo = account.kind === 'rental' ? review.rental_invoice_no : review.utility_invoice_no;
         return <li key={idFor(account)}>{labels[account.kind]} · {account.name} · {invoiceNo || account.billNo} · {account.amount.toLocaleString('en-MY', {style: 'currency', currency: 'MYR'})}</li>;
       })}</ul>}
-      <p><a href={pdfUrl(review.id)} target="_blank" rel="noreferrer">Open exact PDF in a new tab</a></p>
+      <p><a className={styles.action} href={pdfUrl(review.id)} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden="true"/> Open exact PDF in a new tab</a></p>
       <iframe title={`Invoice package for ${review.company_name}`} src={pdfUrl(review.id)} width="100%" height="680"/>
       {review.status === 'draft' && <div>
-        {!manuallySent && <label><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)}/> I checked the official invoice pages and amounts against the approved invoices, and verified the company and recipient.</label>}
-        <p>{!manuallySent && <><button className="button" type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}>Confirm and send from noreply</button>{' '}</>}
-          <button className="button danger" type="button" disabled={busy} onClick={() => void changePackage(review, 'discard')}>Discard draft</button></p>
+        {!manuallySent && <label className={styles.confirmation}><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)}/> I checked the official invoice pages and amounts against the approved invoices, and verified the company and recipient.</label>}
+        <div className={styles.actions}>{!manuallySent && <button className={`${styles.action} ${styles.primary}`} type="button" disabled={!confirmed || busy} onClick={() => void changePackage(review, 'send')}><Send size={16} aria-hidden="true"/> Confirm and send from noreply</button>}
+          <button className={`${styles.action} ${styles.danger}`} type="button" disabled={busy} onClick={() => void changePackage(review, 'discard')}><Trash2 size={16} aria-hidden="true"/> Discard draft</button></div>
       </div>}
       {!manuallySent && review.status !== 'draft' && <p>{statuses[review.status]}{review.delivery_error ? ` · ${review.delivery_error}` : ''}</p>}
     </section>}
@@ -193,10 +204,10 @@ export function CustomerInvoicePackages({initialPeriod}: {initialPeriod: string}
         <tbody>{catalog.packages.map(pack => <tr key={pack.id}>
           <td>{pack.company_name}</td><td>{pack.recipient}</td><td>{pack.page_count}</td>
           <td>{manuallySent && pack.status !== 'sent' ? 'Delivery closed' : statuses[pack.status]}{pack.sent_at && <small> · {new Date(pack.sent_at).toLocaleString('en-GB', {timeZone: 'Asia/Kuala_Lumpur'})} MYT</small>}</td>
-          <td><button className="button secondary" type="button" disabled={busy} onClick={() => openReview(pack.id)}>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>{' '}
-            {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button className="button secondary" type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}>Check / retry delivery</button>}</td>
+          <td><div className={styles.actions}><button className={styles.action} type="button" disabled={busy} onClick={() => openReview(pack.id)}><FileText size={16} aria-hidden="true"/>{pack.status === 'draft' ? 'Review draft' : 'View PDF'}</button>
+            {!manuallySent && (pack.status === 'delivery_pending' || pack.status === 'sending') && <button className={styles.action} type="button" disabled={busy} onClick={() => void changePackage(pack, 'send')}><RefreshCw size={16} aria-hidden="true"/> Check / retry delivery</button>}</div></td>
         </tr>)}</tbody>
       </table></div>}
     </section>
-  </>;
+  </div>;
 }
