@@ -1,5 +1,6 @@
 import {canCaptureUtilityPhotos} from "@/lib/utility-photo-access";
 import { assistantEnabled } from "@/lib/ai-assistant";
+import { FLEX_INSPECTION_PATH, FLEX_INSPECTION_TITLE } from "@/lib/flex-inspection";
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
 import { NotificationBell } from "./notification-bell";
@@ -11,7 +12,8 @@ import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, File
 const adminNav = [
   ["Dashboard", "/admin", Gauge], ["New Complaints", "/admin/complaints", ShieldAlert],
   ["Maintenance Jobs", "/admin/jobs", Wrench], ["Calendar", "/admin/calendar", CalendarDays],
-  ["Check-out Rooms", "/admin/checkouts", DoorOpen], ["Waste Collection", "/admin/waste-collection", ClipboardCheck],
+  ["Check-out Rooms", "/admin/checkouts", DoorOpen], [FLEX_INSPECTION_TITLE, FLEX_INSPECTION_PATH, ClipboardCheck],
+  ["Waste Collection", "/admin/waste-collection", ClipboardCheck],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
   ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
@@ -21,7 +23,8 @@ const staffNav = [
   ["My Dashboard", "/staff"], ["My Tasks", "/staff/tasks"],
   ["Daily Tasks", "/staff/daily-tasks"],
   ["Office Inventory", "/office-inventory"], ["Material Request", "/staff/material-request"], ["Monitoring", "/staff/monitoring"],
-  ["Calendar", "/staff/calendar"], ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
+  [FLEX_INSPECTION_TITLE, FLEX_INSPECTION_PATH], ["Calendar", "/staff/calendar"],
+  ["Appointments", "/staff/appointments"], ["Completed Jobs", "/staff/tasks?status=completed"],
 ] as const;
 const shellDate = new Intl.DateTimeFormat("en-MY", {
   timeZone: "Asia/Kuala_Lumpur", day: "2-digit", month: "short", year: "numeric",
@@ -39,7 +42,7 @@ type AdminNavGroup = {
 };
 
 const adminNavGroups: AdminNavGroup[] = [
-    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", "Waste Collection"].includes(label)) },
+    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
     { label: "Daily Tasks", Icon: ClipboardCheck, links: [
       ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck, "All Daily Tasks"],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
@@ -66,7 +69,7 @@ const adminNavGroups: AdminNavGroup[] = [
 function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isAdmin = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; isAdmin?: boolean }) {
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
   const renderGroup = ({ label, Icon, links }: AdminNavGroup) => {
-    const visibleLinks = links.filter(([item]) => item !== "TM Unifi Invoices" || isAdmin);
+    const visibleLinks = links.filter(([item]) => isAdmin || (item !== "TM Unifi Invoices" && item !== FLEX_INSPECTION_TITLE));
     const groupClass = `admin-nav-group${visibleLinks.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
     const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) => <ShellLink key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></ShellLink>)}</div>;
