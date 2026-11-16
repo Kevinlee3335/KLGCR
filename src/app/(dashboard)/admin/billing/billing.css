@@ -49,3 +49,51 @@
   .billing-payment-actions>.button { white-space:normal; }
   .billing-payment-history { align-items:stretch; }
 }
+
+.billing-page-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.billing-page-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--follow-up-control-line, #d9c9a0);
+  border-radius: 8px;
+  background: var(--follow-up-control, #fffcf5);
+  color: #69501f;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.billing-page-link-primary {
+  border-color: #bfa15b;
+  background: #f0e6cf;
+}
+
+.billing-page-link:hover {
+  border-color: #a9873b;
+  background: #eddfb8;
+}
+
+.billing-page-link:focus-visible {
+  outline: 2px solid #866629;
+  outline-offset: 3px;
+}
+
+.billing-page-link svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .billing-page-link-primary {
+    flex-basis: 100%;
+  }
+}

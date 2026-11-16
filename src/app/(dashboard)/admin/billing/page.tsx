@@ -1,3 +1,5 @@
+import { ArrowRight, FileUp, Printer } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -21,10 +23,19 @@ export default async function BillingPage() {
 
   return (
     <AppShell profile={profile} title="Rental & Utilities">
-      <p>
-        <a href="/admin/billing/print-agent">Office printer · KLG Print Agent</a>
-        {isAdmin && <> · <a href="/admin/billing/customer-invoices">Customer invoice packages</a></>}
-      </p>
+      <nav className="billing-module billing-page-links" aria-label="Billing tools">
+        {isAdmin && (
+          <Link className="billing-page-link billing-page-link-primary" href="/admin/billing/customer-invoices">
+            <FileUp size={18} aria-hidden="true" />
+            Customer invoice packages
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        )}
+        <Link className="billing-page-link" href="/admin/billing/print-agent">
+          <Printer size={17} aria-hidden="true" />
+          Office printer
+        </Link>
+      </nav>
       <Suspense fallback={<div className="card" role="status">Loading billing…</div>}>
         <BillingContent name={profile.full_name} approver={approver} canManageMail={isAdmin} />
       </Suspense>
