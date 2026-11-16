@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { complaintReceivedEmail, sendTransactionalEmail, tenantNotAvailableEmail } from "./email";
+import { complaintReceivedEmail, jobCompletedEmail, sendTransactionalEmail, tenantNotAvailableEmail } from "./email";
 
 describe("transactional email", () => {
   afterEach(() => { vi.unstubAllGlobals(); delete process.env.KLGCR_EMAIL_ENABLED; delete process.env.RESEND_API_KEY; delete process.env.KLGCR_EMAIL_FROM; delete process.env.KLGCR_GMAIL_WEB_APP_URL; delete process.env.KLGCR_GMAIL_WEB_APP_SECRET; });
@@ -48,6 +48,29 @@ describe("transactional email", () => {
     expect(noShow.subject).toBe("Maintenance Visit – Tenant Not Available");
     expect(noShow.text).toContain("Maintenance Attendance Time: 13 September 2026, 6:05 PM (Malaysia Time)");
   });
+  it.each([
+    complaintReceivedEmail({ complaintNo: "CMP-1", roomNo: "A417", description: "No power", submittedAt: "2026-11-16T06:00:00Z" }),
+    jobCompletedEmail({ complaintNo: "CMP-1", roomNo: "A417", description: "No power", completedAt: "2026-11-16T06:00:00Z" }),
+    tenantNotAvailableEmail({ complaintNo: "CMP-1", roomNo: "A417", description: "No power", appointmentDate: "2026-11-16", appointmentTime: "10:00", attendedAt: "2026-11-16T02:05:00Z" }),
+  ])("sends $subject with one sign-off and the branded HTML layout", async (message) => {
+    process.env.KLGCR_GMAIL_WEB_APP_URL = "https://script.google.com/test/exec";
+    process.env.KLGCR_GMAIL_WEB_APP_SECRET = "test-secret";
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+
+    await expect(sendTransactionalEmail("resident@example.test", message)).resolves.toEqual({ sent: true });
+    const payload = JSON.parse(fetcher.mock.calls[0][1].body as string);
+    const managementName = "KLG Campus Residence Management";
+    expect(payload.text.split("\n").filter((line: string) => line === managementName)).toHaveLength(1);
+    expect(payload.html).toContain("K HOTEL SDN BHD");
+    expect(payload.html).toContain("border-top:4px solid #b99a57");
+    expect(payload.html).toContain("Complaint No.: CMP-1");
+    expect(payload.html).toContain(`Best regards,<br>${managementName}</p>`);
+    expect(payload.html).toContain("Management Office Contact");
+    expect(payload.html).toContain("Operating Hours");
+    expect(payload.html.match(/KLG Campus Residence Management(?=<)/g)).toHaveLength(1);
+  });
+
 });
 
 
