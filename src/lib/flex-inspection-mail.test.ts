@@ -19,7 +19,8 @@ vi.mock("@/lib/flex-inspection-store", () => ({ loadFlexInspectionForReport: moc
 vi.mock("@/lib/flex-reports/generate", () => ({ generateFlexInspectionReportPack: mocks.render }));
 
 const period = "2026-11";
-const pinnedRecipient = "reports@flex.example";
+const pinnedRecipient = "inspection-fixture@flex.com";
+const cc = ["inspection-fixture-cc1@flex.com", "inspection-fixture-cc2@flex.com"];
 const sender = "klgcr.noreply@gmail.com";
 const sentAt = "2026-11-16T07:00:00Z";
 const inspection = { period, completedAt: sentAt };
@@ -28,7 +29,7 @@ const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("VERCEL_ENV", "production");
-  vi.stubEnv("KLGCR_FLEX_REPORT_TO", pinnedRecipient);
+  vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", JSON.stringify({ to: pinnedRecipient, cc }));
   mocks.admin.mockImplementation(() => ({
     rpc: mocks.claim,
     from: () => ({
@@ -52,21 +53,33 @@ beforeEach(() => {
   mocks.inspection.mockResolvedValue({ inspection });
   mocks.render.mockResolvedValue(pdf);
   mocks.save.mockResolvedValue({ data: { period }, error: null });
-  mocks.gateway.mockImplementation(async ({ key }: { key: string }) => ({
-    ok: true, status: "sent", sender, to: pinnedRecipient, sentAt, key,
-  }));
+  mocks.gateway.mockImplementation(async ({ action, key }: { action: string; key?: string }) =>
+    action === "flex-inspection-capabilities"
+      ? { ok: true, sender, capabilities: ["combinedPdf", "cc", "idempotency"] }
+      : { ok: true, status: "sent", sender, to: pinnedRecipient, cc, sentAt, key },
+  );
 });
 
 afterEach(() => vi.unstubAllEnvs());
 
-it("does not read or claim outbound mail from preview or with an invalid recipient", async () => {
+it("does not read or claim outbound mail from preview", async () => {
   vi.stubEnv("VERCEL_ENV", "preview");
   await dispatchFlexInspectionMail(period);
   await retryQueuedFlexInspectionMail();
-  vi.stubEnv("VERCEL_ENV", "production");
-  vi.stubEnv("KLGCR_FLEX_REPORT_TO", "reports@flex.example,other@example.test");
-  await dispatchFlexInspectionMail(period);
-  await retryQueuedFlexInspectionMail();
+  expect(mocks.admin).not.toHaveBeenCalled();
+  expect(mocks.gateway).not.toHaveBeenCalled();
+});
+
+it("does not claim a delivery with fewer than two CC contacts or with duplicate or non-Flex addresses", async () => {
+  for (const recipients of [
+    { to: pinnedRecipient, cc: cc.slice(0, 1) },
+    { to: pinnedRecipient, cc: [pinnedRecipient.toUpperCase(), cc[1]] },
+    { to: pinnedRecipient, cc: [cc[0], "someone@example.test"] },
+  ]) {
+    vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", JSON.stringify(recipients));
+    await dispatchFlexInspectionMail(period);
+    await retryQueuedFlexInspectionMail();
+  }
   expect(mocks.admin).not.toHaveBeenCalled();
   expect(mocks.gateway).not.toHaveBeenCalled();
 });
@@ -79,8 +92,7 @@ it("does not load or send the PDFs until both reviewers have verified", async ()
   expect(mocks.update).not.toHaveBeenCalled();
 });
 
-it("uses the pinned recipient and one stable delivery key even if recording the send fails", async () => {
-  vi.stubEnv("KLGCR_FLEX_REPORT_TO", "reports@flex.example");
+it("uses the approved To and both CC addresses and keeps one delivery key across retries", async () => {
   mocks.save.mockResolvedValueOnce({ data: null, error: Error("temporary db error") });
   await expect(dispatchFlexInspectionMail(period)).rejects.toThrow("Unable to save");
   await dispatchFlexInspectionMail(period);
@@ -89,12 +101,12 @@ it("uses the pinned recipient and one stable delivery key even if recording the 
     p_period: period, p_claim_token: expect.any(String), p_recipient: pinnedRecipient,
   });
   expect(claim.p_claim_token).not.toBe(mocks.claim.mock.calls[0][1].p_claim_token);
-  const [first] = mocks.gateway.mock.calls[0];
-  const [second] = mocks.gateway.mock.calls[1];
+  const [first, second] = mocks.gateway.mock.calls.map(([request]) => request)
+    .filter(request => request.action === "flex-inspection-send");
   expect(second).toEqual(first);
   expect(second).toMatchObject({
-    action: "finance-send", from: sender, to: pinnedRecipient,
-    key: expect.stringMatching(/^invoice_[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+    action: "flex-inspection-send", from: sender, to: pinnedRecipient, cc,
+    key: "flex-inspection_2026-11",
     fileName: "Flex-Fire-Safety-Inspection-2026-11.pdf",
     pdfBase64: Buffer.from(pdf).toString("base64"),
   });
@@ -105,7 +117,29 @@ it("uses the pinned recipient and one stable delivery key even if recording the 
 });
 
 it("records an uncertain outcome when the gateway may have accepted the email", async () => {
-  mocks.gateway.mockRejectedValueOnce(Error("timeout"));
+  mocks.gateway.mockResolvedValueOnce({
+    ok: true, sender, capabilities: ["combinedPdf", "cc", "idempotency"],
+  }).mockRejectedValueOnce(Error("timeout"));
+  await dispatchFlexInspectionMail(period);
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ status: "uncertain", sent_at: null }));
+});
+
+it("stops before sending if the configured gateway does not support CC", async () => {
+  mocks.gateway.mockResolvedValueOnce({
+    ok: true, sender, capabilities: ["combinedPdf", "idempotency"],
+  });
+  await dispatchFlexInspectionMail(period);
+  expect(mocks.gateway).toHaveBeenCalledTimes(1);
+  expect(mocks.render).not.toHaveBeenCalled();
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", sent_at: null }));
+});
+
+it("requires delivery confirmation for both CC addresses", async () => {
+  mocks.gateway.mockResolvedValueOnce({
+    ok: true, sender, capabilities: ["combinedPdf", "cc", "idempotency"],
+  }).mockResolvedValueOnce({
+    ok: true, status: "sent", key: "flex-inspection_2026-11", sender, to: pinnedRecipient, cc: [], sentAt,
+  });
   await dispatchFlexInspectionMail(period);
   expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ status: "uncertain", sent_at: null }));
 });

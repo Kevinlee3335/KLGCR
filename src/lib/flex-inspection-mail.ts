@@ -1,16 +1,16 @@
-import { createHash, randomUUID } from "node:crypto";
-import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { gmailGateway } from "@/lib/billing-mail";
 import { BILLING_MAIL_FROM } from "@/lib/billing-mail-settings";
 import { isFlexPeriod } from "@/lib/flex-inspection";
+import { flexInspectionMailRecipients, type FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import { loadFlexInspectionForReport } from "@/lib/flex-inspection-store";
 import { generateFlexInspectionReportPack } from "@/lib/flex-reports/generate";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const deliveryTable = "flex_inspection_reviews";
 const maximumPdfBytes = 12_000_000;
-const recipientSchema = z.string().max(254).email();
 const uncertainDelivery = "Gmail did not confirm delivery. Checking again uses the same delivery key.";
+const gatewayNotReady = "The company Gmail gateway has not enabled Flex emails with CC.";
 
 type FlexMailClaim = {
   period: string;
@@ -25,22 +25,23 @@ type FlexMailOutcome = {
   error: string | null;
 };
 
-function configuredRecipient() {
-  if (process.env.VERCEL_ENV !== "production") return null;
-  const result = recipientSchema.safeParse(process.env.KLGCR_FLEX_REPORT_TO?.trim());
-  return result.success ? result.data : null;
+function matchesFlexRecipients(result: { to?: unknown; cc?: unknown }, { to, cc }: FlexInspectionMailRecipients) {
+  return result.to === to && Array.isArray(result.cc)
+    && result.cc.length === cc.length && result.cc.every((email, index) => email === cc[index]);
 }
 
-function deliveryKey(period: string) {
-  const hash = createHash("sha256").update("KLGCR Flex Fire Safety Inspection\n" + period).digest("hex");
-  const variant = (8 | (parseInt(hash[16], 16) & 3)).toString(16);
-  // The company gateway requires a finance-prefixed UUID. A scoped v8 UUID is
-  // stable across attempts without overlapping invoice or receipt identifiers.
-  return `invoice_${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-${variant}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-}
+async function sendInspectionReport(period: string, recipients: FlexInspectionMailRecipients): Promise<FlexMailOutcome> {
+  try {
+    const gateway = await gmailGateway({ action: "flex-inspection-capabilities" }, 10_000);
+    if (gateway.ok !== true || gateway.sender !== BILLING_MAIL_FROM
+      || !Array.isArray(gateway.capabilities)
+      || !["combinedPdf", "cc", "idempotency"].every(capability => gateway.capabilities.includes(capability))) {
+      return { status: "failed", sent_at: null, error: gatewayNotReady };
+    }
+  } catch {
+    return { status: "failed", sent_at: null, error: gatewayNotReady };
+  }
 
-async function sendInspectionReport(claim: FlexMailClaim): Promise<FlexMailOutcome> {
-  const { period, recipient } = claim;
   let preparedPdf: Uint8Array;
   try {
     const { inspection, inspectorSignature } = await loadFlexInspectionForReport(period);
@@ -55,13 +56,13 @@ async function sendInspectionReport(claim: FlexMailClaim): Promise<FlexMailOutco
     return { status: "failed", sent_at: null, error: "Unable to prepare the Flex inspection PDF." };
   }
 
-  const key = deliveryKey(period);
+  const key = `flex-inspection_${period}`;
   try {
     const result = await gmailGateway({
-      action: "finance-send",
+      action: "flex-inspection-send",
       key,
       from: BILLING_MAIL_FROM,
-      to: recipient,
+      ...recipients,
       subject: `Flex monthly fire safety inspection - ${period}`,
       text: [
         "Dear Flex team,",
@@ -73,7 +74,7 @@ async function sendInspectionReport(claim: FlexMailClaim): Promise<FlexMailOutco
       pdfBase64: Buffer.from(preparedPdf).toString("base64"),
     }, 25_000);
     if (result.ok === true && result.status === "sent" && result.key === key
-      && result.sender === BILLING_MAIL_FROM && result.to === recipient
+      && result.sender === BILLING_MAIL_FROM && matchesFlexRecipients(result, recipients)
       && typeof result.sentAt === "string" && Number.isFinite(Date.parse(result.sentAt))) {
       return { status: "sent", sent_at: result.sentAt, error: null };
     }
@@ -90,28 +91,29 @@ async function sendInspectionReport(claim: FlexMailClaim): Promise<FlexMailOutco
 }
 
 export async function dispatchFlexInspectionMail(period: string) {
-  const recipient = configuredRecipient();
-  if (!recipient || !isFlexPeriod(period)) return;
+  if (process.env.VERCEL_ENV !== "production" || !isFlexPeriod(period)) return;
+  const recipients = flexInspectionMailRecipients();
+  if (!recipients) return;
 
   const db = createAdminClient();
   const token = randomUUID();
   const { data, error } = await db.rpc("claim_flex_inspection_mail", {
     p_period: period,
     p_claim_token: token,
-    p_recipient: recipient,
+    p_recipient: recipients.to,
   });
   if (error) throw Error("Unable to claim the Flex inspection email.");
   const claim = data as FlexMailClaim | null;
-  if (!claim?.period || !claim.kevin_verified_at || !claim.fikri_verified_at) return;
+  if (!claim || claim.period !== period || claim.recipient !== recipients.to || !claim.kevin_verified_at || !claim.fikri_verified_at) return;
 
-  const outcome = await sendInspectionReport(claim);
+  const outcome = await sendInspectionReport(period, recipients);
   const saved = await db.from(deliveryTable).update({ ...outcome, claim_token: null, locked_until: null })
     .eq("period", period).eq("status", "sending").eq("claim_token", token).select("period").maybeSingle();
   if (saved.error || !saved.data) throw Error("Unable to save the Flex inspection email status.");
 }
 
 export async function retryQueuedFlexInspectionMail() {
-  if (!configuredRecipient()) return;
+  if (process.env.VERCEL_ENV !== "production" || !flexInspectionMailRecipients()) return;
 
   const result = await createAdminClient().from(deliveryTable).select("period")
     .not("kevin_verified_at", "is", null).not("fikri_verified_at", "is", null)

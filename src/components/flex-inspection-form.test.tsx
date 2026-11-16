@@ -128,10 +128,19 @@ it("lets the trial simulate both verifications in either order, including after 
     completedAt: today + "T03:00:00Z",
   };
   save.mockResolvedValue({ ok: true, inspection: completed });
-  const trial = <FlexInspectionForm inspection={inspection} groups={groups} today={today} preview review={emptyFlexReview} />;
+  const recipients = {
+    to: "inspection-fixture@flex.com",
+    cc: ["inspection-fixture-cc1@flex.com", "inspection-fixture-cc2@flex.com"] as [string, string],
+  };
+  const trial = <FlexInspectionForm inspection={inspection} groups={groups} today={today} preview
+    review={emptyFlexReview} recipients={recipients} />;
   const first = render(trial);
   fireEvent.click(screen.getByRole("button", { name: "Complete inspection" }));
   await screen.findByRole("button", { name: "Emergency Light PDF" });
+  const verification = within(screen.getByRole("region", { name: "Flex verification" }));
+  expect(verification.getByText(recipients.to)).toBeInTheDocument();
+  expect(verification.getByText(recipients.cc[0])).toBeInTheDocument();
+  expect(verification.getByText(recipients.cc[1])).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Verify as Fikri" }));
   expect(screen.getByText(/both verifications are required/i)).toBeInTheDocument();
   first.unmount();

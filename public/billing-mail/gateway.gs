@@ -18,7 +18,12 @@ function doPost(e){
  if(request.action==='po-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:2,sender:sender,capabilities:['poPdf','officePoPdf','cc','idempotency']});
  if(request.action==='finance-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,version:3,sender:sender,capabilities:['financePdf','customerInvoicePdf','idempotency']});
  if(request.action==='compliance-capabilities')return klgReply({ok:sender===KLG_BILLING_FROM,sender:sender,invoiceCc:KLG_BILLING_TO,capabilities:['compliancePdf','invoiceCc','idempotency']});
+ if(request.action==='flex-inspection-capabilities')return klgReply({
+  ok:sender===KLG_BILLING_FROM,sender:sender,
+  capabilities:['combinedPdf','cc','idempotency']
+ });
  if(request.action==='compliance-send')return klgComplianceSend(request,props,sender);
+ if(request.action==='flex-inspection-send')return klgFlexInspectionSend(request,props,sender);
  if(request.action==='finance-send')return klgFinanceSend(request,props,sender);
  if(request.action==='po-send')return klgPoSend(request,props,sender);
  if(request.action==='billing-send')return klgBillingSend(request,props,sender);
@@ -27,6 +32,51 @@ function doPost(e){
  if(sender!==KLG_BILLING_FROM)throw new Error('Authorize this gateway under klgcr.noreply@gmail.com');
  MailApp.sendEmail({to:String(request.to),subject:String(request.subject),body:String(request.text),htmlBody:request.html||undefined,name:'KLG Campus Residence',replyTo:KLG_REPLY_TO});
  return klgReply({ok:true,sender:sender});
+}
+
+function klgFlexInspectionAddress(address){
+ return typeof address==='string'&&address===address.trim()&&
+  /^[a-z0-9_%+-]+(?:\.[a-z0-9_%+-]+)*@flex\.com$/i.test(address)&&address.indexOf('@')<=64;
+}
+
+function klgFlexInspectionSend(request,props,sender){
+ var key=request.key,pdf=request.pdfBase64,to=request.to,cc=request.cc;
+ if(sender!==KLG_BILLING_FROM||request.from!==KLG_BILLING_FROM||!klgFlexInspectionAddress(to)||
+    !Array.isArray(cc)||cc.length!==2||!cc.every(klgFlexInspectionAddress)||
+    new Set([to,cc[0],cc[1]].map(function(address){return address.toLowerCase();})).size!==3||
+    typeof key!=='string'||!/^flex-inspection_[2-9][0-9]{3}-(0[1-9]|1[0-2])$/.test(key)||
+    typeof pdf!=='string'||pdf.length>16000000||pdf.length%4!==0||!/^JVBERi0[A-Za-z0-9+/]*={0,2}$/.test(pdf)||
+    typeof request.subject!=='string'||!request.subject.trim()||request.subject.length>200||/[\r\n]/.test(request.subject)||
+    typeof request.text!=='string'||!request.text.trim()||
+    (request.html!=null&&typeof request.html!=='string'))return klgReply({ok:false,status:'rejected'});
+
+ var lock=LockService.getScriptLock();
+ if(!lock.tryLock(10000))return klgReply({ok:false,status:'busy'});
+ try{
+  var prior=props.getProperty(key);
+  if(prior){
+   var saved;
+   try{saved=JSON.parse(prior);}catch(error){return klgReply({ok:false,status:'uncertain',key:key});}
+   if(!saved||saved.to!==to||JSON.stringify(saved.cc)!==JSON.stringify(cc)){
+    return klgReply({ok:false,status:'rejected',key:key});
+   }
+   return klgReply(saved.status==='sent'?saved:{ok:false,status:'uncertain',key:key});
+  }
+  if(MailApp.getRemainingDailyQuota()<1+cc.length)return klgReply({ok:false,status:'rejected'});
+
+  var fileName=String(request.fileName||'Flex-Fire-Safety-Inspection-'+key.slice(-7)+'.pdf').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,175);
+  if(!/\.pdf$/i.test(fileName))fileName+='.pdf';
+  var attachment=Utilities.newBlob(Utilities.base64Decode(pdf),'application/pdf',fileName);
+  var message={to:to,cc:cc.join(','),subject:request.subject,body:request.text,htmlBody:request.html||undefined,
+   attachments:[attachment],name:'KLG Campus Residence',replyTo:KLG_REPLY_TO};
+
+  // If Gmail accepts the message and the execution stops, retries must not send again.
+  props.setProperty(key,JSON.stringify({status:'started',to:to,cc:cc,startedAt:new Date().toISOString()}));
+  try{MailApp.sendEmail(message);}catch(error){return klgReply({ok:false,status:'uncertain',key:key});}
+  var receipt={ok:true,status:'sent',key:key,sender:sender,to:to,cc:cc,sentAt:new Date().toISOString()};
+  props.setProperty(key,JSON.stringify(receipt));
+  return klgReply(receipt);
+ }finally{lock.releaseLock();}
 }
 
 function klgComplianceSha(value){

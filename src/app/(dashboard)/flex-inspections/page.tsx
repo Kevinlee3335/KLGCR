@@ -9,6 +9,7 @@ import {
   isFlexPeriod,
 } from "@/lib/flex-inspection";
 import { loadFlexGroups } from "@/lib/flex-inspection-catalog";
+import { flexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import { emptyFlexReview } from "@/lib/flex-inspection-review";
 import { flexReviewer, isFlexPreview, loadFlexReview } from "@/lib/flex-inspection-review-store";
 import { loadFlexInspection } from "@/lib/flex-inspection-store";
@@ -26,6 +27,8 @@ export default async function FlexInspectionsPage({
     ? requestedPeriod
     : currentPeriod;
   const preview = isFlexPreview();
+  const reviewer = flexReviewer(profile);
+  const recipients = reviewer ? flexInspectionMailRecipients() : null;
 
   const [groups, inspection] = await Promise.all([
     loadFlexGroups(),
@@ -52,7 +55,7 @@ export default async function FlexInspectionsPage({
       </div>
       {groups && inspection ? (
         <FlexInspectionForm key={period} groups={groups} inspection={inspection} today={today}
-          preview={preview} reviewer={flexReviewer(profile)} review={review} />
+          preview={preview} reviewer={reviewer} review={review} recipients={recipients} />
       ) : (
         <section className="panel" role="alert">
           Unable to load the inspection. Reload this page to try again.

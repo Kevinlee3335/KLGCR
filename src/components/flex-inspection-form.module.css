@@ -126,6 +126,26 @@
   color: var(--muted);
 }
 
+.reviewRecipients {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+
+.reviewRecipients dt {
+  font-weight: 650;
+}
+
+.reviewRecipients dd {
+  display: grid;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .blocks {
   display: inline-flex;
   width: fit-content;

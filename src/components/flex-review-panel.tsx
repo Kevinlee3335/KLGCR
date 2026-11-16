@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Check, Clock3 } from "lucide-react";
 import { verifyFlexInspection } from "@/lib/flex-inspection-review-actions";
+import type { FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import { emptyFlexReview, type FlexReview, type FlexReviewer } from "@/lib/flex-inspection-review";
 import styles from "./flex-inspection-form.module.css";
 
@@ -27,11 +28,12 @@ function mailMessage(review: FlexReview, preview: boolean) {
   return review.mailStatus === "sending" ? "Sending the reports to Flex…" : "Both verified. Flex email is queued.";
 }
 
-export function FlexReviewPanel({ period, initial, reviewer, preview }: {
+export function FlexReviewPanel({ period, initial, reviewer, preview, recipients }: {
   period: string;
   initial: FlexReview;
   reviewer: FlexReviewer | null;
   preview: boolean;
+  recipients?: FlexInspectionMailRecipients | null;
 }) {
   const storageKey = `flex-preview-review-${period}`;
   const [local, setLocal] = useState<FlexReview | null>(null);
@@ -91,6 +93,14 @@ export function FlexReviewPanel({ period, initial, reviewer, preview }: {
           );
         })}
       </ul>
+      {preview || reviewer ? (
+        <dl className={styles.reviewRecipients}>
+          <dt>To</dt>
+          <dd>{recipients?.to ?? "Flex report contact"}</dd>
+          <dt>CC</dt>
+          <dd>{recipients ? recipients.cc.map(email => <span key={email}>{email}</span>) : "Two Flex contacts"}</dd>
+        </dl>
+      ) : null}
       <p className={styles.instructions} role="status">{mailMessage(review, preview)}</p>
       {!preview && review.kevinVerifiedAt && review.fikriVerifiedAt && review.mailStatus !== "sent" ? (
         <a href={`/flex-inspections?period=${period}`} className={styles.reload}>Refresh email status</a>

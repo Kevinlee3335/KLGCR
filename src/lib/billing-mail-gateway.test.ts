@@ -94,3 +94,79 @@ it('does not retry the same supplier message when an earlier send may have succe
   expect(post(request)).toMatchObject({ status: 'uncertain', key: request.key });
   expect(send).toHaveBeenCalledOnce();
 });
+
+const flexInspectionPayload = {
+  action: 'flex-inspection-send',
+  key: 'flex-inspection_2026-11',
+  from: payload.from,
+  to: 'newsletter.fixture@flex.com',
+  cc: ['facilities.fixture@flex.com', 'safety.fixture@flex.com'],
+  subject: 'Flex monthly fire safety inspection - 2026-11',
+  text: 'Attached is the monthly Flex inspection PDF verified by Kevin and Fikri.',
+  pdfBase64: Buffer.from('%PDF-1.7 combined Flex report').toString('base64'),
+  fileName: 'Flex-Fire-Safety-Inspection-2026-11.pdf',
+};
+
+it('advertises the Flex PDF capability without sending and confirms the actual sender', () => {
+  const cap = { action: 'flex-inspection-capabilities' };
+  expect(post(cap)).toEqual({
+    ok: true, sender: payload.from,
+    capabilities: ['combinedPdf', 'cc', 'idempotency'],
+  });
+  owner = 'other@gmail.com';
+  expect(post(cap)).toMatchObject({ ok: false, sender: owner });
+  expect(send).not.toHaveBeenCalled();
+});
+
+it('sends one PDF to the supplied Flex To and CC once per inspection month', () => {
+  const receipt = post(flexInspectionPayload);
+  expect(receipt).toEqual({
+    ok: true, status: 'sent', key: flexInspectionPayload.key, sender: payload.from,
+    to: flexInspectionPayload.to, cc: flexInspectionPayload.cc, sentAt: expect.any(String),
+  });
+  expect(post(flexInspectionPayload)).toEqual(receipt);
+  expect(send).toHaveBeenCalledOnce();
+  expect(send.mock.calls[0][0]).toMatchObject({
+    to: flexInspectionPayload.to, cc: flexInspectionPayload.cc.join(','),
+    attachments: [{
+      type: 'application/pdf', name: flexInspectionPayload.fileName,
+      html: Buffer.from(flexInspectionPayload.pdfBase64, 'base64'),
+    }],
+  });
+});
+
+it('rejects invalid Flex destinations and malformed delivery data', () => {
+  for (const change of [
+    { from: 'other@gmail.com' }, { to: 'wrong@example.com' }, { to: 'newsletter.fixture@flex.com.evil.test' },
+    { to: 'newsletter.fixture@flex.com\n' }, { to: 'Newsletter <newsletter.fixture@flex.com>' },
+    { cc: [] }, { cc: [flexInspectionPayload.to.toUpperCase(), flexInspectionPayload.cc[1]] },
+    { cc: [flexInspectionPayload.cc[0], flexInspectionPayload.cc[0].toUpperCase()] },
+    { cc: [flexInspectionPayload.cc[0], 'wrong@example.com'] }, { key: 'flex-inspection_2026-13' },
+    { key: 'finance_2026-11' }, { pdfBase64: 'not a pdf' }, { subject: 'New\nBcc: other@example.com' },
+    { text: '' }, { html: 1 },
+  ]) expect(post({ ...flexInspectionPayload, ...change }).status).toBe('rejected');
+  expect(send).not.toHaveBeenCalled();
+});
+
+it('does not risk a second Flex email if the first send may have succeeded', () => {
+  send.mockImplementation(() => { throw Error('interrupted'); });
+  const receipt = post(flexInspectionPayload);
+  expect(receipt).toMatchObject({
+    status: 'uncertain', key: flexInspectionPayload.key,
+  });
+  expect(post(flexInspectionPayload)).toEqual(receipt);
+  expect(send).toHaveBeenCalledOnce();
+});
+
+it('pins Flex recipients after a send is started, whether or not Gmail confirms it', () => {
+  send.mockImplementationOnce(() => { throw Error('interrupted'); });
+  expect(post(flexInspectionPayload).status).toBe('uncertain');
+  expect(post({ ...flexInspectionPayload, to: 'alternate.fixture@flex.com' }).status).toBe('rejected');
+  expect(post({ ...flexInspectionPayload, cc: [...flexInspectionPayload.cc].reverse() }).status).toBe('rejected');
+  expect(send).toHaveBeenCalledOnce();
+
+  const nextMonth = { ...flexInspectionPayload, key: 'flex-inspection_2026-12' };
+  expect(post(nextMonth).status).toBe('sent');
+  expect(post({ ...nextMonth, cc: [...nextMonth.cc].reverse() }).status).toBe('rejected');
+  expect(send).toHaveBeenCalledTimes(2);
+});

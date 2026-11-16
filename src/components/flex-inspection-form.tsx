@@ -11,6 +11,7 @@ import {
   type FlexSaveInput,
 } from "@/lib/flex-inspection";
 import { downloadFlexPreviewReport, saveFlexInspection } from "@/lib/flex-inspection-actions";
+import type { FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import type { FlexReview, FlexReviewer } from "@/lib/flex-inspection-review";
 import { FlexReviewPanel } from "./flex-review-panel";
 import styles from "./flex-inspection-form.module.css";
@@ -55,13 +56,14 @@ function formatLevel(level: number | null) {
   return level === null ? "Common areas" : "Level " + level;
 }
 
-export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null }: {
+export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null, recipients }: {
   inspection: FlexInspectionSnapshot;
   groups: FlexGroup[];
   today: string;
   preview?: boolean;
   review?: FlexReview | null;
   reviewer?: FlexReviewer | null;
+  recipients?: FlexInspectionMailRecipients | null;
 }) {
   const { inspectionLocations, levelOptions, unitCount } = useMemo(() => organizeInspection(groups), [groups]);
   const [saved, setSaved] = useState(inspection);
@@ -229,7 +231,8 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
               ))}
             </div>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
-            {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer} preview={preview} /> : null}
+            {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer}
+              preview={preview} recipients={recipients} /> : null}
             {review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
           </>
         ) : (
