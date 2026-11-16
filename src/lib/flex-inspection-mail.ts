@@ -101,13 +101,12 @@ export async function dispatchFlexInspectionMail(period: string) {
 async function dispatchFlexInspectionMailTo(period: string, recipients: FlexInspectionMailRecipients) {
   const db = createAdminClient();
   const token = randomUUID();
-  const { data, error } = await db.rpc("claim_flex_inspection_mail", {
+  const { data: claim, error } = await db.rpc("claim_flex_inspection_mail", {
     p_period: period,
     p_claim_token: token,
     p_recipient: recipients.to,
-  });
+  }).maybeSingle<FlexMailClaim>();
   if (error) throw Error("Unable to claim the Flex inspection email.");
-  const claim = data as FlexMailClaim | null;
   if (!claim || claim.period !== period || claim.recipient !== recipients.to || !claim.kevin_verified_at || !claim.fikri_verified_at) return;
 
   const outcome = await sendInspectionReport(period, recipients);

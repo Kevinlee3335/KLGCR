@@ -17,7 +17,8 @@ export async function verifyFlexInspection(period: string): Promise<FlexReviewRe
   if (!isFlexPeriod(period)) return { ok: false, message: "Choose a valid inspection month." };
 
   const { data, error } = await createAdminClient()
-    .rpc("record_flex_inspection_verification", { p_period: period, p_actor_id: profile.id });
+    .rpc("record_flex_inspection_verification", { p_period: period, p_actor_id: profile.id })
+    .maybeSingle();
   if (error || !data?.period) {
     return { ok: false, message: "Unable to verify this inspection. Refresh the page and try again." };
   }

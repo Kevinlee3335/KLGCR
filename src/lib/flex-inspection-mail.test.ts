@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", JSON.stringify({ to: pinnedRecipient, cc }));
   mocks.admin.mockImplementation(() => ({
-    rpc: mocks.claim,
+    rpc: (...args: unknown[]) => ({ maybeSingle: () => mocks.claim(...args) }),
     from: (table: string) => ({
       select: (columns: string) => ({
         eq: (key: string, value: boolean) => ({
