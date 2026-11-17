@@ -1,0 +1,37 @@
+.dialog {
+  border: 1px solid #e8dac4;
+  border-radius: 22px;
+  color: #1c1812;
+  background: #fffdf9;
+  width: min(620px, calc(100% - 28px));
+  max-height: calc(100dvh - 28px);
+  padding: 0;
+  box-shadow: 0 24px 80px #100d0a50;
+}
+.dialog::backdrop { background: #17130eb5; backdrop-filter: blur(3px); }
+.content { padding: clamp(20px, 5vw, 36px); }
+.heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.emblem, .close { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; }
+.emblem { background: #f3e3b8; color: #624b1a; }
+.close { background: transparent; border: 0; color: #41372a; cursor: pointer; }
+.close:hover { background: #f3eee5; }
+.content h2 { margin: 0; font-size: clamp(23px, 4vw, 34px); line-height: 1.13; letter-spacing: -.035em; }
+.subtitle { margin: 10px 0 20px; color: #62594e; }
+.timeline { border-top: 1px solid #c59b44; margin: 0; padding: 0; list-style: none; }
+.timeline li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 68px; padding: 10px 0; border-bottom: 1px solid #eae1d5; }
+.timeline li > svg { color: #775b24; }
+.timeline li > div { display: grid; gap: 3px; }
+.timeline li > div > span { color: #62594e; font-size: .875rem; }
+.complete, .pending { border-radius: 999px; padding: 4px 9px; font-size: .75rem; font-weight: 650; }
+.complete { color: #205638; background: #e6f2e4; }
+.pending { color: #725013; background: #f6ecd8; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.actions > * { display: flex; align-items: center; justify-content: center; text-align: center; border-radius: 10px; min-height: 46px; padding: 10px; font: inherit; font-weight: 700; border: 1px solid #ac9e88; color: #21190e; background: transparent; text-decoration: none; cursor: pointer; }
+.actions .primary { background: #d1a74f; border-color: #d1a74f; }
+.actions .primary:hover { background: #e1ba67; }
+.actions > button:hover { background: #f3eee5; }
+.content :focus-visible { outline: 2px solid #785a1e; outline-offset: 3px; }
+@media (max-width: 480px) {
+  .actions { grid-template-columns: 1fr; }
+  .timeline li { gap: 8px; }
+}
