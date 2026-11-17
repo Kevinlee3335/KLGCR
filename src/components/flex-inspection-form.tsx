@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Download, FolderOpen, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { ArrowDown, ArrowUp, Check, Download, FolderOpen, X } from "lucide-react";
 import {
   AB_REPORT_LABELS,
   FLEX_REMARK_MAX_LENGTH,
@@ -19,6 +19,7 @@ import styles from "./flex-inspection-form.module.css";
 
 type Block = InspectionGroup["block"];
 type Level = "all" | "common" | number;
+type FloorDirection = 1 | -1;
 
 type InspectionLocation = {
   block: Block;
@@ -76,6 +77,36 @@ function formatBlock(block: Block) {
   return block === "Other" ? "Other areas" : `Block ${block}`;
 }
 
+function FloorNavigation({ position, block, level, direction, nextLevel, headingRef, onNext }: {
+  position: "top" | "bottom";
+  block: Block;
+  level: number;
+  direction: FloorDirection;
+  nextLevel: number | undefined;
+  headingRef?: Ref<HTMLHeadingElement>;
+  onNext: () => void;
+}) {
+  const destination = nextLevel === undefined ? undefined : formatLevel(nextLevel);
+  const Arrow = direction === 1 ? ArrowUp : ArrowDown;
+
+  return (
+    <nav className={styles.floorNavigation} aria-label={`Floor navigation (${position})`}>
+      {position === "top" ? (
+        <h3 ref={headingRef} tabIndex={-1} className={styles.floorHeading}>
+          {formatBlock(block)} · {formatLevel(level)}
+        </h3>
+      ) : (
+        <span className={styles.floorHeading}>{formatBlock(block)} · {formatLevel(level)}</span>
+      )}
+      <button className={styles.nextFloor} type="button" disabled={!destination}
+        aria-label={destination ? `Next: ${destination}` : "Next"} onClick={onNext}>
+        Next
+        {destination ? <><span>{destination}</span><Arrow size={16} aria-hidden="true" /></> : null}
+      </button>
+    </nav>
+  );
+}
+
 export function FlexInspectionForm({ inspection, groups, today, scope = "cd", preview = false, review, reviewer = null, recipients, scheduledDate }: {
   inspection: FlexInspectionSnapshot;
   groups: InspectionGroup[];
@@ -97,6 +128,7 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
   );
   const [block, setBlock] = useState<Block>(blocks[0]);
   const [level, setLevel] = useState<Level>(levelOptions[blocks[0]][0] ?? "all");
+  const [floorDirection, setFloorDirection] = useState<FloorDirection>(1);
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [pending, setPending] = useState<"draft" | "complete" | null>(null);
   const [error, setError] = useState("");
@@ -107,6 +139,8 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
   const storageKey = isAb ? `ab-preview-inspection-${inspection.period}` : `flex-preview-inspection-${inspection.period}`;
   const saving = useRef(false);
   const inspectionDateInput = useRef<HTMLInputElement>(null);
+  const floorHeading = useRef<HTMLHeadingElement>(null);
+  const followedNext = useRef(false);
 
   useEffect(() => {
     if (!preview) return;
@@ -122,7 +156,17 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
     }
   }, [preview, storageKey]);
 
+  useEffect(() => {
+    if (!followedNext.current) return;
+    followedNext.current = false;
+    floorHeading.current?.focus({ preventScroll: true });
+    floorHeading.current?.scrollIntoView?.({ block: "start" });
+  }, [level]);
+
   const completed = saved.completedAt !== null;
+  const floor = typeof level === "number" && !issuesOnly ? level : null;
+  const numberedLevels = levelOptions[block].filter((option) => option !== null);
+  const nextLevel = floor === null ? undefined : numberedLevels[numberedLevels.indexOf(floor) + floorDirection];
   const issueCount = Object.keys(exceptions).length;
   const missingRemarks = Object.values(exceptions).filter((remark) => !remark.trim()).length;
   const missingRemarkError = showMissing && missingRemarks > 0
@@ -134,10 +178,29 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
       : location.block === block && (level === "all" || location.level === (level === "common" ? null : level)),
   ), [block, exceptions, inspectionLocations, issuesOnly, level]);
 
+  function selectLevel(nextLevel: Level, nextBlock: Block) {
+    setLevel(nextLevel);
+    if (typeof nextLevel !== "number") return;
+
+    const numbered = levelOptions[nextBlock].filter((option) => option !== null);
+    const lowest = numbered[0] ?? nextLevel;
+    const highest = numbered[numbered.length - 1] ?? nextLevel;
+    setFloorDirection(nextLevel - lowest > highest - nextLevel ? -1 : 1);
+  }
+
   function switchBlock(next: Block) {
+    if (next === block) return;
     setBlock(next);
     if (level === "common" && !levelOptions[next].includes(null)) setLevel("all");
-    if (typeof level === "number" && !levelOptions[next].includes(level)) setLevel(levelOptions[next][0] ?? "all");
+    if (typeof level === "number") {
+      selectLevel(levelOptions[next].includes(level) ? level : (levelOptions[next][0] ?? "all"), next);
+    }
+  }
+
+  function advanceFloor() {
+    if (nextLevel === undefined) return;
+    followedNext.current = true;
+    setLevel(nextLevel);
   }
 
   function markUnit(id: string, isIssue: boolean) {
@@ -291,7 +354,7 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
                 <span className={styles.srOnly}>Level</span>
                 <select value={level} onChange={(event) => {
                   const value = event.target.value;
-                  setLevel(value === "all" || value === "common" ? value : Number(value));
+                  selectLevel(value === "all" || value === "common" ? value : Number(value), block);
                 }}>
                   <option value="all">All levels</option>
                   {levelOptions[block].map((option) => (
@@ -308,6 +371,11 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
           ) : null}
         </div>
       </div>
+
+      {floor !== null ? (
+        <FloorNavigation position="top" block={block} level={floor} direction={floorDirection}
+          nextLevel={nextLevel} onNext={advanceFloor} headingRef={floorHeading} />
+      ) : null}
 
       <div className={styles.locations}>
         {visibleLocations.map((location) => (
@@ -370,6 +438,11 @@ export function FlexInspectionForm({ inspection, groups, today, scope = "cd", pr
         ))}
         {!visibleLocations.length ? <p className={styles.empty}>{issuesOnly ? "No issues recorded." : "No equipment at this level."}</p> : null}
       </div>
+
+      {floor !== null ? (
+        <FloorNavigation position="bottom" block={block} level={floor} direction={floorDirection}
+          nextLevel={nextLevel} onNext={advanceFloor} />
+      ) : null}
 
       {!completed ? (
         <div className={styles.footer}>

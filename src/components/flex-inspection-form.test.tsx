@@ -202,3 +202,69 @@ it("completes A/B through its own action and links all four PDFs and the Documen
   expect(screen.getByRole("link", { name: "Open Documents archive" }))
     .toHaveAttribute("href", "/documents/fire-safety-inspections/ab");
 });
+
+const floorGroups: InspectionGroup[] = [1, 2, 7, 8, 9, null].map((level, index) => ({
+  id: `hose-a-c${index + 1}`,
+  report: "hose-reel",
+  block: "A",
+  level,
+  location: level === null ? "Lobby" : "West Wing",
+  quantity: 1,
+  sourceCell: `C${index + 1}`,
+  units: [{ id: `hose-a-c${index + 1}-1`, label: "Unit 1" }],
+}));
+
+function floorNavigation(position: "top" | "bottom") {
+  return within(screen.getByRole("navigation", { name: `Floor navigation (${position})` }));
+}
+
+it("offers the same upward next floor at the top and bottom, then stops at the highest floor", () => {
+  render(<FlexInspectionForm inspection={inspection} groups={floorGroups} today={today} scope="ab" />);
+
+  const level = screen.getByRole("combobox", { name: "Level" });
+  expect(level).toHaveValue("1");
+  expect(floorNavigation("bottom").getByRole("button", { name: "Next: Level 2" })).toBeEnabled();
+  fireEvent.click(floorNavigation("top").getByRole("button", { name: "Next: Level 2" }));
+  expect(level).toHaveValue("2");
+  expect(screen.getByRole("group", { name: /Block A, Level 2$/ })).toBeInTheDocument();
+
+  fireEvent.click(floorNavigation("bottom").getByRole("button", { name: "Next: Level 7" }));
+  fireEvent.click(floorNavigation("top").getByRole("button", { name: "Next: Level 8" }));
+  fireEvent.click(floorNavigation("bottom").getByRole("button", { name: "Next: Level 9" }));
+  expect(level).toHaveValue("9");
+  expect(floorNavigation("top").getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(floorNavigation("bottom").getByRole("button", { name: "Next" })).toBeDisabled();
+
+  fireEvent.change(level, { target: { value: "all" } });
+  expect(screen.queryByRole("navigation", { name: "Floor navigation (top)" })).not.toBeInTheDocument();
+  fireEvent.change(level, { target: { value: "common" } });
+  expect(screen.queryByRole("navigation", { name: "Floor navigation (bottom)" })).not.toBeInTheDocument();
+
+  fireEvent.change(level, { target: { value: "9" } });
+  expect(floorNavigation("top").getByRole("button", { name: "Next: Level 8" })).toBeEnabled();
+});
+
+it("goes down from a manually selected Level 8 and keeps faults and remarks when changing floors", () => {
+  render(<FlexInspectionForm inspection={inspection} groups={floorGroups} today={today} scope="ab" />);
+
+  const level = screen.getByRole("combobox", { name: "Level" });
+  fireEvent.change(level, { target: { value: "8" } });
+  markFault(/Block A, Level 8$/);
+  fireEvent.change(screen.getByRole("textbox", { name: /Level 8/ }), { target: { value: "Damaged nozzle" } });
+
+  expect(floorNavigation("top").getByRole("button", { name: "Next: Level 7" })).toBeEnabled();
+  fireEvent.click(floorNavigation("bottom").getByRole("button", { name: "Next: Level 7" }));
+  expect(level).toHaveValue("7");
+  expect(floorNavigation("top").getByRole("heading", { name: "Block A · Level 7" })).toHaveFocus();
+  expect(screen.getByRole("group", { name: /Block A, Level 7$/ })).toBeInTheDocument();
+  fireEvent.click(floorNavigation("top").getByRole("button", { name: "Next: Level 2" }));
+  fireEvent.click(floorNavigation("bottom").getByRole("button", { name: "Next: Level 1" }));
+  expect(level).toHaveValue("1");
+  expect(floorNavigation("top").getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(floorNavigation("bottom").getByRole("button", { name: "Next" })).toBeDisabled();
+
+  fireEvent.change(level, { target: { value: "8" } });
+  expect(within(screen.getByRole("group", { name: /Block A, Level 8$/ }))
+    .getByRole("button", { name: "Fault" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("textbox", { name: /Level 8/ })).toHaveValue("Damaged nozzle");
+});
