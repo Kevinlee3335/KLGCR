@@ -56,7 +56,7 @@ function formatLevel(level: number | null) {
   return level === null ? "Common areas" : "Level " + level;
 }
 
-export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null, recipients }: {
+export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null, recipients, scheduledDate }: {
   inspection: FlexInspectionSnapshot;
   groups: FlexGroup[];
   today: string;
@@ -64,6 +64,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
   review?: FlexReview | null;
   reviewer?: FlexReviewer | null;
   recipients?: FlexInspectionMailRecipients | null;
+  scheduledDate?: string;
 }) {
   const { inspectionLocations, levelOptions, unitCount } = useMemo(() => organizeInspection(groups), [groups]);
   const [saved, setSaved] = useState(inspection);
@@ -232,7 +233,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
             </div>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
             {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer}
-              preview={preview} recipients={recipients} /> : null}
+              preview={preview} recipients={recipients} scheduledDate={scheduledDate} /> : null}
             {review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
           </>
         ) : (

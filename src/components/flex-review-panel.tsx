@@ -15,8 +15,11 @@ const reviewers = [
 const timeFormat = new Intl.DateTimeFormat("en-MY", {
   timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "short",
 });
+const dateFormat = new Intl.DateTimeFormat("en-MY", {
+  timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium",
+});
 
-function mailMessage(review: FlexReview, preview: boolean) {
+function mailMessage(review: FlexReview, preview: boolean, scheduledDate?: string) {
   if (!review.kevinVerifiedAt || !review.fikriVerifiedAt) {
     return "Both verifications are required before the reports are emailed to Flex.";
   }
@@ -25,15 +28,18 @@ function mailMessage(review: FlexReview, preview: boolean) {
   if (review.mailStatus === "failed" || review.mailStatus === "uncertain") {
     return review.error || "Flex email delivery needs review.";
   }
-  return review.mailStatus === "sending" ? "Sending the reports to Flex…" : "Both verified. Flex email is queued.";
+  if (review.mailStatus === "sending") return "Sending the reports to Flex…";
+  if (scheduledDate) return `Both verified. Flex email is scheduled for ${dateFormat.format(new Date(scheduledDate))}.`;
+  return "Both verified. Flex email is queued.";
 }
 
-export function FlexReviewPanel({ period, initial, reviewer, preview, recipients }: {
+export function FlexReviewPanel({ period, initial, reviewer, preview, recipients, scheduledDate }: {
   period: string;
   initial: FlexReview;
   reviewer: FlexReviewer | null;
   preview: boolean;
   recipients?: FlexInspectionMailRecipients | null;
+  scheduledDate?: string;
 }) {
   const storageKey = `flex-preview-review-${period}`;
   const [local, setLocal] = useState<FlexReview | null>(null);
@@ -101,7 +107,7 @@ export function FlexReviewPanel({ period, initial, reviewer, preview, recipients
           <dd>{recipients ? recipients.cc.map(email => <span key={email}>{email}</span>) : "Two Flex contacts"}</dd>
         </dl>
       ) : null}
-      <p className={styles.instructions} role="status">{mailMessage(review, preview)}</p>
+      <p className={styles.instructions} role="status">{mailMessage(review, preview, scheduledDate)}</p>
       {!preview && review.kevinVerifiedAt && review.fikriVerifiedAt && review.mailStatus !== "sent" ? (
         <a href={`/flex-inspections?period=${period}`} className={styles.reload}>Refresh email status</a>
       ) : null}

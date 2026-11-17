@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   inspection: vi.fn(),
   render: vi.fn(),
   config: vi.fn(),
+  queue: vi.fn(),
+  cutoff: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
@@ -29,12 +31,24 @@ const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(sentAt));
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("KLGCR_FLEX_MAIL_RECIPIENTS", JSON.stringify({ to: pinnedRecipient, cc }));
+  const queue = {
+    lte: (...args: unknown[]) => {
+      mocks.cutoff(...args);
+      return queue;
+    },
+    not: () => queue,
+    or: () => queue,
+    order: () => queue,
+    limit: mocks.queue,
+  };
   mocks.admin.mockImplementation(() => ({
     rpc: (...args: unknown[]) => ({ maybeSingle: () => mocks.claim(...args) }),
     from: (table: string) => ({
-      select: (columns: string) => ({
+      select: (columns: string) => table === "flex_inspection_reviews" ? queue : ({
         eq: (key: string, value: boolean) => ({
           maybeSingle: () => mocks.config({ table, columns, key, value }),
         }),
@@ -82,7 +96,10 @@ it("loads the exact approved To and CC from private production settings", async 
   }), 25_000);
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 it("does not read or claim outbound mail from preview", async () => {
   vi.stubEnv("VERCEL_ENV", "preview");
@@ -112,6 +129,31 @@ it("does not load or send the PDFs until both reviewers have verified", async ()
   expect(mocks.inspection).not.toHaveBeenCalled();
   expect(mocks.gateway).not.toHaveBeenCalled();
   expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it("does not claim a verified inspection before its scheduled Malaysia date", async () => {
+  await dispatchFlexInspectionMail("2027-02", new Date("2027-02-04T15:59:59Z"));
+  expect(mocks.admin).not.toHaveBeenCalled();
+  expect(mocks.gateway).not.toHaveBeenCalled();
+});
+
+it("only loads due reports in the retry queue before and at the local send date", async () => {
+  mocks.queue.mockResolvedValue({ data: [], error: null });
+  await retryQueuedFlexInspectionMail(new Date("2027-02-04T15:59:59Z"));
+  await retryQueuedFlexInspectionMail(new Date("2027-02-04T16:00:00Z"));
+  expect(mocks.cutoff.mock.calls).toEqual([["period", "2027-01"], ["period", "2027-02"]]);
+});
+
+it("allows a verified report to be dispatched immediately on its scheduled Malaysia date", async () => {
+  const holidayPeriod = "2027-02";
+  mocks.claim.mockResolvedValueOnce({
+    data: { period: holidayPeriod, recipient: pinnedRecipient, kevin_verified_at: sentAt, fikri_verified_at: sentAt },
+    error: null,
+  });
+  await dispatchFlexInspectionMail(holidayPeriod, new Date("2027-02-04T16:00:00Z"));
+  expect(mocks.gateway).toHaveBeenCalledWith(expect.objectContaining({
+    action: "flex-inspection-send", key: "flex-inspection_2027-02",
+  }), 25_000);
 });
 
 it("uses the approved To and both CC addresses and keeps one delivery key across retries", async () => {

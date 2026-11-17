@@ -24,6 +24,26 @@ const published: Record<number, Record<string, string>> = {
 export type CompanyHoliday = { date: string; label: string; provisional: boolean; substituteFor?: string };
 const nextDay = (day: string) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 
+function johorHolidays(year: number) {
+  return new Holidays("MY", "01", { languages: "en" }).getHolidays(year);
+}
+
+function holidayKey(holiday: { name: string; rule: string }) {
+  return holiday.name === "Deepavali" ? "Deepavali" : holiday.rule;
+}
+
+function holidayDate(year: number, key: string, date: string) {
+  const override = published[year]?.[key];
+  return override ? `${year}-${override}` : date.slice(0, 10);
+}
+
+export function isJohorPublicHoliday(date: string) {
+  const year = Number(date.slice(0, 4));
+  return johorHolidays(year).some(holiday =>
+    holiday.type === "public" && holidayDate(year, holidayKey(holiday), holiday.date) === date,
+  );
+}
+
 export function addSubstituteDays(base: CompanyHoliday[]): CompanyHoliday[] {
   const sorted = [...base].sort((a, b) => a.date.localeCompare(b.date));
   const occupied = new Set(sorted.map(h => h.date));
@@ -43,15 +63,13 @@ export function addSubstituteDays(base: CompanyHoliday[]): CompanyHoliday[] {
 
 export function companyHolidays(year: number): CompanyHoliday[] {
   if (!Number.isInteger(year) || year < 1900 || year > 2100) return [];
-  const calendar = new Holidays("MY", "01", { languages: "en" });
   const rows: CompanyHoliday[] = [];
-  for (const h of calendar.getHolidays(year)) {
+  for (const h of johorHolidays(year)) {
     if (h.substitute) continue;
-    const key = h.name === "Deepavali" ? "Deepavali" : h.rule;
+    const key = holidayKey(h);
     const label = key === "Deepavali" ? "Deepavali" : names[key];
     if (!label) continue;
-    const override = published[year]?.[key];
-    const date = override ? `${year}-${override}` : h.date.slice(0, 10);
+    const date = holidayDate(year, key, h.date);
     if (rows.some(row => row.date === date && row.label === label)) continue;
     rows.push({ date, label, provisional: !published[year] || ["1 Shawwal", "2 Shawwal", "10 Dhu al-Hijjah", "Deepavali"].includes(key) });
   }
