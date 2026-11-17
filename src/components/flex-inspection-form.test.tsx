@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { FlexGroup, FlexInspectionSnapshot } from "@/lib/flex-inspection";
+import type { FlexGroup, FlexInspectionSnapshot, InspectionGroup } from "@/lib/flex-inspection";
 import { emptyFlexReview } from "@/lib/flex-inspection-review";
 import { FlexInspectionForm } from "./flex-inspection-form";
 
-const { save, verify } = vi.hoisted(() => ({ save: vi.fn(), verify: vi.fn() }));
-vi.mock("@/lib/flex-inspection-actions", () => ({ saveFlexInspection: save }));
+const { save, saveAb, verify } = vi.hoisted(() => ({ save: vi.fn(), saveAb: vi.fn(), verify: vi.fn() }));
+vi.mock("@/lib/flex-inspection-actions", () => ({ saveFlexInspection: save, saveAbFireSafetyInspection: saveAb }));
 vi.mock("@/lib/flex-inspection-review-actions", () => ({ verifyFlexInspection: verify }));
 
 const inspection: FlexInspectionSnapshot = {
@@ -39,6 +39,7 @@ const today = "2026-11-16";
 beforeEach(() => {
   sessionStorage.clear();
   save.mockReset();
+  saveAb.mockReset();
   verify.mockReset();
 });
 afterEach(cleanup);
@@ -150,4 +151,54 @@ it("lets the trial simulate both verifications in either order, including after 
   fireEvent.click(await screen.findByRole("button", { name: "Verify as Kevin" }));
   expect(screen.getByText(/email is simulated/i)).toBeInTheDocument();
   expect(verify).not.toHaveBeenCalled();
+});
+
+it("completes A/B through its own action and links all four PDFs and the Documents archive", async () => {
+  const abGroups: InspectionGroup[] = [
+    {
+      id: "hose-a-b6", report: "hose-reel", block: "A", level: 1, location: "Wing A",
+      quantity: 1, sourceCell: "B6", units: [{ id: "hose-a-b6-1", label: "Unit 1" }],
+    },
+    {
+      id: "light-a-b9", report: "emergency-light", block: "A", level: 4, location: "Lobby",
+      quantity: 0, sourceCell: "B9", units: [], note: "No emergency light",
+    },
+    {
+      id: "fire-other-b50", report: "fire-extinguisher", block: "Other", level: 1, location: "Bungalow XA3",
+      quantity: 1, sourceCell: "B50", units: [{ id: "fire-other-b50-1", label: "DP 1" }],
+    },
+  ];
+  saveAb.mockResolvedValue({
+    ok: true,
+    inspection: {
+      ...inspection, revision: 1, inspectionDate: today, inspectedByName: "Inspector",
+      completedAt: today + "T03:00:00Z", exceptions: { "fire-other-b50-1": "Low pressure" },
+    },
+  });
+  render(<FlexInspectionForm inspection={inspection} groups={abGroups} today={today} scope="ab"
+    review={emptyFlexReview} reviewer="kevin" />);
+
+  fireEvent.change(screen.getByRole("combobox", { name: "Level" }), { target: { value: "4" } });
+  expect(screen.getByText("No emergency light")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Good" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Other areas" }));
+  markFault(/Bungalow XA3/);
+  fireEvent.change(screen.getByRole("textbox", { name: /Bungalow XA3/ }), { target: { value: "Low pressure" } });
+  fireEvent.click(screen.getByRole("button", { name: "Complete inspection" }));
+
+  const reports = await screen.findAllByRole("link", { name: / PDF$/ });
+  expect(reports.map((link) => link.getAttribute("href"))).toEqual([
+    "/api/flex-inspections/2026-11/hose-reel?scope=ab",
+    "/api/flex-inspections/2026-11/fire-extinguisher?scope=ab",
+    "/api/flex-inspections/2026-11/exit-sign?scope=ab",
+    "/api/flex-inspections/2026-11/emergency-light?scope=ab",
+  ]);
+  expect(saveAb).toHaveBeenCalledWith({
+    period: inspection.period, revision: 0, inspectionDate: today, complete: true,
+    exceptions: { "fire-other-b50-1": "Low pressure" },
+  });
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.queryByRole("region", { name: "Flex verification" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Open Documents archive" }))
+    .toHaveAttribute("href", "/documents/fire-safety-inspections/ab");
 });

@@ -1,5 +1,8 @@
+import { ClipboardList, FolderOpen } from "lucide-react";
+import { loadAbInspectionGroups } from "@/lib/ab-inspection-catalog";
 import { AppShell } from "@/components/app-shell";
 import { FlexInspectionForm } from "@/components/flex-inspection-form";
+import styles from "@/components/flex-inspection-form.module.css";
 import { requireRole } from "@/lib/auth";
 import { malaysiaDate } from "@/lib/checkout-occupancy-report";
 import {
@@ -18,36 +21,54 @@ import { loadFlexInspection } from "@/lib/flex-inspection-store";
 export default async function FlexInspectionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; scope?: string }>;
 }) {
   const profile = await requireRole(FLEX_INSPECTION_ROLES);
-  const { period: requestedPeriod } = await searchParams;
+  const { period: requestedPeriod, scope: requestedScope } = await searchParams;
+  const scope = requestedScope === "ab" ? "ab" : "cd";
+  const isAb = scope === "ab";
   const today = malaysiaDate();
   const currentPeriod = today.slice(0, 7);
   const period = typeof requestedPeriod === "string" && isFlexPeriod(requestedPeriod) && requestedPeriod <= currentPeriod
     ? requestedPeriod
     : currentPeriod;
   const preview = isFlexPreview();
-  const reviewer = flexReviewer(profile);
-  const scheduledDate = flexInspectionSendDate(period);
+  const reviewer = isAb ? null : flexReviewer(profile);
+  const scheduledDate = isAb ? undefined : flexInspectionSendDate(period);
 
   const [groups, inspection, recipients] = await Promise.all([
-    loadFlexGroups().catch(() => null),
+    isAb ? loadAbInspectionGroups() : loadFlexGroups().catch(() => null),
     preview ? Promise.resolve({
       period, revision: 0, exceptions: {}, inspectionDate: null, inspectedByName: null, completedAt: null,
-    }) : loadFlexInspection(period).catch(() => null),
+    }) : loadFlexInspection(period, scope).catch(() => null),
     reviewer ? flexInspectionMailRecipients().catch(() => null) : null,
   ]);
-  const review = inspection?.completedAt ? await loadFlexReview(period).catch(() => null) : emptyFlexReview;
+  const review = isAb ? undefined : inspection?.completedAt
+    ? await loadFlexReview(period).catch(() => null)
+    : emptyFlexReview;
 
   return (
     <AppShell profile={profile} title={FLEX_INSPECTION_TITLE}>
+      <div className={styles.inspectionNav}>
+        <nav aria-label="Fire safety inspection blocks" className={styles.scopeTabs}>
+          <a href={`${FLEX_INSPECTION_PATH}?scope=ab&period=${period}`} aria-current={isAb ? "page" : undefined}>
+            <ClipboardList size={17} aria-hidden="true" /> Block A &amp; B
+          </a>
+          <a href={`${FLEX_INSPECTION_PATH}?period=${period}`} aria-current={isAb ? undefined : "page"}>
+            <ClipboardList size={17} aria-hidden="true" /> Block C &amp; D
+          </a>
+        </nav>
+        <a className={styles.archiveLink} href={`/documents/fire-safety-inspections/${scope}`}>
+          <FolderOpen size={17} aria-hidden="true" /> Monthly PDF archive
+        </a>
+      </div>
       <div className="section-head">
         <div>
-          <p className="eyebrow">Block C &amp; D</p>
+          <p className="eyebrow">{isAb ? "Block A & B" : "Block C & D · Flex"}</p>
           <h2>Monthly fire safety checklist</h2>
         </div>
         <form action={FLEX_INSPECTION_PATH} method="get" className="actions">
+          {isAb ? <input type="hidden" name="scope" value={scope} /> : null}
           <label className="field">
             <span>Inspection month</span>
             <input type="month" name="period" required defaultValue={period} max={currentPeriod} />
@@ -56,9 +77,9 @@ export default async function FlexInspectionsPage({
         </form>
       </div>
       {groups && inspection ? (
-        <FlexInspectionForm key={period} groups={groups} inspection={inspection} today={today}
+        <FlexInspectionForm key={`${scope}-${period}`} groups={groups} inspection={inspection} today={today} scope={scope}
           preview={preview} reviewer={reviewer} review={review} recipients={recipients}
-          scheduledDate={scheduledDate > today ? scheduledDate : undefined} />
+          scheduledDate={scheduledDate && scheduledDate > today ? scheduledDate : undefined} />
       ) : (
         <section className="panel" role="alert">
           Unable to load the inspection. Reload this page to try again.
