@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
+import { CheckoutCleaningHistory } from "@/components/checkout-cleaning-history";
 import { CheckoutBatchImport } from "@/components/checkout-batch-import";
 import { CheckoutBulkAssign } from "@/components/checkout-bulk-assign";
 import { CheckoutDefectPicker } from "@/components/checkout-defect-picker";
@@ -17,8 +18,8 @@ type Blocks = Promise<{ id: number; code: string }[]>;
 type Workers = Promise<{ id: string; full_name: string; role: string }[]>;
 type Overview = ReturnType<typeof loadCheckoutOverviewRooms>;
 
-function loadStatusReport(db: Awaited<ReturnType<typeof createClient>>) {
-  return Promise.resolve(db.rpc("checkout_status_report", { p_date: malaysiaDate(), p_group: "ALL" }));
+function loadStatusReport(db: Awaited<ReturnType<typeof createClient>>, date: string) {
+  return Promise.resolve(db.rpc("checkout_status_report", { p_date: date, p_group: "ALL" }));
 }
 
 type StatusReport = ReturnType<typeof loadStatusReport>;
@@ -110,7 +111,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const page = checkoutProgressPageNumber(query.page);
   const progress = loadCheckoutProgressPage(db, filters, page);
   const overview = loadCheckoutOverviewRooms(db);
-  const report = loadStatusReport(db);
+  const today = malaysiaDate();
+  const requestedDate = typeof query.completedDate === "string" ? query.completedDate : "";
+  const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? new Date(requestedDate) : null;
+  const completedDate = parsedDate && Number.isFinite(parsedDate.getTime())
+    && parsedDate.toISOString().slice(0, 10) === requestedDate && requestedDate <= today && requestedDate >= "0001-01-01"
+    ? requestedDate : today;
+  const completedCleaner = typeof query.completedCleaner === "string" ? query.completedCleaner : "";
+  const report = loadStatusReport(db, today);
+  const completionReport = completedDate === today ? report : loadStatusReport(db, completedDate);
   const blocks: Blocks = Promise.resolve(db.from("blocks").select("id,code").order("code")).then(({ data }) => data || []);
   const workers: Workers = isAdmin
     ? Promise.resolve(db.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null)
@@ -129,6 +138,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       </div>
       <Suspense fallback={<p className="subtle" role="status">Loading check-out statistics…</p>}>
         <CheckoutStatistics db={db} overview={overview} report={report} />
+      </Suspense>
+      <Suspense fallback={<p className="subtle" role="status">Loading cleaning completions…</p>}>
+        <CheckoutCleaningHistory today={today} date={completedDate} cleaner={completedCleaner} report={completionReport} currentReport={report} />
       </Suspense>
       {isAdmin && <>
         <Suspense fallback={<p className="subtle" role="status">Loading rooms awaiting assignment…</p>}>

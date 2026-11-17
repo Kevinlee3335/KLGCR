@@ -1,6 +1,7 @@
 "use server";
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
+import {notifyActiveAdmins} from "@/lib/app-notifications";
 import {requireSuperAdmin} from "@/lib/auth";
 import {createClient} from "@/lib/supabase/server";
 
@@ -16,10 +17,24 @@ export async function manageCheckoutAsSuperAdmin(id:string,data:FormData) {
   redirect(`${origin}?error=${encodeURIComponent("Confirm that this is a duplicate record before archiving.")}`);
 
  const db=await createClient();
- const {error}=await db.rpc("super_admin_manage_checkout",{
+ const {data:room,error}=await db.rpc("super_admin_manage_checkout",{
   p_room:id,p_operation:operation,p_reason:reason
  });
  if(error)redirect(`${origin}?error=${encodeURIComponent(error.message)}`);
+ if (operation === "complete_cleaning") {
+  try {
+   await notifyActiveAdmins({
+    type: "checkout_completed",
+    title: "Room ready for occupancy",
+    body: `${room?.reference_no || "Check-out room"} — Room ${room?.room_no || ""} is ready for occupancy.`,
+    href: `/admin/checkouts/${id}`,
+    entityId: id,
+    deferPush: true,
+   });
+  } catch (error) {
+   console.error("Unable to notify administrators about Super Admin cleaning completion", error);
+  }
+ }
  for(const path of ["/admin","/admin/checkouts",`/admin/checkouts/${id}`,"/admin/super-admin","/staff/checkouts","/admin/checkouts/occupancy-report"])
   revalidatePath(path);
  if(operation==="archive_duplicate"||operation==="restore_archived")
