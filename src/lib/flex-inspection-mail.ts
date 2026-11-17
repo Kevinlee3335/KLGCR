@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { gmailGateway } from "@/lib/billing-mail";
 import { BILLING_MAIL_FROM } from "@/lib/billing-mail-settings";
+import { malaysiaDate } from "@/lib/checkout-occupancy-report";
 import { isFlexPeriod } from "@/lib/flex-inspection";
+import { flexInspectionSendDate, latestDueFlexInspectionPeriod } from "@/lib/flex-inspection-mail-schedule";
 import { flexInspectionMailRecipients, type FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import { loadFlexInspectionForReport } from "@/lib/flex-inspection-store";
 import { generateFlexInspectionReportPack } from "@/lib/flex-reports/generate";
@@ -90,8 +92,9 @@ async function sendInspectionReport(period: string, recipients: FlexInspectionMa
   return { status: "uncertain", sent_at: null, error: uncertainDelivery };
 }
 
-export async function dispatchFlexInspectionMail(period: string) {
+export async function dispatchFlexInspectionMail(period: string, now = new Date()) {
   if (process.env.VERCEL_ENV !== "production" || !isFlexPeriod(period)) return;
+  if (malaysiaDate(now) < flexInspectionSendDate(period)) return;
   const recipients = await flexInspectionMailRecipients();
   if (!recipients) return;
 
@@ -115,14 +118,15 @@ async function dispatchFlexInspectionMailTo(period: string, recipients: FlexInsp
   if (saved.error || !saved.data) throw Error("Unable to save the Flex inspection email status.");
 }
 
-export async function retryQueuedFlexInspectionMail() {
+export async function retryQueuedFlexInspectionMail(now = new Date()) {
   if (process.env.VERCEL_ENV !== "production") return;
   const recipients = await flexInspectionMailRecipients();
   if (!recipients) return;
 
   const result = await createAdminClient().from(deliveryTable).select("period")
+    .lte("period", latestDueFlexInspectionPeriod(malaysiaDate(now)))
     .not("kevin_verified_at", "is", null).not("fikri_verified_at", "is", null)
-    .or(`status.in.(pending,failed,uncertain),and(status.eq.sending,locked_until.lte.${new Date().toISOString()})`)
+    .or(`status.in.(pending,failed,uncertain),and(status.eq.sending,locked_until.lte.${now.toISOString()})`)
     .order("attempted_at", { nullsFirst: true }).order("period").limit(4);
   if (result.error) throw Error("Unable to read the Flex inspection email queue.");
 
