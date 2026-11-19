@@ -36,7 +36,7 @@ async function recordAccessAudit(
 const schema = z.object({
   fullName: z.string().trim().min(2),
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/),
-  email: z.string().email().toLowerCase(),
+  email: z.string().trim().toLowerCase().email().or(z.literal("")),
   password: z.string().min(10),
   role: z.enum(["admin", "maintenance_staff", "cleaner", "management_viewer", "gym_patrol"]),
 });
@@ -49,7 +49,7 @@ export async function createUser(
   const parsed = schema.safeParse({
     fullName: data.get("fullName"),
     username: data.get("username"),
-    email: data.get("email"),
+    email: data.get("email") ?? "",
     password: data.get("password"),
     role: data.get("role"),
   });
@@ -60,12 +60,14 @@ export async function createUser(
   try {
     const admin = adminClient();
     const { data: created, error } = await admin.auth.admin.createUser({
-      email: parsed.data.email,
+      email: parsed.data.email || `${crypto.randomUUID()}@users.klgcr.invalid`,
       password: parsed.data.password,
       email_confirm: true,
       user_metadata: {
+        email: parsed.data.email || null,
         full_name: parsed.data.fullName,
         username: parsed.data.username,
+        email_optional: !parsed.data.email,
       },
     });
     if (error) return { error: error.message };
@@ -73,6 +75,7 @@ export async function createUser(
     const { error: profileError } = await admin
       .from("profiles")
       .update({
+        email: parsed.data.email || null,
         full_name: parsed.data.fullName,
         username: parsed.data.username,
         role: parsed.data.role,
@@ -84,18 +87,20 @@ export async function createUser(
       return { error: profileError.message };
     }
 
-    const blocks = parsed.data.role === "gym_patrol" ? [] : data.getAll("blocks").map(String);
+    const blocks = [...new Set(data.getAll("blocks").map(String))].filter(code => ["A", "B", "C", "D"].includes(code));
     if (blocks.length) {
-      const { data: blockRows } = await admin
+      const { data: blockRows, error: blocksError } = await admin
         .from("blocks")
         .select("id,code")
         .in("code", blocks);
-      await admin.from("profile_blocks").insert(
+      if (blocksError) { await admin.auth.admin.deleteUser(created.user.id); return { error: blocksError.message }; }
+      const { error: assignmentError } = await admin.from("profile_blocks").insert(
         (blockRows || []).map((block) => ({
           profile_id: created.user.id,
           block_id: block.id,
         })),
       );
+      if (assignmentError) { await admin.auth.admin.deleteUser(created.user.id); return { error: assignmentError.message }; }
     }
 
     await recordAccessAudit(admin, actor.id, created.user.id, "user_created", {
@@ -190,9 +195,9 @@ export async function setUserPassword(data: FormData): Promise<UserActionState> 
     if (id === actor.id) return { error: "Use Change Password in your own account to change your password." };
 
     const admin = adminClient();
-    const {data:target,error:targetError}=await admin.from("profiles").select("is_super_admin").eq("id",id).single();
+    const {data:target,error:targetError}=await admin.from("profiles").select("is_super_admin,email").eq("id",id).single();
     if(targetError)return {error:targetError.message};
-    if(target.is_super_admin&&!actor.is_super_admin)return {error:"Only Super Admin may change the Super Admin account password."};
+    if ((!target.email || target.is_super_admin) && !(actor.is_super_admin && actor.username === "kevinlee3335")) return {error:"Only Super Admin may reset this account password."};
     const { error } = await admin.auth.admin.updateUserById(id, { password: password.data });
     if (error) return { error: error.message };
     await recordAccessAudit(admin, actor.id, id, "password_changed_by_admin");

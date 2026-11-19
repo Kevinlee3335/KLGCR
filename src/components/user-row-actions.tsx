@@ -12,7 +12,7 @@ const roles = [
   ["gym_patrol", "Gym Patrol (Read only)"],
 ] as const;
 
-export function UserRowActions({ id, email, isActive, role, fullName }: { id: string; email?: string | null; isActive: boolean; role: string; fullName: string }) {
+export function UserRowActions({ id, email, isActive, role, fullName, canResetPassword = true }: { id: string; email?: string | null; isActive: boolean; role: string; fullName: string; canResetPassword?: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState<string>();
 
@@ -42,11 +42,11 @@ export function UserRowActions({ id, email, isActive, role, fullName }: { id: st
         <button className="button secondary" type="submit">Save role</button>
       </form>
       <form action={setUserActive}><input type="hidden" name="id" value={id}/><input type="hidden" name="active" value={String(!isActive)}/><button className={`button ${isActive ? "danger" : "secondary"}`} type="submit">{isActive ? "Disable user" : "Enable user"}</button></form>
-      <form onSubmit={updatePassword}>
+      {canResetPassword ? <form onSubmit={updatePassword}>
         <input type="hidden" name="id" value={id}/>
         <label>New password<input name="password" type="password" minLength={10} autoComplete="new-password" required/></label>
         <button className="button secondary" type="submit">Update password</button>
-      </form>
+      </form> : <p>Contact Super Admin to reset this password.</p>}
       {email && <form action={sendReset}><input type="hidden" name="email" value={email}/><button className="button secondary" type="submit">Send reset email</button></form>}
       <form onSubmit={removeUser}>
         <input type="hidden" name="id" value={id}/>
