@@ -1,3 +1,4 @@
+import {cdInspectionRepairKeys,type CDInspection} from "./checkout-cd-inspection";
 export type InspectionItem = {enabled?:boolean;confirm?:boolean;qty?:number;status:string;defects?:{type:string;qty:number;remark:string}[];photos?:string[];type?:string;remark?:string};
 export type ABInspection = {id:string;room:string;b:string;p:number;date:string;by:string;reason:string;items:InspectionItem[][];fac:Record<string,InspectionItem>};
 const FURNITURE_NAMES=["Divan","Mattress","Chair","Wardrobe","Bookshelf"];
@@ -13,6 +14,7 @@ function facilityDescription(name:string,item:InspectionItem){
 export function inspectionRepairKeys(checklist:unknown,defects:{description:string;status:string}[]){
  if(!checklist||typeof checklist!=="object")return [];
  const record=checklist as Partial<ABInspection>;
+ if(["C","D"].includes(record.b||""))return cdInspectionRepairKeys(checklist as CDInspection,defects);
  if(!Array.isArray(record.items))return [];
  const repaired=(description:string)=>{
   const matches=defects.filter(d=>d.description.trim()===description.trim());

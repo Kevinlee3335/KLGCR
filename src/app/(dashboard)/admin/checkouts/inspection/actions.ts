@@ -43,22 +43,23 @@ export async function getRecentRoomInspection(roomCode:string) {
  const today=malaysiaDate.format(now);
  const firstInstant=new Date(`${firstDay}T00:00:00+08:00`).toISOString();
  const db=await createClient();
- const {data:rooms,error}=await db.from("checkout_rooms")
+ let recentQuery=db.from("checkout_rooms")
   .select("id,created_at,status,ready_at,inspection_checklist,blocks!inner(code)")
   .eq("blocks.code",block)
   .in("room_no",[number,roomCode,`${block}-${number}`,`${block} ${number}`])
   .is("deleted_at",null)
   .not("inspection_checklist","is",null)
-  .gte("created_at",firstInstant)
   .order("created_at",{ascending:false})
   .order("id",{ascending:false});
+ if(!["C","D"].includes(block))recentQuery=recentQuery.gte("created_at",firstInstant);
+ const {data:rooms,error}=await recentQuery;
  if(error) return {error:"Could not check previous inspections. Please try again."};
  const room=rooms.map(entry=>{
   const date=entry.inspection_checklist?.date;
   const hasDate=typeof date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&!Number.isNaN(Date.parse(date));
   return {...entry,day:hasDate?date:malaysiaDate.format(new Date(entry.created_at)),inspectedAt:hasDate?date:entry.created_at};
- }).filter(entry=>entry.day>=firstDay&&entry.day<=today)
-  .sort((first,second)=>second.day.localeCompare(first.day))[0];
+ }).filter(entry=>(entry.day>=firstDay&&entry.day<=today)||(["C","D"].includes(block)&&entry.status!=="ready_for_occupancy"))
+  .sort((first,second)=>["C","D"].includes(block)&&((first.status==="ready_for_occupancy")!==(second.status==="ready_for_occupancy"))?(first.status==="ready_for_occupancy"?1:-1):second.day.localeCompare(first.day))[0];
  if(!room) return {record:null};
 
  const [defects,history]=await Promise.all([

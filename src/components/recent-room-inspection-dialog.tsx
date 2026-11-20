@@ -17,8 +17,8 @@ function formatDate(value:string) {
  return `${day} · ${time.toUpperCase()}`;
 }
 
-export function RecentRoomInspectionDialog({room,record,onClose,onContinue}:{
- room:string;record:RecentInspection;onClose:()=>void;onContinue:()=>void;
+export function RecentRoomInspectionDialog({room,record,onClose,onContinue,allowNewInspection=true}:{
+ room:string;record:RecentInspection;onClose:()=>void;onContinue:()=>void;allowNewInspection?:boolean;
 }) {
  const dialog=useRef<HTMLDialogElement>(null);
  useEffect(()=>{
@@ -44,8 +44,8 @@ export function RecentRoomInspectionDialog({room,record,onClose,onContinue}:{
     <span className={styles.emblem}><History aria-hidden="true"/></span>
     <button type="button" className={styles.close} aria-label="Close inspection notice" onClick={onClose}><X aria-hidden="true"/></button>
    </div>
-   <h2 id="recent-room-title">{room} was recently inspected</h2>
-   <p className={styles.subtitle}>This room was inspected within the last 30 days.</p>
+   <h2 id="recent-room-title">{allowNewInspection?`${room} was recently inspected`:`${room} has an active check-out record`}</h2>
+   <p className={styles.subtitle}>{allowNewInspection?"This room was inspected within the last 30 days.":"Open the existing record to continue repairs or cleaning. A second active record cannot be created."}</p>
    <ul className={styles.timeline}>
     {rows.map(({label,icon:Icon,detail,status})=><li key={label}>
      <Icon aria-hidden="true" size={21}/>
@@ -55,7 +55,7 @@ export function RecentRoomInspectionDialog({room,record,onClose,onContinue}:{
    </ul>
    <div className={styles.actions}>
     <Link className={styles.primary} href={`/admin/checkouts/${record.id}`} target="_blank" rel="noopener" autoFocus>View Previous Record</Link>
-    <button type="button" onClick={onContinue}>Continue Inspection</button>
+    {allowNewInspection&&<button type="button" onClick={onContinue}>Continue Inspection</button>}
    </div>
   </div>
  </dialog>;

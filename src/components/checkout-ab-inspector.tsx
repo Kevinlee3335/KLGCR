@@ -1,8 +1,9 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
+import {useRouter} from "next/navigation";
 import {createClient} from "@/lib/supabase/client";
-import {cdInspectionFindings,type CDInspection} from "@/lib/checkout-cd-inspection";
+import {cdInspectionFindings,cdUploadedPhotoGroups,type CDInspection} from "@/lib/checkout-cd-inspection";
 import {inspectionFindings,type ABInspection} from "@/lib/checkout-inspection";
 import {CHECKOUT_PHOTO_UPLOAD_CONCURRENCY,mapCheckoutPhotos} from "@/lib/checkout-photo-uploads";
 import {RecentRoomInspectionDialog,type RecentInspection} from "./recent-room-inspection-dialog";
@@ -11,6 +12,7 @@ import {getRecentRoomInspection,prepareInspectionPhotos,submitABInspection} from
 type SavedInspection={checklist:unknown;created_at:string;rectifiedItems?:string[]};
 const EMPTY_INSPECTIONS:SavedInspection[]=[];
 export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPECTIONS,loadError=false,blocks="AB"}:{blocks?:"AB"|"CD";isAdmin?:boolean;initialInspections?:SavedInspection[];loadError?:boolean}){
+ const router=useRouter();
  const [recent,setRecent]=useState<{room:string;request:number;record:RecentInspection}|null>(null);
  const recentLookup=useRef(0);
  const [inspections,setInspections]=useState(initialInspections);
@@ -21,8 +23,16 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPE
   frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:initialInspections},window.location.origin);
  },[initialInspections]);
  useEffect(()=>{
+  if(blocks!=="CD")return;
+  const refresh=()=>{if(document.visibilityState==="visible"&&!pending.current)router.refresh();};
+  const timer=window.setInterval(refresh,60000);
+  window.addEventListener("focus",refresh);
+  return()=>{window.clearInterval(timer);window.removeEventListener("focus",refresh);};
+ },[blocks,router]);
+ useEffect(()=>{
   async function receive(event:MessageEvent){
    if(event.origin!==window.location.origin||event.source!==frame.current?.contentWindow||pending.current)return;
+   if(blocks==="CD"&&event.data?.type==="klg-inspection-refresh"){router.refresh();return;}
    if(!isAdmin&&event.data?.type==="klg-inspection-recent"){
     if(event.data.startAfter)frame.current?.contentWindow?.postMessage({type:"klg-inspection-continue",room:event.data.room,request:event.data.request},window.location.origin);
     return;
@@ -75,10 +85,7 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPE
     // Store the complete checklist without inline image data; evidence remains in private storage.
     const checklist=JSON.parse(JSON.stringify(record,(key,value)=>key==="photos"||key==="ph"?undefined:value));
     if(blocks==="CD"){
-     let next=0;checklist.ph={};
-     for(const [category,photos] of Object.entries((record as CDInspection).ph||{})){
-      checklist.ph[category]=paths.slice(next,next+photos.length);next+=photos.length;
-     }
+     checklist.ph=cdUploadedPhotoGroups(record as CDInspection,images,paths);
     }
     const result=await submitABInspection({id:record.id,block:record.b,room:String(record.room).replace(/^[ABCD]/,""),pax:"t" in record?record.t:record.p,notes:`${record.date} · ${record.by} · ${record.reason}`,checklist,findings:uploaded});
     if("error" in result)throw new Error(result.error);
@@ -103,10 +110,10 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPE
    finally{pending.current=false;setProgress("");frame.current?.contentWindow?.postMessage({type:"klg-inspection-unlock"},window.location.origin);}
   }
   window.addEventListener("message",receive);return()=>window.removeEventListener("message",receive);
- },[isAdmin,blocks]);
- return <section>{recent&&<RecentRoomInspectionDialog room={recent.room} record={recent.record}
+ },[isAdmin,blocks,router]);
+ return <section>{recent&&<RecentRoomInspectionDialog room={recent.room} record={recent.record} allowNewInspection={blocks!=="CD"||recent.record.status==="ready_for_occupancy"}
   onClose={()=>setRecent(null)} onContinue={()=>{
    frame.current?.contentWindow?.postMessage({type:"klg-inspection-continue",room:recent.room,request:recent.request},window.location.origin);
    setRecent(null);
-  }}/>} {saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{isAdmin?error:"Pemeriksaan tidak dapat dihantar. Sila semak maklumat dan gambar, kemudian cuba lagi. Jika masih gagal, hubungi admin."} {isAdmin?"Your inspection is still open below.":"Pemeriksaan masih terbuka di bawah."}</p>}{progress&&<div className="panel" role="status">{progress}</div>}{loadError&&<p className="error" role="alert">{isAdmin?"Unable to load saved inspections. Please refresh or contact admin.":"Tidak dapat memuatkan pemeriksaan. Sila muat semula atau hubungi admin."}</p>}<iframe ref={frame} key={round} onLoad={()=>frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:inspections},window.location.origin)} title={blocks==="CD"?"Block C and D room inspection":"Block A and B room inspection"} src={blocks==="CD"?"/checkout-cd-inspection.html":isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
+  }}/>} {saved?<div className="panel"><h3>{isAdmin?"Inspection submitted successfully":"Pemeriksaan berjaya dihantar"}</h3><p>{isAdmin?`${saved.reference_no} is now in the Check-out Progress Table, ready to assign.`:`${saved.reference_no} telah dihantar untuk tindakan seterusnya.`}</p><div className="checkout-page-actions">{isAdmin&&<><Link className="button" href="/admin/checkouts">Assign rooms</Link><Link className="button secondary" href={`/admin/checkouts/${saved.id}`}>View defect form</Link></>}<button className="button secondary" onClick={()=>{setSaved(null);setRound(n=>n+1)}}>{isAdmin?"Inspect another room":"Periksa bilik lain"}</button></div></div>:<>{error&&<p className="error" role="alert">{isAdmin?error:"Pemeriksaan tidak dapat dihantar. Sila semak maklumat dan gambar, kemudian cuba lagi. Jika masih gagal, hubungi admin."} {isAdmin?"Your inspection is still open below.":"Pemeriksaan masih terbuka di bawah."}</p>}{progress&&<div className="panel" role="status">{progress}</div>}{loadError&&<p className="error" role="alert">{isAdmin?"Unable to load saved inspections. Please refresh or contact admin.":"Tidak dapat memuatkan pemeriksaan. Sila muat semula atau hubungi admin."}</p>}<iframe ref={frame} key={round} onLoad={()=>frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:inspections},window.location.origin)} title={blocks==="CD"?"Block C and D room inspection":"Block A and B room inspection"} src={blocks==="CD"?(isAdmin?"/checkout-cd-inspection.html":"/checkout-cd-inspection.html?lang=ms"):isAdmin?"/checkout-ab-inspection.html":"/checkout-ab-inspection.html?lang=ms"} style={{width:"100%",height:"calc(100dvh - 160px)",minHeight:540,border:"1px solid #e7e0d0",borderRadius:16,pointerEvents:progress?"none":"auto"}}/></>}</section>;
 }

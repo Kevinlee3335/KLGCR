@@ -4,6 +4,7 @@ import {requireCheckoutInspector} from "@/lib/auth";
 import {createClient} from "@/lib/supabase/server";
 import {CheckoutABInspector} from "@/components/checkout-ab-inspector";
 import {inspectionRepairKeys} from "@/lib/checkout-inspection";
+import {checkoutProgress} from "@/lib/checkouts";
 import type {CDInspection} from "@/lib/checkout-cd-inspection";
 export default async function Page({searchParams}:{searchParams:Promise<{blocks?:string}>}){
  const blocks=(await searchParams).blocks==="CD"?"CD":"AB";
@@ -11,12 +12,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{blocks?
  const profile=await requireCheckoutInspector();
  const admin=profile.role==="admin";
  const db=await createClient();
- const inspections:{checklist:unknown;created_at:string;rectifiedItems:string[]}[]=[];
+ const inspections:{checklist:unknown;created_at:string;rectifiedItems:string[];checkoutId:string;roomStatus:string;repair:{total:number;completed:number;remaining:number}}[]=[];
  let loadError=false;
  for(let offset=0;;offset+=500){
-  const {data,error}=await db.from("checkout_rooms").select("inspection_checklist,created_at,checkout_defects(description,status)").is("deleted_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
+  const {data,error}=await db.from("checkout_rooms").select("id,status,inspection_checklist,created_at,checkout_defects(description,status)").is("deleted_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
   if(error){loadError=true;break;}
-  inspections.push(...(data||[]).map(row=>({checklist:row.inspection_checklist,created_at:row.created_at,rectifiedItems:inspectionRepairKeys(row.inspection_checklist,row.checkout_defects||[])})));
+  inspections.push(...(data||[]).map(row=>({checklist:row.inspection_checklist,created_at:row.created_at,checkoutId:row.id,roomStatus:row.status,repair:checkoutProgress(row.checkout_defects||[]),rectifiedItems:inspectionRepairKeys(row.inspection_checklist,row.checkout_defects||[])})));
   if(!data||data.length<500)break;
  }
  if(blocks==="CD"){
@@ -29,5 +30,5 @@ export default async function Page({searchParams}:{searchParams:Promise<{blocks?
    for(const row of checklists)for(const key of Object.keys(row.ph||{}))row.ph![key]=row.ph![key].flatMap(path=>urls.get(path)?[urls.get(path)!]:[]);
   }
  }
- return <AppShell profile={profile} title={admin?`Room Inspection · Block ${label}`:`Pemeriksaan Bilik · Blok ${label}`}><div className="section-head"><div><p className="eyebrow">{admin?"Check-out Rooms":"Bilik Daftar Keluar"}</p><h2>{admin?`Room Inspection · Block ${label}`:`Pemeriksaan Bilik · Blok ${label}`}</h2><p className="subtle">{admin?(blocks==="CD"?"Check each item, add photos and submit to the Check-out Progress Table.":"Default Good. Mark defects, add photos and submit to the Check-out Progress Table."):"Keadaan asal ialah Baik. Tandakan kerosakan, tambah gambar dan hantar pemeriksaan."}</p></div><Link className="button secondary" href={admin?"/admin/checkouts":"/staff/checkouts"}>{admin?"Back to Check-out Rooms":"Kembali ke Bilik Daftar Keluar"}</Link></div><div className="checkout-page-actions" style={{marginBottom:16}}><Link className={`button ${blocks==="AB"?"":"secondary"}`} aria-current={blocks==="AB"?"page":undefined} href="/admin/checkouts/inspection">Block A &amp; B</Link><Link className={`button ${blocks==="CD"?"":"secondary"}`} aria-current={blocks==="CD"?"page":undefined} href="/admin/checkouts/inspection?blocks=CD">Block C &amp; D</Link></div><CheckoutABInspector key={blocks} blocks={blocks} isAdmin={admin} initialInspections={inspections.filter(row=>blocks.includes((row.checklist as {b?:string})?.b||"_"))} loadError={loadError}/></AppShell>;
+ return <AppShell profile={profile} title={admin?`Room Inspection · Block ${label}`:`Pemeriksaan Bilik · Blok ${label}`}><div className="section-head"><div><p className="eyebrow">{admin?"Check-out Rooms":"Bilik Daftar Keluar"}</p><h2>{admin?`Room Inspection · Block ${label}`:`Pemeriksaan Bilik · Blok ${label}`}</h2><p className="subtle">{admin?"Default Good. Mark defects, add photos and submit to the Check-out Progress Table.":"Keadaan asal ialah Baik. Tandakan kerosakan, tambah gambar dan hantar pemeriksaan."}</p></div><Link className="button secondary" href={admin?"/admin/checkouts":"/staff/checkouts"}>{admin?"Back to Check-out Rooms":"Kembali ke Bilik Daftar Keluar"}</Link></div><div className="checkout-page-actions" style={{marginBottom:16}}><Link className={`button ${blocks==="AB"?"":"secondary"}`} aria-current={blocks==="AB"?"page":undefined} href="/admin/checkouts/inspection">Block A &amp; B</Link><Link className={`button ${blocks==="CD"?"":"secondary"}`} aria-current={blocks==="CD"?"page":undefined} href="/admin/checkouts/inspection?blocks=CD">Block C &amp; D</Link></div><CheckoutABInspector key={blocks} blocks={blocks} isAdmin={admin} initialInspections={inspections.filter(row=>blocks.includes((row.checklist as {b?:string})?.b||"_"))} loadError={loadError}/></AppShell>;
 }

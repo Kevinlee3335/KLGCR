@@ -1,7 +1,8 @@
 import {render,screen,waitFor,act,cleanup,fireEvent} from "@testing-library/react";
 import {afterEach,beforeEach,it,expect,vi} from "vitest";
-const state=vi.hoisted(()=>({prepare:vi.fn(),submit:vi.fn(),upload:vi.fn(),recent:vi.fn()}));
+const state=vi.hoisted(()=>({prepare:vi.fn(),submit:vi.fn(),upload:vi.fn(),recent:vi.fn(),refresh:vi.fn()}));
 vi.mock("@/app/(dashboard)/admin/checkouts/inspection/actions",()=>({prepareInspectionPhotos:state.prepare,submitABInspection:state.submit,getRecentRoomInspection:state.recent}));
+vi.mock("next/navigation",()=>({useRouter:()=>({refresh:state.refresh})}));
 vi.mock("@/lib/supabase/client",()=>({createClient:()=>({storage:{from:()=>({uploadToSignedUrl:state.upload})}})}));
 import {CheckoutABInspector} from "./checkout-ab-inspector";
 const record=()=>({id:"00000000-0000-4000-8000-000000000010",room:"A203",b:"A",p:2,date:"2026-10-30",by:"Kevin",reason:"Inspection",items:Array.from({length:5},()=>[{enabled:true,status:"good"},{enabled:false,status:"good"}]),fac:{Fan:{status:"defect",type:"Broken",qty:1,remark:"Stopped",photos:Array(7).fill("data:image/jpeg;base64,cGhvdG8=")}}});
@@ -115,4 +116,28 @@ it("submits the C/D checklist and all category photos, and preserves a failed fo
  expect(payload.checklist.ph).toEqual({1:['inspection/photo0']});
  expect(JSON.stringify(payload.checklist)).not.toContain('base64');
 
+});
+
+it("opens the existing C/D record instead of starting a duplicate active inspection",async()=>{
+ const prototype=HTMLDialogElement.prototype;
+ Object.defineProperties(prototype,{showModal:{configurable:true,value:function(this:HTMLDialogElement){this.open=true;}},close:{configurable:true,value:function(this:HTMLDialogElement){this.open=false;}}});
+ try{
+  state.recent.mockResolvedValue({record:{...recentRoom,status:'rectification',remaining:1}});
+  render(<CheckoutABInspector blocks="CD"/>);
+  const frame=screen.getByTitle('Block C and D room inspection') as HTMLIFrameElement;
+  const post=vi.spyOn(frame.contentWindow!,'postMessage');
+  act(()=>window.dispatchEvent(new MessageEvent('message',{origin:window.location.origin,source:frame.contentWindow,data:{type:'klg-inspection-recent',room:'C218',request:1,startAfter:true}})));
+  await screen.findByText('C218 has an active check-out record');
+  expect(screen.queryByRole('button',{name:'Continue Inspection'})).not.toBeInTheDocument();
+  expect(screen.getByRole('link',{name:'View Previous Record'})).toHaveAttribute('href','/admin/checkouts/existing-room');
+  expect(post).not.toHaveBeenCalledWith(expect.objectContaining({type:'klg-inspection-continue'}),window.location.origin);
+ }finally{cleanup();Reflect.deleteProperty(prototype,'showModal');Reflect.deleteProperty(prototype,'close');}
+});
+it("refreshes C/D repair and signed-photo data from the iframe while rejecting foreign messages",()=>{
+ state.refresh.mockReset();render(<CheckoutABInspector blocks="CD"/>);
+ const frame=screen.getByTitle('Block C and D room inspection') as HTMLIFrameElement;
+ act(()=>window.dispatchEvent(new MessageEvent('message',{origin:'https://example.com',source:frame.contentWindow,data:{type:'klg-inspection-refresh'}})));
+ expect(state.refresh).not.toHaveBeenCalled();
+ act(()=>window.dispatchEvent(new MessageEvent('message',{origin:window.location.origin,source:frame.contentWindow,data:{type:'klg-inspection-refresh'}})));
+ expect(state.refresh).toHaveBeenCalledTimes(1);
 });
