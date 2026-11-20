@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       .select('id,po_no,order_date,requested_by,approved_by,requested_date,approved_date,items,created_at,revision,updated_at,received_quantities,approved_at,approved_by_user,created_by')
       .order('created_at', { ascending: false }).order('id').range(from, to)),
     loadRows((from, to) => db.from('inventory_po_dispatch')
-      .select('order_id,revision,status,inventory_group').order('order_id').order('revision').range(from, to)),
+      .select('order_id,revision,status,inventory_group,error,sent_at').order('order_id').order('revision').range(from, to)),
   ]);
 
   const error = orders.failed ? 'Purchase Order storage is unavailable. Please try again shortly.'
