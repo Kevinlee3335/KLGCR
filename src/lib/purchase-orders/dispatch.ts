@@ -5,6 +5,7 @@ import {archivedPurchaseOrderPdf} from './archive';
 import {signatureSchema} from './signature';
 import type {PurchaseOrder} from './schema';
 import {sendPushNotifications} from '@/lib/push';
+import {createHash} from 'node:crypto';
 
 // Claim once. Failed/uncertain sends require review, preventing duplicate purchase emails.
 export async function dispatchApprovedPurchase(orderId:string,revision:number,origin:string){
@@ -34,9 +35,12 @@ export async function dispatchApprovedPurchase(orderId:string,revision:number,or
  if(building||office){
   if(building&&(destination.channel!=='email'||destination.recipient!=='purchasing@keanlenggroup.com'||current.data.approved_by_user!=='eeab5f04-30c3-42bd-a095-58e56c814358'||!signatureSchema.safeParse(current.data.approved_signature).success))return;
   try{
-   const check=await gmailGateway({action:'po-capabilities'});
+   // The legacy Building PO endpoint forces billing CC recipients. Use the
+   // already deployed PDF endpoint that sends only to the confirmed recipient.
+   const check=await gmailGateway({action:building?'finance-capabilities':'po-capabilities'});
    if(office&&!check.capabilities?.includes('officePoPdf'))throw Error();
-   if(check.ok!==true||check.sender!=='klgcr.noreply@gmail.com'||!['poPdf','cc','idempotency'].every(c=>check.capabilities?.includes(c)))throw Error();
+   const required=building?['financePdf','idempotency']:['poPdf','cc','idempotency'];
+   if(check.ok!==true||check.sender!=='klgcr.noreply@gmail.com'||!required.every(c=>check.capabilities?.includes(c)))throw Error();
   }catch{
    await db.from('inventory_po_dispatch').update({error:'Gmail PO gateway not connected. Update the existing Apps Script deployment.'}).eq('order_id',orderId).eq('revision',revision).eq('status','pending');
    return;
@@ -59,10 +63,14 @@ export async function dispatchApprovedPurchase(orderId:string,revision:number,or
    await sendPushNotifications({recipientIds,title,body,href}).catch(()=>{});
   }else if(building||office){
    const bytes=await archivedPurchaseOrderPdf(order as PurchaseOrder);
-   const key=`po_${orderId}_r${revision}`,cc=office?[]:['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'];
+   // The shared PDF gateway accepts invoice_UUID keys. Namespace the hash by
+   // PO and revision so different revisions never reuse another document's key.
+   const digest=createHash('sha256').update(`klgcr:purchase-order:${orderId}:revision:${revision}:no-cc`).digest('hex');
+   const pdfKey=`invoice_${digest.slice(0,8)}-${digest.slice(8,12)}-${digest.slice(12,16)}-${digest.slice(16,20)}-${digest.slice(20,32)}`;
+   const key=building?pdfKey:`po_${orderId}_r${revision}`,cc:string[]=[];
    const recipient=office?'khet_loong@yahoo.com':'purchasing@keanlenggroup.com';
-   const result=await gmailGateway({action:'po-send',key,from:'klgcr.noreply@gmail.com',to:recipient,cc,subject:office?`Purchase Order ${order.po_no} – Office Supplies | K HOTEL SDN BHD`:`Approved Purchase Order ${order.po_no} — KLGCR`,text:office?`Dear Supplier,\n\nPlease find attached our approved Purchase Order ${order.po_no} for office supplies for K HOTEL SDN BHD (KLG Campus Residence).\n\nKindly confirm receipt of this order and advise on item availability and the expected delivery date. If any items are unavailable, please inform us before making any substitutions.\n\nDelivery location: KLG Campus Residence.\n\nThank you.\n\nBest regards,\nManagement Office\nK HOTEL SDN BHD\nKLG Campus Residence`:`Building Material Purchase Order: ${order.po_no}\nApproved by: ${order.approved_by}\n\nThe attached PDF includes James's E-signature.\n\nKLG Campus Residence Management`,pdfBase64:Buffer.from(bytes).toString('base64'),fileName:`${order.po_no}-approved.pdf`},20000);
-   sent=result.ok===true&&result.status==='sent'&&result.key===key&&result.sender==='klgcr.noreply@gmail.com'&&result.to===recipient&&JSON.stringify(result.cc)===JSON.stringify(cc)&&Number.isFinite(Date.parse(result.sentAt));
+   const result=await gmailGateway({action:building?'finance-send':'po-send',key,from:'klgcr.noreply@gmail.com',to:recipient,cc,subject:office?`Purchase Order ${order.po_no} – Office Supplies | K HOTEL SDN BHD`:`Approved Purchase Order ${order.po_no} — KLGCR`,text:office?`Dear Supplier,\n\nPlease find attached our approved Purchase Order ${order.po_no} for office supplies for K HOTEL SDN BHD (KLG Campus Residence).\n\nKindly confirm receipt of this order and advise on item availability and the expected delivery date. If any items are unavailable, please inform us before making any substitutions.\n\nDelivery location: KLG Campus Residence.\n\nThank you.\n\nBest regards,\nManagement Office\nK HOTEL SDN BHD\nKLG Campus Residence`:`Building Material Purchase Order: ${order.po_no}\nApproved by: ${order.approved_by}\n\nThe attached PDF includes James's E-signature.\n\nKLG Campus Residence Management`,pdfBase64:Buffer.from(bytes).toString('base64'),fileName:`${order.po_no}-approved.pdf`},20000);
+   sent=result.ok===true&&result.status==='sent'&&result.key===key&&result.sender==='klgcr.noreply@gmail.com'&&result.to===recipient&&JSON.stringify(result.cc??[])===JSON.stringify(cc)&&!result.bcc?.length&&Number.isFinite(Date.parse(result.sentAt));
    error=sent?null:'PO delivery requires review before retrying.';
   }else{
    const result=await sendTransactionalEmail(destination.recipient,{
