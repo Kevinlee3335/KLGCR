@@ -8,13 +8,18 @@ import {CHECKOUT_PHOTO_UPLOAD_CONCURRENCY,mapCheckoutPhotos} from "@/lib/checkou
 import {RecentRoomInspectionDialog,type RecentInspection} from "./recent-room-inspection-dialog";
 import {getRecentRoomInspection,prepareInspectionPhotos,submitABInspection} from "@/app/(dashboard)/admin/checkouts/inspection/actions";
 
-type SavedInspection={checklist:unknown;created_at:string};
-export function CheckoutABInspector({isAdmin=true,initialInspections=[],loadError=false,blocks="AB"}:{blocks?:"AB"|"CD";isAdmin?:boolean;initialInspections?:SavedInspection[];loadError?:boolean}){
+type SavedInspection={checklist:unknown;created_at:string;rectifiedItems?:string[]};
+const EMPTY_INSPECTIONS:SavedInspection[]=[];
+export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPECTIONS,loadError=false,blocks="AB"}:{blocks?:"AB"|"CD";isAdmin?:boolean;initialInspections?:SavedInspection[];loadError?:boolean}){
  const [recent,setRecent]=useState<{room:string;request:number;record:RecentInspection}|null>(null);
  const recentLookup=useRef(0);
  const [inspections,setInspections]=useState(initialInspections);
  const frame=useRef<HTMLIFrameElement>(null),pending=useRef(false);
  const [progress,setProgress]=useState(""),[error,setError]=useState(""),[saved,setSaved]=useState<{id:string;reference_no:string}|null>(null),[round,setRound]=useState(0);
+ useEffect(()=>{
+  setInspections(initialInspections);
+  frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:initialInspections},window.location.origin);
+ },[initialInspections]);
  useEffect(()=>{
   async function receive(event:MessageEvent){
    if(event.origin!==window.location.origin||event.source!==frame.current?.contentWindow||pending.current)return;

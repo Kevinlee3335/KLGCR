@@ -87,6 +87,16 @@ it("ignores a stale lookup when the search changes and starts normally for a roo
  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
+it("sends refreshed repair status into an existing inspection iframe",()=>{
+ const original={checklist:record(),created_at:"2026-11-20T03:00:00Z",rectifiedItems:[] as string[]};
+ const {rerender}=render(<CheckoutABInspector initialInspections={[original]}/>);
+ const frame=screen.getByTitle("Block A and B room inspection") as HTMLIFrameElement;
+ const post=vi.spyOn(frame.contentWindow!,"postMessage");
+ const refreshed=[{...original,rectifiedItems:["a-Fan"]}];
+ rerender(<CheckoutABInspector initialInspections={refreshed}/>);
+ expect(post).toHaveBeenCalledWith({type:"klg-inspection-records",records:refreshed},window.location.origin);
+});
+
 it("submits the C/D checklist and all category photos, and preserves a failed form for retry",async()=>{
  const {CD_CATEGORIES}=await import('@/lib/checkout-cd-inspection');
  const cd={id:'00000000-0000-4000-8000-000000000050',b:'C',room:218,l:2,t:6,round:1,date:'2026-11-20',by:'Kevin',reason:'Inspection',it:Object.fromEntries(CD_CATEGORIES.flatMap(([,items],ci)=>items.map((_,si)=>[`${ci}.${si}`,0]))),nt:{1:'Fan stopped'},ph:{1:['data:image/jpeg;base64,cGhvdG8=']}};
@@ -104,4 +114,5 @@ it("submits the C/D checklist and all category photos, and preserves a failed fo
  expect(payload.findings[0]).toMatchObject({description:'Electrical Fixtures · Wall Fans · Qty 2: Fan stopped',photos:['inspection/photo0']});
  expect(payload.checklist.ph).toEqual({1:['inspection/photo0']});
  expect(JSON.stringify(payload.checklist)).not.toContain('base64');
+
 });

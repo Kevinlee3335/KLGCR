@@ -3,6 +3,7 @@ import {AppShell} from "@/components/app-shell";
 import {requireCheckoutInspector} from "@/lib/auth";
 import {createClient} from "@/lib/supabase/server";
 import {CheckoutABInspector} from "@/components/checkout-ab-inspector";
+import {inspectionRepairKeys} from "@/lib/checkout-inspection";
 import type {CDInspection} from "@/lib/checkout-cd-inspection";
 export default async function Page({searchParams}:{searchParams:Promise<{blocks?:string}>}){
  const blocks=(await searchParams).blocks==="CD"?"CD":"AB";
@@ -10,12 +11,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{blocks?
  const profile=await requireCheckoutInspector();
  const admin=profile.role==="admin";
  const db=await createClient();
- const inspections:{checklist:unknown;created_at:string}[]=[];
+ const inspections:{checklist:unknown;created_at:string;rectifiedItems:string[]}[]=[];
  let loadError=false;
  for(let offset=0;;offset+=500){
-  const {data,error}=await db.from("checkout_rooms").select("inspection_checklist,created_at").is("deleted_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
+  const {data,error}=await db.from("checkout_rooms").select("inspection_checklist,created_at,checkout_defects(description,status)").is("deleted_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
   if(error){loadError=true;break;}
-  inspections.push(...(data||[]).map(row=>({checklist:row.inspection_checklist,created_at:row.created_at})));
+  inspections.push(...(data||[]).map(row=>({checklist:row.inspection_checklist,created_at:row.created_at,rectifiedItems:inspectionRepairKeys(row.inspection_checklist,row.checkout_defects||[])})));
   if(!data||data.length<500)break;
  }
  if(blocks==="CD"){

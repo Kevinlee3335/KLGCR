@@ -3,7 +3,7 @@
 import {JSDOM} from "jsdom";
 import {readFileSync} from "node:fs";
 import {it,expect,vi} from "vitest";
-import {inspectionFindings,type ABInspection} from "./checkout-inspection";
+import {inspectionFindings,inspectionRepairKeys,type ABInspection} from "./checkout-inspection";
 function setup(){
  const dom=new JSDOM(readFileSync("public/checkout-ab-inspection.html","utf8"),{url:"https://klgcr-maintenance-system.vercel.app/checkout-ab-inspection.html",runScripts:"dangerously",beforeParse(w:Window & typeof globalThis){
   w.structuredClone=structuredClone;
@@ -36,5 +36,27 @@ it("accumulates seven camera shots, prevents racing submissions, enforces 20 acr
  await ui.photos(0,0,Array.from({length:13},()=>files[0]));expect(ui.getRecord().items[0][0].photos).toHaveLength(13);
  await ui.facilityPhotos("Fan",[files[0]]);expect(ui.getRecord().fac.Fan.photos).toHaveLength(7);expect(w.document.body.textContent).toContain("Maximum 20 photos");
  ui.save(false);ui.start("B106");expect(ui.getRecord().fac.Fan.photos).toHaveLength(7);expect(ui.getRecord().items[0][0].photos).toHaveLength(13);
+ }finally{dom.window.close()}
+});
+
+it("updates the summary from linked repair status while retaining original findings",()=>{
+ const {dom,w,ui}=setup();try{
+ ui.start("A202");const r=structuredClone(ui.getRecord());
+ r.fac["Room Wall"]={status:"defect",type:"Other",qty:1,remark:"Stain"};
+ r.fac["Bathroom Ceiling"]={status:"defect",type:"Water Mark",qty:1};
+ r.items[2]=[0,1].map(()=>({enabled:true,status:"defect",defects:[{type:"Broken",qty:1,remark:"Leg"}]}));
+ const defects=inspectionFindings(r).map(f=>({description:f.description,status:f.description.includes("Bathroom")||f.description.includes("UTMSPACE")?"pending":"rectified"}));
+ const send=()=>{w.eval(`mergeSubmitted(${JSON.stringify([{checklist:r,created_at:"2026-11-20T03:00:00Z",rectifiedItems:inspectionRepairKeys(r,defects)}])});`)};
+ send();
+ const summary=()=>w.eval('matrix([ROOMS.A202])') as string;
+ expect(summary()).toContain('title="Room Wall">✅');
+ expect(summary()).toContain('title="Bathroom Ceiling">❌');
+ expect(summary()).toContain('title="Chair">❌');
+ defects.forEach(d=>d.status="rectified");send();
+ expect(summary()).toContain('title="Chair">✅');
+ expect(summary()).toContain('title="Bathroom Ceiling">✅');
+ expect(w.eval('latest("A202").fac["Room Wall"].status')).toBe("defect");
+ defects[0].status="pending";send();
+ expect(summary()).toContain('title="Chair">❌');
  }finally{dom.window.close()}
 });
