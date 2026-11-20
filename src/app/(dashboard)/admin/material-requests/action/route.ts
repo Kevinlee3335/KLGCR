@@ -13,6 +13,19 @@ export async function POST(request: Request) {
   const action = String(form.get("action") || "");
   const reason = String(form.get("reason") || "");
   const url = new URL("/admin/material-requests", request.url);
+  // Keep the selected list after approving, issuing or matching an item.
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const source = new URL(referer);
+      if (source.origin === url.origin && source.pathname === url.pathname) {
+        const status = source.searchParams.get("status");
+        const page = Number(source.searchParams.get("page"));
+        if (status && ["pending", "approved", "all"].includes(status)) url.searchParams.set("status", status);
+        if (Number.isSafeInteger(page) && page > 0) url.searchParams.set("page", String(page));
+      }
+    } catch { /* A missing or malformed referrer uses the default list. */ }
+  }
   if (!requestId) { url.searchParams.set("error", "Request is required."); return NextResponse.redirect(url, 303); }
   const supabase = await createClient();
   const { data: materialRequest } = await supabase.from("material_requests")
