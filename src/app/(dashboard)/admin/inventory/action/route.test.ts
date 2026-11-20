@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ role: vi.fn(), rpc: vi.fn(), sync: vi.fn(), available: { id: 'item', quantity_unverified: false } as {id:string;quantity_unverified:boolean}|null }));
+const mocks = vi.hoisted(() => ({ role: vi.fn(), rpc: vi.fn(), sync: vi.fn(), numbered: vi.fn(), available: { id: 'item', quantity_unverified: false } as {id:string;quantity_unverified:boolean}|null }));
 vi.mock('@/lib/auth', () => ({ requireRole: mocks.role }));
 vi.mock('@/lib/inventory-google-sync', () => ({ pushInventoryItemToGoogle: mocks.sync }));
+vi.mock('@/lib/inventory-new-item.server', () => ({ insertNumberedInventoryItem: mocks.numbered }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc: mocks.rpc, from: () => { const q = {select: () => q, eq: () => q, maybeSingle: async () => ({data:mocks.available})}; return q; } }) }));
 import { POST } from './route';
 beforeEach(() => { vi.clearAllMocks(); mocks.available={id:'item',quantity_unverified:false}; mocks.rpc.mockResolvedValue({error:null}); mocks.sync.mockResolvedValue({skipped:false,ok:true}); });
@@ -25,4 +26,18 @@ it('bulk hide and restore use the store-scoped RPC without syncing stock',async(
 it('rejects an empty bulk selection before calling the database',async()=>{
  const url=await submit({action:'procurement_mode',mode:'buy_when_needed'});
  expect(url.searchParams.has('error')).toBe(true);expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it('assigns the final code on the server and redirects to that item after syncing',async()=>{
+ mocks.numbered.mockResolvedValue({itemCode:'KLGCR-PG00098',error:null});
+ const url=await submit({action:'create',autoCode:'true',description:'PVC JOINT : 20 MM (GREY PIPE)',category:'Piping',balance:'0',reorder:'0'});
+ expect(mocks.numbered).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({inventory_group:'building',category:'Piping',description:'PVC JOINT : 20 MM (GREY PIPE)',balance_qty:0}));
+ expect(url.searchParams.get('q')).toBe('KLGCR-PG00098');
+ expect(url.hash).toBe('#inventory-stock-list');
+ expect(mocks.sync).toHaveBeenCalledTimes(1);
+});
+it('rejects missing or cross-store categories before allocating any number',async()=>{
+ for(const fields of ([{description:' '},{category:''},{category:'Office Inventory'},{store:'office',category:'Piping'}] as Record<string,string>[])){
+  expect((await submit({action:'create',autoCode:'true',description:'PVC joint',category:'Piping',balance:'0',reorder:'0',...fields})).searchParams.has('error')).toBe(true);
+ }
+ expect(mocks.numbered).not.toHaveBeenCalled();
 });
