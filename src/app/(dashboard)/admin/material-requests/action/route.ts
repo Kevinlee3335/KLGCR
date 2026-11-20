@@ -36,6 +36,18 @@ export async function POST(request: Request) {
   const requestItemId=String(form.get("requestItemId")||"");
   if (action === "approve_item") ({error}=await supabase.rpc("approve_material_request_item",{p_request_id:requestId,p_item_id:requestItemId}));
   else if (action === "issue_item") ({error}=await supabase.rpc("issue_material_request_items",{p_request_id:requestId,p_item_id:requestItemId}));
+  else if (["edit_item", "reject_item", "cancel_item"].includes(action)) {
+    const numeric = (name: string) => {
+      const value = String(form.get(name) || "").trim();
+      return value && Number.isFinite(Number(value)) ? Number(value) : null;
+    };
+    ({ error } = await supabase.rpc("amend_material_request_item", {
+      p_request_id: requestId, p_item_id: requestItemId, p_action: action.replace("_item", ""), p_reason: reason,
+      p_expected_inventory_item_id: String(form.get("expectedInventoryItemId") || "") || null,
+      p_expected_requested_qty: numeric("expectedRequestedQty"), p_expected_approved_qty: numeric("expectedApprovedQty"),
+      p_inventory_item_id: String(form.get("inventoryItemId") || "") || null, p_requested_qty: numeric("requestedQty"),
+    }));
+  }
   else if (action === "approve") ({ error } = await supabase.rpc("review_material_request", { p_request_id: requestId, p_approve: true, p_reason: null }));
   else if (action === "reject") ({ error } = await supabase.rpc("review_material_request", { p_request_id: requestId, p_approve: false, p_reason: reason }));
   else if (action === "issue") ({ error } = await supabase.rpc("issue_material_request", { p_request_id: requestId }));

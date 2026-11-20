@@ -14,7 +14,7 @@ type InventoryMatch = {
 };
 
 type SearchResult = { term: string; items: InventoryMatch[] } | { term: string; error: true };
-type MaterialLine = { requestId: string; itemId: string; materialName: string };
+type MaterialLine = { requestId: string; itemId: string; materialName: string; edit?: { inventoryItemId: string | null; requestedQty: number | string; approvedQty: number | string | null } };
 
 const stores: Record<string, string> = {
   building: "Building Material",
@@ -29,8 +29,8 @@ export function MatchMaterialItem(line: MaterialLine) {
 
   return <div className={styles.picker}>
     <button ref={trigger} className="button secondary" type="button" aria-expanded={open}
-      aria-controls={open ? panelId : undefined} aria-label={`Match Item · ${line.materialName}`}
-      onClick={() => setOpen((value) => !value)}>Match Item</button>
+      aria-controls={open ? panelId : undefined} aria-label={`${line.edit ? "Edit Material" : "Match Item"} · ${line.materialName}`}
+      onClick={() => setOpen((value) => !value)}>{line.edit ? "Edit Material" : "Match Item"}</button>
     {open && <MatchMaterialForm {...line} panelId={panelId} onClose={() => {
       setOpen(false);
       trigger.current?.focus();
@@ -38,9 +38,9 @@ export function MatchMaterialItem(line: MaterialLine) {
   </div>;
 }
 
-function MatchMaterialForm({ requestId, itemId, materialName, panelId, onClose }: MaterialLine & { panelId: string; onClose: () => void }) {
+function MatchMaterialForm({ requestId, itemId, materialName, edit, panelId, onClose }: MaterialLine & { panelId: string; onClose: () => void }) {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(edit?.inventoryItemId || "");
   const [result, setResult] = useState<SearchResult>();
   const [attempt, setAttempt] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -49,7 +49,7 @@ function MatchMaterialForm({ requestId, itemId, materialName, panelId, onClose }
   const searchable = term.length >= 2;
   const current = result?.term === term ? result : undefined;
   const items = current && "items" in current ? current.items : [];
-  const selected = items.some((item) => item.id === selectedId);
+  const selected = (!!edit && selectedId === edit.inventoryItemId && !term) || items.some((item) => item.id === selectedId);
 
   useEffect(() => { input.current?.focus(); }, []);
 
@@ -74,13 +74,20 @@ function MatchMaterialForm({ requestId, itemId, materialName, panelId, onClose }
     };
   }, [attempt, searchable, term]);
 
-  return <form id={panelId} className={styles.form} aria-label={`Match ${materialName} to inventory`}
+  return <form id={panelId} className={styles.form} aria-label={edit ? `Edit ${materialName}` : `Match ${materialName} to inventory`}
     action="/admin/material-requests/action" method="post" onSubmit={(event) => {
       if (!selected) event.preventDefault();
     }}>
-    <input type="hidden" name="action" value="match_other"/>
+    <input type="hidden" name="action" value={edit ? "edit_item" : "match_other"}/>
     <input type="hidden" name="requestId" value={requestId}/>
     <input type="hidden" name="requestItemId" value={itemId}/>
+    {edit && <>
+      <input type="hidden" name="expectedInventoryItemId" value={edit.inventoryItemId || ""}/>
+      <input type="hidden" name="expectedRequestedQty" value={edit.requestedQty}/>
+      <input type="hidden" name="expectedApprovedQty" value={edit.approvedQty ?? ""}/>
+      {selectedId === edit.inventoryItemId && !term && <input type="hidden" name="inventoryItemId" value={selectedId}/>}
+      <p className={styles.explanation}>Current: {materialName}. Changes return this item to Pending Review. Stock is deducted only when issued.</p>
+    </>}
     <label htmlFor={inputId}>Inventory item code or name</label>
     <input ref={input} id={inputId} type="search" value={query} maxLength={100} autoComplete="off"
       onChange={(event) => {
@@ -113,8 +120,12 @@ function MatchMaterialForm({ requestId, itemId, materialName, panelId, onClose }
         </span>
       </label>)}
     </fieldset> : <small role="status">No active inventory item matches this search.</small>)}
+    {edit && <>
+      <label>Requested quantity<input name="requestedQty" type="number" min="0.01" step="0.01" max="9999999999.99" defaultValue={edit.requestedQty} required/></label>
+      <label>Reason for change<textarea name="reason" rows={2} maxLength={1000} placeholder="e.g. Correct size is 15mm, not 20mm" required/></label>
+    </>}
     <div className={styles.actions}>
-      <button className="button" type="submit" disabled={!selected}>Confirm Match</button>
+      <button className="button" type="submit" disabled={!selected}>{edit ? "Save Changes" : "Confirm Match"}</button>
       <button className="button secondary" type="button" onClick={onClose}>Cancel</button>
     </div>
   </form>;

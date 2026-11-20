@@ -1,4 +1,18 @@
 /* UI polish for admin dashboard, inventory and material request pages */
+.material-line-actions{display:grid;justify-items:start;gap:8px;white-space:normal;min-width:130px}
+.material-line-actions>div{margin-top:0}
+.material-line-decision>summary{cursor:pointer;list-style:none;border:1px solid #d7b879;border-radius:9px;padding:9px 12px;color:#8b5021;font-size:.875rem;font-weight:700}
+.material-line-decision>summary::-webkit-details-marker{display:none}
+.material-line-decision form{display:grid;gap:10px;margin-top:10px;width:min(280px,65vw)}
+.material-line-decision p{margin:0;font-size:.875rem;line-height:1.5}
+.material-line-decision label{display:grid;gap:6px}
+.material-line-decision textarea{width:100%;font:inherit;border:1px solid #ded2b7;border-radius:9px;padding:8px}
+.material-decision-reason{display:block;margin-top:6px;white-space:normal;font-size:.875rem;color:var(--muted)}
+.material-request-history{padding:14px 20px;border-top:1px solid #e5dac5;white-space:normal}
+.material-request-history>summary{cursor:pointer;color:#855f16;font-weight:700}
+.material-request-history ol{display:grid;gap:12px;padding:0;list-style:none}
+.material-request-history li{padding:12px;border:1px solid #e5dac5;border-radius:10px;background:#fffdf8}
+.material-request-history p{margin:6px 0;overflow-wrap:anywhere}
 .material-request-kpis article:has(a){padding:0;overflow:hidden}
 .material-request-kpis article>a{display:block;height:100%;padding:18px 20px;color:inherit;text-decoration:none;border-radius:14px;border:2px solid transparent;transition:background .15s,border-color .15s}
 .material-request-kpis article>a:hover{background:#f7edcf;border-color:#d4b46a}
