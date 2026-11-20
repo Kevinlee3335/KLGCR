@@ -1,3 +1,4 @@
+import {complianceScheduleLabel,type ComplianceSchedule} from "@/lib/compliance-schedule";
 import { ArrowUpRight, ChevronDown, Plus, Printer, Search, Settings2, X } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,14 +31,14 @@ export default async function ComplianceSectionPage({
   const selectedArchive = isAdmin && isRecordUuid(search.supplierDocumentId) ? search.supplierDocumentId : undefined;
   const searchTerm = (typeof search.q === "string" ? search.q : "").trim().slice(0, 120);
   const [result, suppliers, archive] = await Promise.all([
-    db.from("compliance_records").select(recordFields).eq("record_type", section.kind)
+    db.from("compliance_records").select(`${recordFields},compliance_cycles(status,scheduled_on,scheduled_time,schedule_notes)`).eq("record_type", section.kind)
       .order("next_due_date", { ascending: true, nullsFirst: false }).order("title"),
     isAdmin && !selectedArchive ? listSupplierCompanies(db) : Promise.resolve([]),
     selectedArchive
       ? db.from("supplier_mail_documents").select("file_name").eq("id", selectedArchive).maybeSingle()
       : Promise.resolve(null),
   ]);
-  const records = ((result.data ?? []) as ComplianceRecord[]).filter(record =>
+  const records = ((result.data ?? []) as (ComplianceRecord & {compliance_cycles?: (ComplianceSchedule & {status:string})[]})[]).filter(record =>
     !searchTerm || [record.title, record.provider, record.location, record.reference_no].some(value => value?.toLowerCase().includes(searchTerm.toLowerCase())),
   );
   const linkDocumentId = archive?.data ? selectedArchive : undefined;
@@ -102,11 +103,13 @@ export default async function ComplianceSectionPage({
                   <th scope="col" role="columnheader">Frequency</th>
                   <th scope="col" role="columnheader">Last completed</th>
                   <th scope="col" role="columnheader">Due date</th>
+                  <th scope="col" role="columnheader">Scheduled for</th>
                   <th scope="col" role="columnheader">Status</th>
                   <th scope="col" role="columnheader"><span className={styles.srOnly}>{recordAction}</span></th>
                 </tr></thead>
                 <tbody role="rowgroup">{records.map(record => {
                   const status = dueStatus(record.next_due_date, record.status);
+                  const schedule=record.compliance_cycles?.find(cycle=>cycle.status==="open");
                   return (
                     <tr key={record.id} role="row">
                       <td className={list.record} role="cell">
@@ -129,6 +132,10 @@ export default async function ComplianceSectionPage({
                       <td className={`${list.date} ${list.dueDate}`} role="cell">
                         <span className={list.cellLabel} aria-hidden="true">Due date</span>
                         {dateLabel(record.next_due_date)}
+                      </td>
+                      <td className={list.schedule} role="cell">
+                        <span className={list.cellLabel} aria-hidden="true">Scheduled for</span>
+                        {schedule?.scheduled_on?<><strong>{complianceScheduleLabel(schedule)}</strong>{schedule.schedule_notes&&<small>{schedule.schedule_notes}</small>}</>:"Not scheduled"}
                       </td>
                       <td role="cell">
                         <span className={list.cellLabel} aria-hidden="true">Status</span>

@@ -5,6 +5,8 @@ import { AppShell } from "@/components/app-shell";
 import controls from "@/components/compliance-controls.module.css";
 import { CompliancePdfUpload } from "@/components/compliance-pdf-upload";
 import { ComplianceRecordForm } from "@/components/compliance-record-form";
+import {ComplianceCycleSchedule,ComplianceScheduleHistory} from "@/components/compliance-cycle-schedule";
+import {complianceScheduleLabel} from "@/lib/compliance-schedule";
 import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
 import { listSupplierCompanies } from "@/lib/supplier-mail/queries";
@@ -22,6 +24,8 @@ import styles from "../../compliance.module.css";
 type DetailSearch = {
   error?: string;
   saved?: string;
+  scheduled?: string;
+  scheduleCancelled?: string;
   linked?: string;
   reviewed?: string;
   progress?: string;
@@ -85,6 +89,7 @@ function CycleDates({ cycle }: { cycle: ComplianceCycle }) {
         <div><dt>Original due date</dt><dd>{dateLabel(cycle.original_due_date)}</dd></div>
       )}
       {cycle.effective_date && <div><dt>Effective date</dt><dd>{dateLabel(cycle.effective_date)}</dd></div>}
+      {cycle.scheduled_on && <div><dt>Scheduled for</dt><dd>{complianceScheduleLabel(cycle)}{cycle.schedule_notes&&<small style={{display:"block",marginTop:4,fontWeight:400}}>{cycle.schedule_notes}</small>}</dd></div>}
       <div><dt>Actual completion / return</dt><dd>{dateLabel(cycle.performed_on, "Pending")}</dd></div>
       {cycle.completed_at && <div><dt>Cycle closed</dt><dd>{timestampLabel(cycle.completed_at)}</dd></div>}
       {cycle.next_due_date && <div><dt>Next due date</dt><dd>{dateLabel(cycle.next_due_date)}</dd></div>}
@@ -107,7 +112,7 @@ export default async function ComplianceDetailPage({
   const db = await createClient();
   const [recordResult, cycleResult, suppliers] = await Promise.all([
     db.from("compliance_records").select(recordFields).eq("id", id).maybeSingle(),
-    db.from("compliance_cycles").select("id,record_id,due_date,original_due_date,effective_date,completed_at,performed_on,next_due_date,next_effective_date,requires_invoice,required_evidence,notes,status,created_at")
+    db.from("compliance_cycles").select("id,record_id,due_date,original_due_date,effective_date,completed_at,performed_on,next_due_date,next_effective_date,requires_invoice,required_evidence,notes,status,created_at,scheduled_on,scheduled_time,schedule_notes,schedule_history")
       .eq("record_id", id).order("created_at", { ascending: false }).order("due_date", { ascending: false, nullsFirst: false }),
     isAdmin ? listSupplierCompanies(db) : Promise.resolve([]),
   ]);
@@ -174,7 +179,9 @@ export default async function ComplianceDetailPage({
   const candidateIds = new Set(currentDocs.flatMap(document => document.supplier_document_id ?? []));
   const candidates = picker.choices.filter(choice => !candidateIds.has(choice.id));
   const subtitle = [record.location, record.provider, record.reference_no].filter(Boolean).join(" · ");
-  const confirmation = query.completed ? "Cycle completed and saved to history."
+  const confirmation = query.scheduled ? "Schedule saved. The planned date is shown in the list and report."
+    : query.scheduleCancelled ? "Schedule cancelled. The due date and work record have been kept."
+    : query.completed ? "Cycle completed and saved to history."
     : query.reviewed ? "Document review saved."
     : query.linked ? "Supplier PDF linked to this cycle."
     : query.progress ? "Cycle progress saved."
@@ -198,6 +205,7 @@ export default async function ComplianceDetailPage({
           <section className="panel" aria-labelledby="current-cycle-heading" id="current-cycle">
             <div className={styles.heading}><h3 id="current-cycle-heading">Current cycle</h3></div>
             <CycleDates cycle={current} />
+            <ComplianceCycleSchedule recordId={record.id} cycle={current} canEdit={isAdmin&&!current.performed_on} />
             {current.notes && <p className="subtle">{current.notes}</p>}
             {isAdmin && <details className={`${styles.editor} ${styles.finishForm}`}>
               <summary className={styles.disclosure}>
@@ -271,6 +279,7 @@ export default async function ComplianceDetailPage({
                 </summary>
                 <div className={styles.historyContent}>
                   <CycleDates cycle={cycle} />
+                  <ComplianceScheduleHistory cycle={cycle} />
                   {cycle.notes && <p className="subtle">{cycle.notes}</p>}
                   {Boolean(cycle.required_evidence?.length) && <p className="subtle">Required for this cycle · {cycle.required_evidence?.map(kind => evidenceLabels[kind]).join(", ")}</p>}
                   {!documentResult.error && <DocumentList recordId={record.id} cycle={cycle} documents={documentsByCycle.get(cycle.id) ?? []} archive={archive} deliveries={deliveries} adminId={isAdmin ? profile.id : null} />}

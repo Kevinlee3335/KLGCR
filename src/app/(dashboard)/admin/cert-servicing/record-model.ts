@@ -1,3 +1,4 @@
+import type {ComplianceScheduleChange} from "@/lib/compliance-schedule";
 import { documentReviewerStage } from "@/lib/document-review-status";
 import { malaysiaDate } from "@/lib/monitoring-follow-up";
 import {
@@ -76,6 +77,10 @@ export type ComplianceRecord = {
 };
 
 export type ComplianceCycle = {
+  scheduled_on?: string|null;
+  scheduled_time?: string|null;
+  schedule_notes?: string|null;
+  schedule_history?: ComplianceScheduleChange[];
   id: string;
   record_id: string;
   due_date: string | null;

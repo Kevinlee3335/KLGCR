@@ -245,6 +245,31 @@ export async function retryComplianceDelivery(form: FormData) {
   redirect(back);
 }
 
+export async function scheduleComplianceCycle(form: FormData) {
+  const actor = await requireRole(['admin']);
+  const recordId = uuid.safeParse(value(form, 'recordId')).data;
+  if (!recordId) redirect(compliancePath);
+  const back = complianceRecordPath(recordId);
+  const cycleId = uuid.safeParse(value(form, 'cycleId')).data;
+  const cancel = value(form, 'mode') === 'cancel';
+  const input = z.object({
+    scheduledOn: date,
+    scheduledTime: z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),z.literal('')]).transform(time=>time||null),
+    scheduleNotes: optionalText(2000),
+  }).safeParse(fields(form,['scheduledOn','scheduledTime','scheduleNotes']));
+  if (!cycleId || (!cancel && !input.success) || !await isOpenCycle(recordId,cycleId)) feedback(back,'Select a valid schedule date and optional time for this open cycle.');
+  const planned = input.success ? input.data : null;
+  const {error} = await createAdminClient().rpc('schedule_compliance_cycle',{
+    p_actor_id:actor.id,p_record_id:recordId,p_cycle_id:cycleId,
+    p_scheduled_on:cancel?null:planned!.scheduledOn,
+    p_scheduled_time:cancel?null:planned!.scheduledTime,
+    p_notes:cancel?null:planned!.scheduleNotes,
+  });
+  if (error) feedback(back,'Unable to save the schedule. Check that work has not already been recorded for this cycle.');
+  revalidateRecord(recordId);
+  redirect(back+(cancel?'?scheduleCancelled=1':'?scheduled=1'));
+}
+
 export async function saveComplianceCycleProgress(form: FormData) {
   const actor = await requireRole(['admin']);
   const recordId = uuid.safeParse(value(form, 'recordId')).data;

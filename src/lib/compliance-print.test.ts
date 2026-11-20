@@ -123,3 +123,16 @@ describe('compliance Excel print', () => {
     expect(sheet.E9.v).toBe('Updated second inspection note');
   });
 });
+
+it('exports the planned visit in remarks while preserving the due date and print layout',()=>{
+ const records=printRecords('certificate_license',[{...live,compliance_cycles:[{
+ status:'open',template_row:4,due_date:live.next_due_date,completed_at:null,notes:live.notes,
+ scheduled_on:'2026-11-25',scheduled_time:'14:30:00',schedule_notes:'Confirmed visit',
+ }]}]);
+ const source=fixture();
+ const result=buildCompliancePrint(source,'certificate_license',records);
+ const sheet=read(result.bytes,{type:'buffer'}).Sheets[result.sheetName];
+ expect(sheet.D4.v).toBe(date(live.next_due_date!));
+ expect(sheet.E4.v).toBe(live.notes+'\nScheduled: 25/11/2026 · 2:30 PM (MYT)\nSchedule notes: Confirmed visit');
+ expect(xml(result.bytes,'xl/worksheets/sheet2.xml')).toContain(nativePageSetup);
+});

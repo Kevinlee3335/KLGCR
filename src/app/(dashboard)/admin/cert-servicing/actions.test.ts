@@ -16,7 +16,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({ rpc: mocks.rpc, from: mocks.from, storage: { from: () => ({ download: mocks.download }) } }),
 }));
 
-import { completeComplianceCycle, linkComplianceDocument, saveComplianceCycleProgress, uploadComplianceDocument } from './actions';
+import { completeComplianceCycle, linkComplianceDocument, saveComplianceCycleProgress, scheduleComplianceCycle, uploadComplianceDocument } from './actions';
 
 const recordId = '11111111-1111-4111-8111-111111111111';
 const cycleId = '22222222-2222-4222-8222-222222222222';
@@ -80,4 +80,37 @@ it('reports which evidence blocks completion and uses the already recorded work 
   expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('complete_compliance_cycle', expect.objectContaining({
     p_cycle_id: cycleId, p_performed_on: null, p_next_due_date: '2026-11-15',
   }));
+});
+
+it('saves a planned date independently of actual completion and delivery', async () => {
+  await expect(scheduleComplianceCycle(form({ scheduledOn: '2026-11-25', scheduledTime: '09:30', scheduleNotes: ' Supplier confirmed ' })))
+    .rejects.toThrow(recordPath + '?scheduled=1');
+  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('schedule_compliance_cycle', {
+    p_actor_id: actorId, p_record_id: recordId, p_cycle_id: cycleId,
+    p_scheduled_on: '2026-11-25', p_scheduled_time: '09:30', p_notes: 'Supplier confirmed',
+  });
+  expect(mocks.actor).toHaveBeenCalledWith(['admin']);
+  expect(mocks.after).not.toHaveBeenCalled();
+});
+
+it('allows date-only schedules and cancellation clears the current plan', async () => {
+  await expect(scheduleComplianceCycle(form({ scheduledOn: '2026-11-25' }))).rejects.toThrow('?scheduled=1');
+  expect(mocks.rpc).toHaveBeenLastCalledWith('schedule_compliance_cycle', expect.objectContaining({p_scheduled_time: null, p_notes: null}));
+  await expect(scheduleComplianceCycle(form({ mode: 'cancel' }))).rejects.toThrow('?scheduleCancelled=1');
+  expect(mocks.rpc).toHaveBeenLastCalledWith('schedule_compliance_cycle', expect.objectContaining({p_scheduled_on: null, p_scheduled_time: null, p_notes: null}));
+});
+
+it.each([{scheduledOn: '', scheduledTime: ''}, {scheduledOn: '2026-02-30', scheduledTime: ''}, {scheduledOn: '2026-11-25', scheduledTime: '25:00'}])('rejects invalid schedule fields %j', async (input) => {
+  await expect(scheduleComplianceCycle(form(input))).rejects.toThrow('?error=');
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it('rejects unavailable cycles and database refusals', async () => {
+  const query=mocks.from();
+  query.maybeSingle.mockResolvedValueOnce({data:null});
+  await expect(scheduleComplianceCycle(form({scheduledOn:'2026-11-25'}))).rejects.toThrow('?error=');
+  expect(query.eq).toHaveBeenCalledWith('record_id',recordId);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  mocks.rpc.mockResolvedValue({error:{message:'Work is already recorded'}});
+  await expect(scheduleComplianceCycle(form({scheduledOn:'2026-11-25'}))).rejects.toThrow('?error=');
 });

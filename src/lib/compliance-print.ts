@@ -1,3 +1,4 @@
+import {complianceScheduleRemarks,type ComplianceSchedule} from "./compliance-schedule";
 import { posix } from 'node:path';
 import { CFB, read, SSF, utils, type WorkSheet } from 'xlsx';
 
@@ -5,7 +6,7 @@ export const compliancePrintBucket = 'compliance-print-templates';
 export const compliancePrintPath = 'current.xlsx';
 export const compliancePrintMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const compliancePrintMaxBytes = 3 * 1024 * 1024;
-export const compliancePrintRecordFields = 'title,next_due_date,notes,template_row,compliance_cycles(template_row,due_date,notes,status,completed_at)';
+export const compliancePrintRecordFields = 'title,next_due_date,notes,template_row,compliance_cycles(template_row,due_date,notes,status,completed_at,scheduled_on,scheduled_time,schedule_notes)';
 
 export const compliancePrintKinds = {
   certificate_license: { label: 'Cert & License', filename: 'KLGCR-Cert-and-License.xlsx', sheet: 'CERT & LICENSE' },
@@ -21,13 +22,13 @@ export type CompliancePrintRecord = {
   template_row: number | null;
 };
 export type CompliancePrintMaster = CompliancePrintRecord & {
-  compliance_cycles?: {
+  compliance_cycles?: (ComplianceSchedule & {
     template_row: number | null;
     due_date: string | null;
     notes: string | null;
     status: string;
     completed_at: string | null;
-  }[];
+  })[];
 };
 export type CompliancePrintCoverage = {
   kind: CompliancePrintKind;
@@ -50,14 +51,14 @@ export function printRecords(kind: CompliancePrintKind, masters: CompliancePrint
     const cycles = master.compliance_cycles ?? [];
     const open = cycles.find(({ status }) => status === 'open');
     const { title, next_due_date, notes, template_row } = master;
-    const current = { title, next_due_date, notes: open?.notes ?? notes, template_row };
+    const current = { title, next_due_date, notes: open?complianceScheduleRemarks(open.notes??notes,open):notes, template_row };
     if (kind !== 'servicing') return [current];
 
     const byRow = new Map<number, CompliancePrintRecord>();
     for (const cycle of [...cycles].sort((a, b) => (a.completed_at ?? '').localeCompare(b.completed_at ?? ''))) {
       if (cycle.status !== 'completed' || cycle.template_row === null) continue;
       byRow.set(cycle.template_row, {
-        title, next_due_date: cycle.due_date, notes: cycle.notes, template_row: cycle.template_row,
+        title, next_due_date: cycle.due_date, notes: complianceScheduleRemarks(cycle.notes,cycle), template_row: cycle.template_row,
       });
     }
     const currentRow = open?.template_row ?? template_row;

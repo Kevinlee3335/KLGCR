@@ -87,6 +87,7 @@ beforeAll(async () => {
     '20261027051233_supplier_mail_archive',
     '20261112075230_supplier_mail_sender_registry',
     '20261112092258_linked_compliance_cycles',
+    '20261120044325_compliance_cycle_schedule',
   ]) await db.exec(readFileSync(`supabase/migrations/${migration}.sql`, 'utf8'));
   for (const migration of [
     '20261028043048_billing_run_james_approval_signatures',
@@ -340,5 +341,38 @@ describe('verification in either order', () => {
     } finally {
       await db.exec('reset role; set role service_role');
     }
+  });
+});
+
+describe('compliance cycle schedules', () => {
+  it('keeps plans and change history independent of due dates and actual work', async () => {
+    const record = await saveRecord({record_type:'servicing',title:'Scheduled fogging',next_due_date:'2026-11-01'});
+    const cycle = await openCycle(record);
+    const schedule = (date: string | null, time: string | null = null, notes: string | null = null, actor=kevin, owner=record) =>
+      db.query('select public.schedule_compliance_cycle($1,$2,$3,$4,$5,$6)',[actor,owner,cycle.id,date,time,notes]);
+    await expect(schedule('2026-11-25',null,null,worker)).rejects.toThrow('Admin account required');
+    await expect(schedule('2026-11-25',null,null,kevin,legacy)).rejects.toThrow('unavailable');
+    await db.exec('reset role; set role authenticated');
+    await expect(schedule('2026-11-25')).rejects.toThrow('permission denied');
+    await db.exec('reset role; set role service_role');
+    await schedule('2026-11-25','09:30','Confirmed');
+    await schedule('2026-11-25','09:30','Confirmed');
+    await schedule('2026-11-26');
+    await schedule(null);
+    const state=(await db.query<{schedule_history:{action:string}[]}>('select *,due_date::text as due,performed_on::text as actual from public.compliance_cycles where id=$1',[cycle.id])).rows[0];
+    expect(state).toMatchObject({scheduled_on:null,scheduled_time:null,schedule_notes:null,status:'open',due:'2026-11-01',actual:null});
+    expect(state.schedule_history.map(change=>change.action)).toEqual(['scheduled','rescheduled','cancelled']);
+    await schedule('2025-11-01');
+    await db.query('select public.update_compliance_cycle_progress($1,$2,$3,null)',[kevin,cycle.id,'2025-11-01']);
+    await expect(schedule('2026-11-27')).rejects.toThrow('Work is already recorded');
+    const report=await attachUpload(cycle.id,'service_report');
+    await db.query("select public.advance_compliance_document_review($1,$2,'fikri')",[fikri,report]);
+    await db.query("select public.advance_compliance_document_review($1,$2,'kevin')",[kevin,report]);
+    await db.query("select public.complete_compliance_cycle($1,$2,null,'2027-11-01',null,null)",[kevin,cycle.id]);
+    expect((await db.query('select scheduled_on::text as planned,status from public.compliance_cycles where id=$1',[cycle.id])).rows[0])
+      .toEqual({planned:'2025-11-01',status:'completed'});
+    expect((await db.query("select scheduled_on,schedule_history from public.compliance_cycles where record_id=$1 and status='open'",[record])).rows[0])
+      .toEqual({scheduled_on:null,schedule_history:[]});
+    await expect(schedule('2026-11-27')).rejects.toThrow('closed');
   });
 });
