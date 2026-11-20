@@ -1,0 +1,7 @@
+.frame { min-width: 0; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.toolbar strong { font-size: 1rem; }
+.expanded { position: fixed; inset: 0; z-index: 1200; background: #f7f6f2; padding: 16px; display: flex; flex-direction: column; min-width: 0; }
+.expanded .toolbar { flex: 0 0 auto; margin: 0 0 12px; }
+.expanded iframe { flex: 1; min-height: 0 !important; height: auto !important; background: #fff; }
+@media (max-width: 700px) { .expanded { padding: 8px; } }
