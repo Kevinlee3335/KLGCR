@@ -2,6 +2,8 @@ import { requireRole } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { pushInventoryItemToGoogle } from "@/lib/inventory-google-sync";
+import { inventoryCategories } from "@/lib/inventory-new-item";
+import { insertNumberedInventoryItem } from "@/lib/inventory-new-item.server";
 
 function numberField(value: FormDataEntryValue | null, allowNull = false) {
   const text = String(value || "").trim();
@@ -19,6 +21,7 @@ export async function POST(request: Request) {
   const action = String(form.get("action") || "");
   const supabase = await createClient();
   let error: { message: string } | null = null;
+  let createdItemCode = String(form.get("itemCode") || "").trim();
 
   if (action === "procurement_mode") {
     const itemIds = [...new Set(form.getAll("itemIds").map(String))];
@@ -38,6 +41,14 @@ export async function POST(request: Request) {
   }
 
   if (action === "create") {
+    const description = String(form.get("description") || "").trim();
+    const category = String(form.get("category") || "");
+    const autoCode = form.get("autoCode") === "true";
+    const movement = String(form.get("movement") || "slow");
+    if (!description || description.length > 500 || !inventoryCategories(store).includes(category) || !["fast", "slow", "once_in_a_while"].includes(movement) || (!autoCode && !createdItemCode)) {
+      url.searchParams.set("error", "Enter an item name and select a valid category and movement for this store.");
+      return NextResponse.redirect(url, 303);
+    }
     const balance = numberField(form.get("balance"));
     const reorder = numberField(form.get("reorder"));
     const cost = numberField(form.get("cost"), true);
@@ -45,17 +56,23 @@ export async function POST(request: Request) {
       url.searchParams.set("error", "Enter valid stock quantities and cost.");
       return NextResponse.redirect(url, 303);
     }
-    ({ error } = await supabase.from("inventory_items").insert({
+    const values = {
       inventory_group: store,
-      item_code: String(form.get("itemCode") || "").trim(),
-      description: String(form.get("description") || "").trim(),
-      category: String(form.get("category") || ""),
-      movement_category: String(form.get("movement") || "slow"),
+      description,
+      category,
+      movement_category: movement,
       balance_qty: balance,
       reorder_level: reorder,
       unit: String(form.get("unit") || "").trim() || null,
       cost,
-    }));
+    };
+    if (autoCode) {
+      const result = await insertNumberedInventoryItem(supabase, values);
+      error = result.error;
+      createdItemCode = result.itemCode ?? "";
+    } else {
+      ({ error } = await supabase.from("inventory_items").insert({ ...values, item_code: createdItemCode }));
+    }
   } else if (action === "edit") {
     const itemId = String(form.get("itemId") || "");
     const reorder = numberField(form.get("reorder"));
@@ -110,7 +127,7 @@ export async function POST(request: Request) {
   if (error) url.searchParams.set("error", error.message);
   else {
     const itemId = action === "create" ? null : String(form.get("itemId") || "");
-    const itemCode = action === "create" ? String(form.get("itemCode") || "").trim() : null;
+    const itemCode = action === "create" ? createdItemCode : null;
     const query = itemId ? supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("id", itemId).maybeSingle() : supabase.from("inventory_items").select("item_code,description,category,movement_category,balance_qty,reorder_level,unit").eq("item_code", itemCode!).maybeSingle();
     const { data: item } = await query;
     if (item) {
@@ -119,6 +136,10 @@ export async function POST(request: Request) {
     }
     url.searchParams.set("success", action);
     url.searchParams.set("view", "all");
+    if (action === "create") {
+      url.searchParams.set("q", createdItemCode);
+      url.hash = "inventory-stock-list";
+    }
   }
   return NextResponse.redirect(url, 303);
 }
