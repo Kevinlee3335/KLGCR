@@ -86,3 +86,22 @@ it("ignores a stale lookup when the search changes and starts normally for a roo
  await act(async()=>resolveFirst({record:recentRoom}));
  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+it("submits the C/D checklist and all category photos, and preserves a failed form for retry",async()=>{
+ const {CD_CATEGORIES}=await import('@/lib/checkout-cd-inspection');
+ const cd={id:'00000000-0000-4000-8000-000000000050',b:'C',room:218,l:2,t:6,round:1,date:'2026-11-20',by:'Kevin',reason:'Inspection',it:Object.fromEntries(CD_CATEGORIES.flatMap(([,items],ci)=>items.map((_,si)=>[`${ci}.${si}`,0]))),nt:{1:'Fan stopped'},ph:{1:['data:image/jpeg;base64,cGhvdG8=']}};
+ cd.it['1.0']=2;
+ render(<CheckoutABInspector blocks="CD"/>);
+ const frame=screen.getByTitle('Block C and D room inspection') as HTMLIFrameElement;
+ const sendCD=()=>window.dispatchEvent(new MessageEvent('message',{origin:window.location.origin,source:frame.contentWindow,data:{type:'klg-inspection-submit',record:cd}}));
+ state.submit.mockResolvedValueOnce({error:'Connection lost'});
+ act(()=>{sendCD();sendCD()});
+ await screen.findByText(/Connection lost/);
+ expect(screen.getByTitle('Block C and D room inspection')).toBeInTheDocument();
+ act(()=>sendCD());await screen.findByText('Inspection submitted successfully');
+ const payload=state.submit.mock.calls[1][0];
+ expect(payload).toMatchObject({block:'C',room:'218',pax:6});
+ expect(payload.findings[0]).toMatchObject({description:'Electrical Fixtures · Wall Fans · Qty 2: Fan stopped',photos:['inspection/photo0']});
+ expect(payload.checklist.ph).toEqual({1:['inspection/photo0']});
+ expect(JSON.stringify(payload.checklist)).not.toContain('base64');
+});

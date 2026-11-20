@@ -2,6 +2,7 @@
 import {requireCheckoutInspector} from "@/lib/auth";
 import {createClient} from "@/lib/supabase/server";
 import {revalidatePath} from "next/cache";
+import {cdInspectionFindings,type CDInspection} from "@/lib/checkout-cd-inspection";
 import {isUUID} from "@/lib/checkout-inspection";
 import {EVIDENCE_TYPES,MAX_EVIDENCE_BYTES} from "@/lib/photo-limits";
 import {signCheckoutPhotoUploads} from "@/lib/checkout-photo-uploads";
@@ -14,7 +15,14 @@ export async function prepareInspectionPhotos(id:string,files:{type:string;size:
 }
 export async function submitABInspection(input:{id:string;block:string;room:string;pax:number;notes:string;checklist:unknown;findings:{description:string;photos:string[]}[]}){
  await requireCheckoutInspector();
- if(!isUUID(input.id)||!["A","B"].includes(input.block)||!/^\d{3}$/.test(input.room)||!Array.isArray(input.findings)||input.findings.length>100||input.notes.length>4000)return {error:"Invalid inspection. Please check the room and try again."};
+ if(!isUUID(input.id)||!["A","B","C","D"].includes(input.block)||!/^\d{3}$/.test(input.room)||!Array.isArray(input.findings)||input.findings.length>100||input.notes.length>4000)return {error:"Invalid inspection. Please check the room and try again."};
+ if(["C","D"].includes(input.block)){
+  try{
+   const checklist=input.checklist as CDInspection;
+   if(checklist.b!==input.block||String(checklist.room)!==input.room||checklist.t!==input.pax)return {error:"Invalid inspection room."};
+   cdInspectionFindings({...checklist,ph:{}});
+  }catch(error){return {error:error instanceof Error?error.message:"Invalid inspection."};}
+ }
  const db=await createClient();
  const {data,error}=await db.rpc("submit_ab_checkout_inspection",{p_id:input.id,p_block:input.block,p_room:input.room,p_pax:input.pax,p_notes:input.notes,p_checklist:input.checklist,p_findings:input.findings});
  if(error)return {error:error.message};
@@ -24,7 +32,7 @@ export async function submitABInspection(input:{id:string;block:string;room:stri
 
 export async function getRecentRoomInspection(roomCode:string) {
  const actor=await requireCheckoutInspector();
- if(actor.role!=="admin"||typeof roomCode!=="string"||!/^[AB]\d{3}$/.test(roomCode)) return {record:null};
+ if(actor.role!=="admin"||typeof roomCode!=="string"||!/^[ABCD]\d{3}$/.test(roomCode)) return {record:null};
 
  const block=roomCode[0];
  const number=roomCode.slice(1);

@@ -131,7 +131,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <div className="checkout-overview-header">
         <h2>Check-out room readiness</h2>
         <div className="checkout-overview-actions">
-          {isAdmin && <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>}
+          {isAdmin && <><Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link><Link className="button" href="/admin/checkouts/inspection?blocks=CD">Room Inspection · Block C &amp; D</Link></>}
           <Link className="button secondary" href="/admin/checkouts/painting"><span aria-hidden="true">🎨</span> General Worker · Room / Bathroom List</Link>
           <Link className="button secondary" href="/admin/checkouts/occupancy-report">Ready for Occupancy Report</Link>
         </div>
