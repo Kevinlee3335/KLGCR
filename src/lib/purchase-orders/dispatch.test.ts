@@ -8,9 +8,9 @@ vi.mock('@/lib/email',()=>({sendTransactionalEmail:mocks.email}));
 vi.mock('@/lib/push',()=>({sendPushNotifications:vi.fn()}));
 import {dispatchApprovedPurchase} from './dispatch';
 const id='11111111-1111-4111-8111-111111111111',cc=['klgcr.kevin@gmail.com','klgcr.fikri@gmail.com'];
-let order:Record<string,unknown>,event:Record<string,unknown>,updates:Record<string,unknown>[];
+let order:Record<string,unknown>,event:Record<string,unknown>,updates:Record<string,unknown>[],readError:unknown;
 beforeEach(()=>{
- vi.clearAllMocks();updates=[];
+ vi.clearAllMocks();updates=[];readError=null;
  order={id,revision:1,approved_at:'2026-10-28T01:00:00Z',approved_by:'James',approved_by_user:'eeab5f04-30c3-42bd-a095-58e56c814358',approved_signature:{strokes:[[[0,0],[1,1]]]},items:[],po_no:'PO-1'};
  event={order_id:id,revision:1,inventory_group:'building',recipient:'purchasing@keanlenggroup.com',recipient_ids:[],status:'pending'};
  mocks.from.mockImplementation((table:string)=>{
@@ -18,13 +18,19 @@ beforeEach(()=>{
   const builder:Record<string,unknown>={};
   for(const method of ['select','eq'])builder[method]=()=>builder;
   builder.update=(v:Record<string,unknown>)=>{update=v;updates.push(v);return builder;};
-  const response=()=>({data:table==='inventory_purchase_orders'?order:table==='inventory_procurement_routes'?{channel:'email',recipient:event.recipient,recipient_ids:[]}:update?.status==='sending'?event:event.status==='pending'?event:null,error:null});
+  const response=()=>({data:table==='inventory_purchase_orders'?order:table==='inventory_procurement_routes'?{channel:'email',recipient:event.recipient,recipient_ids:[]}:update?.status==='sending'?event:event.status==='pending'?event:null,error:table==='inventory_purchase_orders'?readError:null});
   builder.single=builder.maybeSingle=async()=>response();
   builder.then=(resolve:(v:unknown)=>unknown)=>Promise.resolve(response()).then(resolve);
   return builder;
  });
  mocks.pdf.mockResolvedValue(Buffer.from('%PDF-1.7 signed'));
  mocks.gateway.mockImplementation(async(p:Record<string,unknown>)=>p.action==='po-capabilities'?{ok:true,sender:'klgcr.noreply@gmail.com',capabilities:['poPdf','cc','idempotency']}:{ok:true,status:'sent',key:p.key,sender:p.from,to:p.to,cc:p.cc,sentAt:'2026-10-28T01:01:00Z'});
+});
+it('records a permission failure without claiming or sending the approved PO',async()=>{
+ readError={code:'42501',message:'permission denied for table inventory_purchase_orders'};
+ await expect(dispatchApprovedPurchase(id,1,'https://example.test')).rejects.toThrow('could not read the approved PO');
+ expect(updates).toEqual([{error:'Email pending: the delivery service could not read the approved PO.'}]);
+ expect(mocks.gateway).not.toHaveBeenCalled();expect(mocks.pdf).not.toHaveBeenCalled();
 });
 it('sends signed PDF only to purchasing with both CC and records a verified receipt',async()=>{
  await dispatchApprovedPurchase(id,1,'https://example.test');

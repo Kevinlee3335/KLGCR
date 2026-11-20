@@ -20,3 +20,11 @@ it('keeps a changed PO in the queue and displays the review error',async()=>{
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('review the latest PO'));
  expect(screen.getByRole('button',{name:'Approve'})).not.toBeDisabled();
 });
+it('keeps approval successful while showing that delivery is pending',async()=>{
+ vi.spyOn(window,'confirm').mockReturnValue(true);
+ vi.spyOn(global,'fetch').mockResolvedValue({ok:true,json:async()=>({order:{},deliveryWarning:'PO approved. Email is still pending; check the delivery status in Purchase Orders. Do not approve again.'})} as Response);
+ render(<PoApprovalQueue orders={[order]} total={1}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Approve'}));
+ await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Email is still pending'));
+ expect(screen.queryByRole('button',{name:'Approve'})).not.toBeInTheDocument();
+});

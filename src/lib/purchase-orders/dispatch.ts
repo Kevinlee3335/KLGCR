@@ -9,13 +9,21 @@ import {sendPushNotifications} from '@/lib/push';
 // Claim once. Failed/uncertain sends require review, preventing duplicate purchase emails.
 export async function dispatchApprovedPurchase(orderId:string,revision:number,origin:string){
  const db=createAdminClient();
+ const blocked=async(message:string)=>{
+  const saved=await db.from('inventory_po_dispatch').update({error:message}).eq('order_id',orderId).eq('revision',revision).eq('status','pending');
+  if(saved.error)console.error('Unable to record PO delivery error',orderId,revision,saved.error.code);
+  throw new Error(message);
+ };
  const current=await db.from('inventory_purchase_orders').select('*').eq('id',orderId).single();
- if(current.error||!current.data?.approved_at||current.data.revision!==revision)return;
+ if(current.error)return blocked('Email pending: the delivery service could not read the approved PO.');
+ if(!current.data?.approved_at||current.data.revision!==revision)return;
  const queued=await db.from('inventory_po_dispatch').select('*').eq('order_id',orderId).eq('revision',revision).eq('status','pending').maybeSingle();
- if(queued.error||!queued.data)return;
+ if(queued.error)return blocked('Email pending: unable to read the PO delivery queue.');
+ if(!queued.data)return;
  const event=queued.data;
  const route=await db.from('inventory_procurement_routes').select('recipient,recipient_ids,channel').eq('inventory_group',event.inventory_group).eq('confirmed',true).maybeSingle();
- if(route.error||!route.data)return;
+ if(route.error)return blocked('Email pending: unable to read the confirmed purchasing destination.');
+ if(!route.data)return;
  const destination=route.data;
  if(destination.recipient!==event.recipient || JSON.stringify(destination.recipient_ids)!==JSON.stringify(event.recipient_ids))return;
  // A destination must be explicitly confirmed; personal emails are never inferred.

@@ -16,7 +16,9 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{id:string}>
   if(error)return NextResponse.json({error:'Unable to approve. Refresh and review the latest PO before trying again.'},{status:409});
   await dispatchPoNotifications(data.id).catch(error=>console.error('PO notifications deferred',error));
     await archivedPurchaseOrderPdf(data);
-  await dispatchApprovedPurchase(data.id,data.revision,req.nextUrl.origin);
-  return NextResponse.json({order:data});
+  let deliveryWarning:string|undefined;
+  try{await dispatchApprovedPurchase(data.id,data.revision,req.nextUrl.origin);}
+  catch(error){console.error('Approved PO email deferred',data.id,data.revision,error);deliveryWarning='PO approved. Email is still pending; check the delivery status in Purchase Orders. Do not approve again.';}
+  return NextResponse.json({order:data,deliveryWarning});
  }catch{return NextResponse.json({error:'Unable to complete approval. Refresh to check the current status.'},{status:503});}
 }

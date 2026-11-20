@@ -41,6 +41,15 @@ it('isolates categories, signatures, approvers and confirmed destinations',async
  await expect(db.query('select approve_inventory_purchase_order($1,1)',[b.id])).rejects.toThrow('designated approver');
  await db.exec(`set app.uid='${james}'`);await db.query('select approve_inventory_purchase_order($1,1)',[b.id]);
  expect((await db.query<{status:string;recipient:string}>('select status,recipient from inventory_po_dispatch where order_id=$1',[b.id])).rows).toEqual([{status:'pending',recipient:'purchasing@keanlenggroup.com'}]);
+ // Reproduce the production worker's 403 before granting only its missing read access.
+ await db.exec('alter role service_role bypassrls; set role service_role');
+ await expect(db.query('select id from inventory_purchase_orders')).rejects.toThrow('permission denied');
+ await db.exec('reset role');
+ await db.exec(readFileSync('supabase/migrations/20261120040039_po_dispatch_read_access.sql','utf8'));
+ await db.exec('set role service_role');
+ expect((await db.query('select id from inventory_purchase_orders where id=$1',[b.id])).rows).toHaveLength(1);
+ await expect(db.query('update inventory_purchase_orders set approved_at=null where id=$1',[b.id])).rejects.toThrow('permission denied');
+ await db.exec('reset role');
  await db.exec(`set app.uid='${kevin}'`);const c=await save([cleaner]);await db.exec(`set app.uid='${mary}'`);await db.query('select approve_inventory_purchase_order($1,1)',[c.id]);
  expect((await db.query<{recipient_ids:string[];status:string}>('select recipient_ids,status from inventory_po_dispatch where order_id=$1',[c.id])).rows).toEqual([{recipient_ids:['7a40e00f-2e95-4c27-83d9-0f7dba788b77','657a0fb1-aa05-4f3c-bd67-3914313a69d1'],status:'pending'}]);
  await db.query("update inventory_procurement_routes set recipient_ids=ARRAY[$1::uuid],confirmed=true where inventory_group='cleaner'",[kevin]);
