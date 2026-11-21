@@ -5,6 +5,13 @@ import type { Profile } from "@/lib/types";
 
 const snapshotColumns = "period, revision, exceptions, inspection_date, inspected_by_name, completed_at";
 
+type InspectionScope = "ab" | "cd";
+
+export const inspectionTables: Record<InspectionScope, string> = {
+  ab: "ab_fire_safety_inspections",
+  cd: "flex_inspections",
+};
+
 type InspectionRow = {
   period: string;
   revision: number;
@@ -27,21 +34,21 @@ function snapshot(period: string, row: InspectionRow | null): FlexInspectionSnap
   };
 }
 
-export async function loadFlexInspection(period: string): Promise<FlexInspectionSnapshot> {
+export async function loadFlexInspection(period: string, scope: InspectionScope = "cd"): Promise<FlexInspectionSnapshot> {
   const db = createAdminClient();
-  const { data, error } = await db.from("flex_inspections").select(snapshotColumns)
+  const { data, error } = await db.from(inspectionTables[scope]).select(snapshotColumns)
     .eq("period", period).maybeSingle<InspectionRow>();
   if (error) throw error;
   return snapshot(period, data);
 }
 
-export async function loadFlexInspectionForReport(period: string): Promise<{
+export async function loadFlexInspectionForReport(period: string, scope: InspectionScope = "cd"): Promise<{
   inspection: FlexInspectionSnapshot;
   inspectorId: string | null;
   inspectorSignature?: unknown;
 }> {
   const db = createAdminClient();
-  const { data, error } = await db.from("flex_inspections")
+  const { data, error } = await db.from(inspectionTables[scope])
     .select(`${snapshotColumns}, inspected_by, inspector_signature`)
     .eq("period", period).maybeSingle<ReportRow>();
   if (error) throw error;
@@ -56,6 +63,7 @@ export async function writeFlexInspection(
   input: FlexSaveInput,
   profile: Profile,
   signature: Signature | null,
+  scope: InspectionScope = "cd",
 ): Promise<FlexInspectionSnapshot | null> {
   const db = createAdminClient();
   const values = {
@@ -69,16 +77,17 @@ export async function writeFlexInspection(
     completed_at: input.complete ? new Date().toISOString() : null,
   };
 
-  // A unique period handles concurrent first saves. Existing drafts use a revision check.
+  const table = inspectionTables[scope];
+  // A unique period per scope handles concurrent first saves. Existing drafts use a revision check.
   if (input.revision === 0) {
-    const { data, error } = await db.from("flex_inspections").insert({ ...values, period: input.period })
+    const { data, error } = await db.from(table).insert({ ...values, period: input.period })
       .select(snapshotColumns).single<InspectionRow>();
     if (error?.code === "23505") return null;
     if (error) throw error;
     return snapshot(input.period, data);
   }
 
-  const { data, error } = await db.from("flex_inspections").update(values)
+  const { data, error } = await db.from(table).update(values)
     .eq("period", input.period).eq("revision", input.revision).is("completed_at", null)
     .select(snapshotColumns).maybeSingle<InspectionRow>();
   if (error) throw error;

@@ -1,37 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Download, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { ArrowDown, ArrowUp, Check, Download, FolderOpen, X } from "lucide-react";
 import {
+  AB_REPORT_LABELS,
   FLEX_REMARK_MAX_LENGTH,
   FLEX_REPORT_LABELS,
-  type FlexGroup,
+  type AbReportType,
   type FlexInspectionSnapshot,
-  type FlexReportType,
   type FlexSaveInput,
+  type InspectionGroup,
 } from "@/lib/flex-inspection";
-import { downloadFlexPreviewReport, saveFlexInspection } from "@/lib/flex-inspection-actions";
+import { downloadAbInspectionPreviewReport, downloadFlexPreviewReport, saveAbFireSafetyInspection, saveFlexInspection } from "@/lib/flex-inspection-actions";
 import type { FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
 import type { FlexReview, FlexReviewer } from "@/lib/flex-inspection-review";
 import { FlexReviewPanel } from "./flex-review-panel";
 import styles from "./flex-inspection-form.module.css";
 
-type Block = FlexGroup["block"];
+type Block = InspectionGroup["block"];
 type Level = "all" | "common" | number;
+type FloorDirection = 1 | -1;
 
 type InspectionLocation = {
   block: Block;
-  level: FlexGroup["level"];
+  level: InspectionGroup["level"];
   location: string;
-  groups: FlexGroup[];
+  groups: InspectionGroup[];
 };
 
-const reportTypes: FlexReportType[] = ["fire-extinguisher", "exit-sign", "emergency-light"];
-const blocks: Block[] = ["C", "D"];
+const inspectionOptions = {
+  ab: {
+    blocks: ["A", "B", "Other"] as const,
+    reportTypes: Object.keys(AB_REPORT_LABELS) as AbReportType[],
+    blockLabel: "Blocks A and B and other areas",
+  },
+  cd: {
+    blocks: ["C", "D"] as const,
+    reportTypes: Object.keys(FLEX_REPORT_LABELS) as AbReportType[],
+    blockLabel: "Blocks C and D",
+  },
+};
 
-function organizeInspection(groups: FlexGroup[]) {
+function organizeInspection(groups: InspectionGroup[]) {
   const locations = new Map<string, InspectionLocation>();
-  const levels: Record<Block, Set<number | null>> = { C: new Set(), D: new Set() };
+  const levels: Record<Block, Set<number | null>> = {
+    A: new Set(), B: new Set(), C: new Set(), D: new Set(), Other: new Set(),
+  };
   let unitCount = 0;
   for (const group of groups) {
     const key = [group.block, group.level, group.location].join("/");
@@ -45,9 +59,12 @@ function organizeInspection(groups: FlexGroup[]) {
     unitCount += group.units.length;
   }
   const orderLevels = (a: number | null, b: number | null) => (a ?? Infinity) - (b ?? Infinity);
+  const levelOptions = Object.fromEntries(Object.entries(levels).map(([block, values]) => [
+    block, [...values].sort(orderLevels),
+  ])) as Record<Block, (number | null)[]>;
   return {
     inspectionLocations: [...locations.values()].sort((a, b) => a.block.localeCompare(b.block) || orderLevels(a.level, b.level)),
-    levelOptions: { C: [...levels.C].sort(orderLevels), D: [...levels.D].sort(orderLevels) },
+    levelOptions,
     unitCount,
   };
 }
@@ -56,34 +73,74 @@ function formatLevel(level: number | null) {
   return level === null ? "Common areas" : "Level " + level;
 }
 
-export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null, recipients, scheduledDate }: {
+function formatBlock(block: Block) {
+  return block === "Other" ? "Other areas" : `Block ${block}`;
+}
+
+function FloorNavigation({ position, block, level, direction, nextLevel, headingRef, onNext }: {
+  position: "top" | "bottom";
+  block: Block;
+  level: number;
+  direction: FloorDirection;
+  nextLevel: number | undefined;
+  headingRef?: Ref<HTMLHeadingElement>;
+  onNext: () => void;
+}) {
+  const destination = nextLevel === undefined ? undefined : formatLevel(nextLevel);
+  const Arrow = direction === 1 ? ArrowUp : ArrowDown;
+
+  return (
+    <nav className={styles.floorNavigation} aria-label={`Floor navigation (${position})`}>
+      {position === "top" ? (
+        <h3 ref={headingRef} tabIndex={-1} className={styles.floorHeading}>
+          {formatBlock(block)} · {formatLevel(level)}
+        </h3>
+      ) : (
+        <span className={styles.floorHeading}>{formatBlock(block)} · {formatLevel(level)}</span>
+      )}
+      <button className={styles.nextFloor} type="button" disabled={!destination}
+        aria-label={destination ? `Next: ${destination}` : "Next"} onClick={onNext}>
+        Next
+        {destination ? <><span>{destination}</span><Arrow size={16} aria-hidden="true" /></> : null}
+      </button>
+    </nav>
+  );
+}
+
+export function FlexInspectionForm({ inspection, groups, today, scope = "cd", preview = false, review, reviewer = null, recipients, scheduledDate }: {
   inspection: FlexInspectionSnapshot;
-  groups: FlexGroup[];
+  groups: InspectionGroup[];
   today: string;
+  scope?: "ab" | "cd";
   preview?: boolean;
   review?: FlexReview | null;
   reviewer?: FlexReviewer | null;
   recipients?: FlexInspectionMailRecipients | null;
   scheduledDate?: string;
 }) {
+  const isAb = scope === "ab";
+  const { blocks, reportTypes, blockLabel } = inspectionOptions[scope];
   const { inspectionLocations, levelOptions, unitCount } = useMemo(() => organizeInspection(groups), [groups]);
   const [saved, setSaved] = useState(inspection);
   const [exceptions, setExceptions] = useState(inspection.exceptions);
   const [inspectionDate, setInspectionDate] = useState(
     inspection.inspectionDate ?? (today.startsWith(inspection.period + "-") ? today : ""),
   );
-  const [block, setBlock] = useState<Block>("C");
-  const [level, setLevel] = useState<Level>(levelOptions.C[0] ?? "all");
+  const [block, setBlock] = useState<Block>(blocks[0]);
+  const [level, setLevel] = useState<Level>(levelOptions[blocks[0]][0] ?? "all");
+  const [floorDirection, setFloorDirection] = useState<FloorDirection>(1);
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [pending, setPending] = useState<"draft" | "complete" | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [needsReload, setNeedsReload] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
-  const [preparingPdf, setPreparingPdf] = useState<FlexReportType | null>(null);
-  const storageKey = `flex-preview-inspection-${inspection.period}`;
+  const [preparingPdf, setPreparingPdf] = useState<AbReportType | null>(null);
+  const storageKey = isAb ? `ab-preview-inspection-${inspection.period}` : `flex-preview-inspection-${inspection.period}`;
   const saving = useRef(false);
   const inspectionDateInput = useRef<HTMLInputElement>(null);
+  const floorHeading = useRef<HTMLHeadingElement>(null);
+  const followedNext = useRef(false);
 
   useEffect(() => {
     if (!preview) return;
@@ -99,7 +156,17 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
     }
   }, [preview, storageKey]);
 
+  useEffect(() => {
+    if (!followedNext.current) return;
+    followedNext.current = false;
+    floorHeading.current?.focus({ preventScroll: true });
+    floorHeading.current?.scrollIntoView?.({ block: "start" });
+  }, [level]);
+
   const completed = saved.completedAt !== null;
+  const floor = typeof level === "number" && !issuesOnly ? level : null;
+  const numberedLevels = levelOptions[block].filter((option) => option !== null);
+  const nextLevel = floor === null ? undefined : numberedLevels[numberedLevels.indexOf(floor) + floorDirection];
   const issueCount = Object.keys(exceptions).length;
   const missingRemarks = Object.values(exceptions).filter((remark) => !remark.trim()).length;
   const missingRemarkError = showMissing && missingRemarks > 0
@@ -111,10 +178,29 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
       : location.block === block && (level === "all" || location.level === (level === "common" ? null : level)),
   ), [block, exceptions, inspectionLocations, issuesOnly, level]);
 
+  function selectLevel(nextLevel: Level, nextBlock: Block) {
+    setLevel(nextLevel);
+    if (typeof nextLevel !== "number") return;
+
+    const numbered = levelOptions[nextBlock].filter((option) => option !== null);
+    const lowest = numbered[0] ?? nextLevel;
+    const highest = numbered[numbered.length - 1] ?? nextLevel;
+    setFloorDirection(nextLevel - lowest > highest - nextLevel ? -1 : 1);
+  }
+
   function switchBlock(next: Block) {
+    if (next === block) return;
     setBlock(next);
     if (level === "common" && !levelOptions[next].includes(null)) setLevel("all");
-    if (typeof level === "number" && !levelOptions[next].includes(level)) setLevel(levelOptions[next][0] ?? "all");
+    if (typeof level === "number") {
+      selectLevel(levelOptions[next].includes(level) ? level : (levelOptions[next][0] ?? "all"), next);
+    }
+  }
+
+  function advanceFloor() {
+    if (nextLevel === undefined) return;
+    followedNext.current = true;
+    setLevel(nextLevel);
   }
 
   function markUnit(id: string, isIssue: boolean) {
@@ -154,7 +240,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
       period: saved.period, revision: saved.revision, exceptions, inspectionDate, complete,
     };
     try {
-      const result = await saveFlexInspection(input);
+      const result = await (isAb ? saveAbFireSafetyInspection(input) : saveFlexInspection(input));
       if (!result.ok) {
         setError(result.message);
         if (result.code === "conflict") setNeedsReload(true);
@@ -166,7 +252,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
         try { sessionStorage.setItem(storageKey, JSON.stringify(result.inspection)); } catch { /* Preview state remains on screen. */ }
       }
       setShowMissing(false);
-      setMessage(complete ? "Inspection completed. The three reports are ready." : "Draft saved.");
+      setMessage(complete ? "Inspection completed. The reports are ready." : "Draft saved.");
     } catch {
       setError("The inspection could not be saved. Your changes are still open. Please try again.");
     } finally {
@@ -175,12 +261,13 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
     }
   }
 
-  async function downloadPreview(report: FlexReportType) {
+  async function downloadPreview(report: AbReportType) {
     if (!saved.inspectionDate || preparingPdf) return;
     setPreparingPdf(report);
     setError("");
     try {
-      const result = await downloadFlexPreviewReport(report, {
+      const download = isAb ? downloadAbInspectionPreviewReport : downloadFlexPreviewReport;
+      const result = await download(report, {
         period: saved.period, revision: saved.revision, exceptions: saved.exceptions,
         inspectionDate: saved.inspectionDate, complete: true,
       });
@@ -192,7 +279,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Flex-Preview-${report}-${saved.period}.pdf`;
+      link.download = `${isAb ? "AB" : "Flex"}-Preview-${report}-${saved.period}.pdf`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
@@ -203,13 +290,15 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
   }
 
   return (
-    <section className={styles.inspection} aria-label="Flex inspection checklist" aria-busy={pending !== null}>
+    <section className={styles.inspection} aria-label={isAb ? "Block A and B inspection checklist" : "Flex inspection checklist"} aria-busy={pending !== null}>
       <div className={styles.controls}>
-        {preview ? <p className={styles.reportNote}>Trial version. This tab uses sample inspection records and simulates email delivery.</p> : null}
+        {preview ? <p className={styles.reportNote}>{isAb
+          ? "Trial version. Drafts and completions are saved in this browser."
+          : "Trial version. This tab uses sample inspection records and simulates email delivery."}</p> : null}
         <div className={styles.statusLine}>
           <div>
             <strong>Inspection checklist</strong>
-            <p>{unitCount} units across Blocks C and D · {issueCount} {issueCount === 1 ? "issue" : "issues"}</p>
+            <p>{unitCount} units across {blockLabel} · {issueCount} {issueCount === 1 ? "issue" : "issues"}</p>
           </div>
           {completed ? <span className={styles.complete}><Check aria-hidden="true" size={16} /> Complete</span> : null}
         </div>
@@ -222,27 +311,34 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
                 <button type="button" className={styles.download} key={report}
                   disabled={preparingPdf !== null} onClick={() => void downloadPreview(report)}>
                   <Download aria-hidden="true" size={16} />
-                  {preparingPdf === report ? "Preparing PDF…" : `${FLEX_REPORT_LABELS[report]} PDF`}
+                  {preparingPdf === report ? "Preparing PDF…" : `${AB_REPORT_LABELS[report]} PDF`}
                 </button>
               ) : (
-                <a className={styles.download} key={report} href={"/api/flex-inspections/" + saved.period + "/" + report}>
+                <a className={styles.download} key={report}
+                  href={`/api/flex-inspections/${saved.period}/${report}${isAb ? "?scope=ab" : ""}`}>
                   <Download aria-hidden="true" size={16} />
-                  {FLEX_REPORT_LABELS[report]} PDF
+                  {AB_REPORT_LABELS[report]} PDF
                 </a>
               ))}
+              {!preview ? (
+                <a className={styles.download} href={`/documents/fire-safety-inspections/${scope}`}>
+                  <FolderOpen aria-hidden="true" size={16} />
+                  Open Documents archive
+                </a>
+              ) : null}
             </div>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
-            {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer}
+            {!isAb && review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer}
               preview={preview} recipients={recipients} scheduledDate={scheduledDate} /> : null}
-            {review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
+            {!isAb && review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
           </>
         ) : (
-          <p className={styles.instructions}>All items start with ✓. Tap X for a fault and add a remark. Complete once you have checked both blocks.</p>
+          <p className={styles.instructions}>All items start with ✓. Tap X for a fault and add a remark. Complete once you have checked {isAb ? "both blocks and other areas" : "both blocks"}.</p>
         )}
-        <p className={styles.reportNote}>
+        {!isAb ? <p className={styles.reportNote}>
           Block C has 60 emergency lights on the checklist, including Lift Motor Room and FAP Room.
           The Flex report displays the original total of 58.
-        </p>
+        </p> : null}
 
         <div className={styles.filters}>
           {!issuesOnly ? (
@@ -250,7 +346,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
               <div className={styles.blocks} role="group" aria-label="Block">
                 {blocks.map((choice) => (
                   <button key={choice} type="button" aria-pressed={block === choice} onClick={() => switchBlock(choice)}>
-                    Block {choice}
+                    {formatBlock(choice)}
                   </button>
                 ))}
               </div>
@@ -258,7 +354,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
                 <span className={styles.srOnly}>Level</span>
                 <select value={level} onChange={(event) => {
                   const value = event.target.value;
-                  setLevel(value === "all" || value === "common" ? value : Number(value));
+                  selectLevel(value === "all" || value === "common" ? value : Number(value), block);
                 }}>
                   <option value="all">All levels</option>
                   {levelOptions[block].map((option) => (
@@ -276,24 +372,30 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
         </div>
       </div>
 
+      {floor !== null ? (
+        <FloorNavigation position="top" block={block} level={floor} direction={floorDirection}
+          nextLevel={nextLevel} onNext={advanceFloor} headingRef={floorHeading} />
+      ) : null}
+
       <div className={styles.locations}>
         {visibleLocations.map((location) => (
           <section className={styles.location} key={[location.block, location.level, location.location].join("/")}>
             <div className={styles.locationHeading}>
               <h3>{location.location}</h3>
-              {issuesOnly || level === "all" ? <span>Block {location.block} · {formatLevel(location.level)}</span> : null}
+              {issuesOnly || level === "all" ? <span>{formatBlock(location.block)}{location.level === null && location.block === "Other" ? "" : ` · ${formatLevel(location.level)}`}</span> : null}
             </div>
             {location.groups.map((group) => {
               const units = issuesOnly ? group.units.filter((unit) => Object.hasOwn(exceptions, unit.id)) : group.units;
-              if (!units.length) return null;
+              if (!units.length && (issuesOnly || !group.note)) return null;
               return (
                 <div className={styles.equipment} key={group.id}>
-                  <h4>{FLEX_REPORT_LABELS[group.report]}</h4>
-                  <ul className={styles.units}>
+                  <h4>{AB_REPORT_LABELS[group.report]}</h4>
+                  {group.note ? <p className={styles.locationNote}>{group.note}</p> : null}
+                  {units.length ? <ul className={styles.units}>
                     {units.map((unit) => {
                       const hasIssue = Object.hasOwn(exceptions, unit.id);
-                      const accessibleUnit = [FLEX_REPORT_LABELS[group.report], unit.label, location.location,
-                        "Block " + location.block, formatLevel(location.level)].join(", ");
+                      const accessibleUnit = [AB_REPORT_LABELS[group.report], unit.label, location.location,
+                        formatBlock(location.block), formatLevel(location.level)].join(", ");
                       return (
                         <li key={unit.id} className={styles.unit}>
                           <div className={styles.unitRow}>
@@ -328,7 +430,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
                         </li>
                       );
                     })}
-                  </ul>
+                  </ul> : null}
                 </div>
               );
             })}
@@ -336,6 +438,11 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
         ))}
         {!visibleLocations.length ? <p className={styles.empty}>{issuesOnly ? "No issues recorded." : "No equipment at this level."}</p> : null}
       </div>
+
+      {floor !== null ? (
+        <FloorNavigation position="bottom" block={block} level={floor} direction={floorDirection}
+          nextLevel={nextLevel} onNext={advanceFloor} />
+      ) : null}
 
       {!completed ? (
         <div className={styles.footer}>

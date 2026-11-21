@@ -1,6 +1,6 @@
 import type { AppRole } from "@/lib/types";
 
-export const FLEX_INSPECTION_TITLE = "Flex Fire Safety Inspection";
+export const FLEX_INSPECTION_TITLE = "Fire Safety Inspections";
 export const FLEX_INSPECTION_PATH = "/flex-inspections";
 export const FLEX_INSPECTION_ROLES: AppRole[] = ["admin", "maintenance_staff"];
 export const FLEX_REMARK_MAX_LENGTH = 500;
@@ -13,16 +13,26 @@ export const FLEX_REPORT_LABELS = {
 
 export type FlexReportType = keyof typeof FLEX_REPORT_LABELS;
 
-export type FlexGroup = {
+export const AB_REPORT_LABELS = {
+  "hose-reel": "Hose Reel",
+  ...FLEX_REPORT_LABELS,
+};
+
+export type AbReportType = keyof typeof AB_REPORT_LABELS;
+
+export type InspectionGroup = {
   id: string;
-  report: FlexReportType;
-  block: "C" | "D";
+  report: AbReportType;
+  block: "A" | "B" | "C" | "D" | "Other";
   level: number | null;
   location: string;
   quantity: number;
   sourceCell: string;
   units: { id: string; label: string }[];
+  note?: string;
 };
+
+export type FlexGroup = InspectionGroup & { report: FlexReportType; block: "C" | "D" };
 
 export type FlexInspectionSnapshot = {
   period: string;
@@ -51,4 +61,8 @@ export function isFlexPeriod(period: string): boolean {
 
 export function isFlexReportType(report: string): report is FlexReportType {
   return Object.hasOwn(FLEX_REPORT_LABELS, report);
+}
+
+export function isAbReportType(report: string): report is AbReportType {
+  return Object.hasOwn(AB_REPORT_LABELS, report);
 }

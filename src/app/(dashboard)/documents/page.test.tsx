@@ -80,8 +80,17 @@ it("starts business and supplier folder reads while the document list is pending
   expect(screen.getByText("1 files")).toBeInTheDocument();
   expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual([
     "Utility Reading History · —", "Receipts · —", "Rental · 3", "Utilities · 0",
-    "Purchase Orders · 5", "Quotations · 2", "Sigma · 7", "MFE · —", "Lab Testing · 7",
+    "Purchase Orders · 5", "Quotations · 2", "Fire Safety Inspections · —", "Sigma · 7", "MFE · —", "Lab Testing · 7",
   ]);
+});
+
+it("shows the fire safety archive to maintenance staff without querying management data", async () => {
+  mocks.requireRole.mockResolvedValue({ role: "maintenance_staff" });
+  render(await DocumentsPage());
+
+  expect(mocks.from.mock.calls).toEqual([["system_documents"]]);
+  expect(screen.getByRole("link", { name: /Fire Safety Inspections/ })).toHaveAttribute("href", "/documents/fire-safety-inspections");
+  expect(screen.queryByText("Management")).toBeNull();
 });
 
 it("skips all management folder queries for a cleaner", async () => {
