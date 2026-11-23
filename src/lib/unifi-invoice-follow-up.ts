@@ -18,8 +18,11 @@ const malaysiaHour = new Intl.DateTimeFormat('en-GB', {
 });
 
 type FollowUp = { period: string; lineNumber: number; followUpOn: string };
-type Health = 'unconfirmed' | 'failed' | 'stale' | 'unavailable' | 'ready';
-type ConnectionStatus = Awaited<ReturnType<typeof getUnifiWebmailConnectionStatus>>;
+type Health = 'unconfirmed' | 'failed' | 'stale' | 'unavailable' | 'ready' | 'reviewed';
+type ConnectionStatus = Pick<Awaited<ReturnType<typeof getUnifiWebmailConnectionStatus>>, 'connected' | 'lastCheckedAt' | 'lastError'> & {
+  reviewedCheckAt?: string | null;
+  reviewedError?: string | null;
+};
 type ReceivedInvoice = Pick<UnifiInvoice, 'period' | 'line_number'>;
 
 function previousMalaysiaDate(now: Date) {
@@ -32,7 +35,16 @@ function nextPeriod(period: string) {
 }
 
 export function unifiWebmailFollowUpHealth(connection: ConnectionStatus, now: Date): Health {
-  if (connection.lastError) return 'failed';
+  if (connection.lastError) {
+    const checked = connection.lastCheckedAt && new Date(connection.lastCheckedAt);
+    const reviewed = connection.reviewedCheckAt && new Date(connection.reviewedCheckAt);
+    const earliestCheck = Number(malaysiaHour.format(now)) >= 10
+      ? malaysiaDate.format(now) : previousMalaysiaDate(now);
+    if (connection.connected && checked && reviewed && Number.isFinite(checked.getTime())
+      && checked.getTime() === reviewed.getTime() && checked <= now
+      && malaysiaDate.format(checked) >= earliestCheck && connection.reviewedError === connection.lastError) return 'reviewed';
+    return 'failed';
+  }
   if (!connection.connected || !connection.lastCheckedAt) return 'unconfirmed';
   const checked = new Date(connection.lastCheckedAt);
   if (!Number.isFinite(checked.getTime()) || checked > now) return 'unconfirmed';

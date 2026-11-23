@@ -38,12 +38,14 @@ export async function loadUnifiWebmailPassword() {
 }
 
 export async function getUnifiWebmailConnectionStatus() {
-  const result = await createAdminClient().from(connectionTable).select('last_checked_at,last_error').eq('id', true).maybeSingle();
+  const result = await createAdminClient().from(connectionTable).select('last_checked_at,last_error,reviewed_check_at,reviewed_error').eq('id', true).maybeSingle();
   if (result.error) throw Error('Unable to check the Webmail connection.');
   return {
     connected: Boolean(result.data),
     lastCheckedAt: result.data?.last_checked_at as string | null ?? null,
     lastError: result.data?.last_error as string | null ?? null,
+    reviewedCheckAt: result.data?.reviewed_check_at as string | null ?? null,
+    reviewedError: result.data?.reviewed_error as string | null ?? null,
   };
 }
 

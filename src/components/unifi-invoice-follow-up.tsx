@@ -12,6 +12,7 @@ const syncDetail = {
 
 export async function UnifiInvoiceFollowUp() {
   const { health, missing } = await getUnifiInvoiceFollowUp().catch(() => ({ health: "unavailable" as const, missing: [] }));
+  if (health === "reviewed") return null;
   if (health !== "ready") {
     return <DashboardActionFollowUp
       title="TM Unifi Webmail check needed"
