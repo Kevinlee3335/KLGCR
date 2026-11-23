@@ -56,3 +56,54 @@ it("seals Flex data, detects competing saves and protects the completed inspecti
     await db.close();
   }
 }, 20000);
+
+it("stores and seals separate Block A and B inspections for the same period as Flex", async () => {
+  const db = new PGlite();
+  const inspector = "00000000-0000-4000-8000-000000000001";
+  const absentProfile = "00000000-0000-4000-8000-000000000002";
+  try {
+    await db.exec(`
+      create role anon;
+      create role authenticated;
+      create role service_role bypassrls;
+      create table public.profiles(id uuid primary key);
+      insert into public.profiles values ('${inspector}');
+    `);
+    for (const migration of [
+      "20261116045750_flex_monthly_inspections",
+      "20261117073400_ab_fire_safety_inspections",
+    ]) {
+      await db.exec(readFileSync(`supabase/migrations/${migration}.sql`, "utf8"));
+    }
+
+    await db.exec("set role authenticated");
+    await expect(db.query("select * from public.ab_fire_safety_inspections")).rejects.toThrow("permission denied");
+    await db.exec("reset role; set role service_role;");
+
+    const draft = `insert into public.ab_fire_safety_inspections (period, inspection_date, updated_by, exceptions)
+      values ('2026-11', '2026-11-17', $1, '{"ab-unit":""}') returning revision`;
+    await expect(db.query(draft, [absentProfile])).rejects.toThrow("foreign key constraint");
+    expect((await db.query(draft, [inspector])).rows).toEqual([{ revision: 1 }]);
+    await expect(db.query(draft, [inspector])).rejects.toThrow("duplicate key");
+    await db.query(`insert into public.flex_inspections (period, inspection_date, updated_by)
+      values ('2026-11', '2026-11-17', $1)`, [inspector]);
+
+    const complete = `update public.ab_fire_safety_inspections set
+      revision=revision+1, completed_at=now(), inspected_by=$2, inspected_by_name='Inspector',
+      exceptions='{"ab-unit":"Blocked"}'
+      where period='2026-11' and revision=$1 and completed_at is null
+      returning revision, exceptions`;
+    expect((await db.query(complete, [5, inspector])).rows).toEqual([]);
+    expect((await db.query(complete, [1, inspector])).rows).toEqual([{
+      revision: 2, exceptions: { "ab-unit": "Blocked" },
+    }]);
+    await expect(db.query("update public.ab_fire_safety_inspections set revision=revision+1"))
+      .rejects.toThrow("completed Flex inspection cannot be changed");
+    expect((await db.query("select completed_at, exceptions from public.flex_inspections")).rows).toEqual([
+      { completed_at: null, exceptions: {} },
+    ]);
+    await expect(db.query("delete from public.ab_fire_safety_inspections")).rejects.toThrow("permission denied");
+  } finally {
+    await db.close();
+  }
+}, 20000);

@@ -2,6 +2,7 @@ import "./documents.css";
 import { AppShell } from "@/components/app-shell";
 import { DocumentsPanel } from "@/components/documents-panel";
 import { requireRole } from "@/lib/auth";
+import { FIRE_SAFETY_ARCHIVE_PATH, FIRE_SAFETY_ARCHIVE_ROLES, FIRE_SAFETY_ARCHIVE_TITLE } from "@/lib/fire-safety-inspection-folders";
 import { listSupplierCompanies } from "@/lib/supplier-mail/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,5 +50,8 @@ export default async function DocumentsPage() {
     ]) : [],
     canManage ? loadSupplierFolders(supabase) : [],
   ]);
-  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={documents} canManage={canManage} companyFolders={[...businessFolders,...companyFolders]}/>}</AppShell>;
+  const inspectionFolders = FIRE_SAFETY_ARCHIVE_ROLES.includes(profile.role)
+    ? [{ name: FIRE_SAFETY_ARCHIVE_TITLE, href: FIRE_SAFETY_ARCHIVE_PATH, count: null }]
+    : [];
+  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={documents} canManage={canManage} companyFolders={[...businessFolders,...inspectionFolders,...companyFolders]}/>}</AppShell>;
 }

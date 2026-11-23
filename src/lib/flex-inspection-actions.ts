@@ -1,10 +1,15 @@
 "use server";
 
+import { after } from "next/server";
 import { z } from "zod";
+import { loadAbInspectionGroups } from "@/lib/ab-inspection-catalog";
+import { generateAbInspectionPdf } from "@/lib/ab-inspection-pdf";
 import { getSessionProfile } from "@/lib/auth";
+import { archiveFireSafetyInspection } from "@/lib/fire-safety-inspection-archive";
 import {
   FLEX_INSPECTION_ROLES,
   FLEX_REMARK_MAX_LENGTH,
+  isAbReportType,
   isFlexPeriod,
   isFlexReportType,
   type FlexSaveInput,
@@ -32,10 +37,11 @@ const saveSchema = z.object({
   complete: z.boolean(),
 });
 
-export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSaveResult> {
+async function saveInspection(input: FlexSaveInput, scope: "ab" | "cd"): Promise<FlexSaveResult> {
+  const inspectionName = scope === "ab" ? "Block A & B fire safety" : "Flex";
   const profile = await getSessionProfile();
   if (!profile || !FLEX_INSPECTION_ROLES.includes(profile.role)) {
-    return { ok: false, message: "You do not have access to Flex inspections." };
+    return { ok: false, message: `You do not have access to ${inspectionName} inspections.` };
   }
 
   const parsed = saveSchema.safeParse(input);
@@ -63,7 +69,7 @@ export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSave
   }
 
   try {
-    const groups = await loadFlexGroups();
+    const groups = await (scope === "ab" ? loadAbInspectionGroups() : loadFlexGroups());
     const unitIds = new Set(groups.flatMap((group) => group.units.map((unit) => unit.id)));
     if (Object.keys(details.exceptions).some((id) => !unitIds.has(id))) {
       return { ok: false, message: "The inspection contains an unknown equipment item. Reload the checklist." };
@@ -95,16 +101,38 @@ export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSave
       }
     }
 
-    const inspection = await writeFlexInspection(details, profile, signature);
+    const inspection = await writeFlexInspection(details, profile, signature, scope);
     if (!inspection) {
       return { ok: false, code: "conflict", message: "This month's inspection has changed. Reload it before saving again." };
+    }
+    if (inspection.completedAt) {
+      const { period } = inspection;
+      try {
+        after(async () => {
+          try {
+            await archiveFireSafetyInspection(scope, period);
+          } catch {
+            console.error("Fire safety inspection PDF could not be archived", { scope, period });
+          }
+        });
+      } catch {
+        console.error("Fire safety inspection PDF could not be queued for archiving", { scope, period });
+      }
     }
     return { ok: true, inspection };
   } catch (error) {
     const message = typeof error === "object" && error && "message" in error ? error.message : undefined;
-    console.error("Flex inspection could not be saved", message);
-    return { ok: false, message: "Could not save the Flex inspection. Try again." };
+    console.error("Fire safety inspection could not be saved", { scope, message });
+    return { ok: false, message: `Could not save the ${inspectionName} inspection. Try again.` };
   }
+}
+
+export async function saveFlexInspection(input: FlexSaveInput): Promise<FlexSaveResult> {
+  return saveInspection(input, "cd");
+}
+
+export async function saveAbFireSafetyInspection(input: FlexSaveInput): Promise<FlexSaveResult> {
+  return saveInspection(input, "ab");
 }
 
 export async function downloadFlexPreviewReport(report: string, input: FlexSaveInput) {
@@ -116,6 +144,21 @@ export async function downloadFlexPreviewReport(report: string, input: FlexSaveI
 
   try {
     const pdf = await generateFlexInspectionPdf(report, result.inspection);
+    return { ok: true as const, content: Buffer.from(pdf).toString("base64") };
+  } catch {
+    return { ok: false as const, message: "The preview report could not be generated. Try again." };
+  }
+}
+
+export async function downloadAbInspectionPreviewReport(report: string, input: FlexSaveInput) {
+  if (!isFlexPreview() || !isAbReportType(report) || !input?.complete) {
+    return { ok: false as const, message: "This preview report is unavailable." };
+  }
+  const result = await saveAbFireSafetyInspection(input);
+  if (!result.ok) return result;
+
+  try {
+    const pdf = await generateAbInspectionPdf(report, result.inspection);
     return { ok: true as const, content: Buffer.from(pdf).toString("base64") };
   } catch {
     return { ok: false as const, message: "The preview report could not be generated. Try again." };
