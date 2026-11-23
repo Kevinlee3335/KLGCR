@@ -16,7 +16,7 @@ function readyRoomsQuery(
  bounds: ReturnType<typeof occupancyBounds>,
  options?: {count: 'exact'; head: true},
 ) {
- const query = db.from('checkout_rooms').select(columns, options).is('deleted_at', null).eq('status', 'ready_for_occupancy');
+ const query = db.from('checkout_rooms').select(columns, options).is('deleted_at', null).is('batch_archived_at', null).eq('status', 'ready_for_occupancy');
  return bounds ? query.gte('ready_at', bounds.start).lt('ready_at', bounds.end) : query;
 }
 

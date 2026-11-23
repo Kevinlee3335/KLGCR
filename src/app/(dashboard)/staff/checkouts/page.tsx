@@ -12,7 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const column = isCleaner ? "cleaner_id" : "assigned_to";
   const { data, error } = await db.from("checkout_rooms")
     .select("id,reference_no,room_no,utmspace_defects,status,block:blocks!block_id(code)")
-    .is("deleted_at", null).eq(column, profile.id).order("updated_at", { ascending: false });
+    .is("deleted_at", null).is("batch_archived_at", null).eq(column, profile.id).order("updated_at", { ascending: false });
   const rows = (data || []) as unknown as Pick<CheckoutRoom, "id" | "reference_no" | "room_no" | "utmspace_defects" | "status" | "block">[];
   if (!isCleaner) {
     // Keep the latest updates first within each group and surface rooms that still need repair.

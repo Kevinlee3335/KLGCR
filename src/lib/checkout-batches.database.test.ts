@@ -1,0 +1,82 @@
+// @vitest-environment node
+import {readFileSync} from 'node:fs';
+import {PGlite} from '@electric-sql/pglite';
+import {expect,it} from 'vitest';
+const admin='00000000-0000-4000-8000-000000000001',worker='00000000-0000-4000-8000-000000000002',viewer='00000000-0000-4000-8000-000000000003',room='00000000-0000-4000-8000-000000000010',item='00000000-0000-4000-8000-000000000020';
+const fixture=`
+create role anon;create role authenticated;create schema auth;create schema storage;
+create function auth.uid() returns uuid language sql as $$select nullif(current_setting('app.uid',true),'')::uuid$$;
+create table profiles(id uuid primary key,full_name text,role text);
+create function public.is_admin() returns boolean language sql as $$select exists(select 1 from public.profiles where id=auth.uid() and role='admin')$$;
+create function public.is_management() returns boolean language sql as $$select exists(select 1 from public.profiles where id=auth.uid() and role in ('admin','management_viewer'))$$;
+create table blocks(id integer primary key,code text);
+create table checkout_rooms(id uuid primary key default gen_random_uuid(),reference_no text default 'TEST',block_id integer,room_no text,assigned_to uuid,cleaner_id uuid,created_by uuid,status text,created_at timestamptz default now(),ready_at timestamptz,deleted_at timestamptz,utmspace_defects text,inspection_notes text);
+create table checkout_defects(id uuid primary key default gen_random_uuid(),checkout_room_id uuid,description text,status text,created_by uuid,rectified_by uuid,rectified_at timestamptz,created_at timestamptz default now());
+create table checkout_history(id bigint generated always as identity primary key,checkout_room_id uuid,actor_id uuid,action text,notes text,created_at timestamptz default now());
+create table checkout_photos(id uuid primary key default gen_random_uuid(),checkout_room_id uuid,uploaded_by uuid,storage_path text,created_at timestamptz default now());
+create table checkout_paint_tasks(id uuid primary key default gen_random_uuid(),checkout_room_id uuid,created_by uuid,status text,created_at timestamptz default now());
+create table inventory_items(id uuid primary key,item_code text,description text,unit text,inventory_group text,balance_qty numeric,is_active boolean default true,quantity_unverified boolean default false);
+create type inventory_adjustment_type as enum('stock_in','correction_add','correction_remove');
+create table inventory_adjustment_history(id bigint generated always as identity primary key,inventory_item_id uuid,adjustment_type inventory_adjustment_type,qty numeric,balance_before numeric,balance_after numeric,note text,adjusted_by uuid,adjusted_at timestamptz default now());
+create table material_requests(id uuid primary key default gen_random_uuid(),checkout_room_id uuid,request_no text default 'MR-1',requested_by uuid,reviewed_by uuid,issued_by uuid,status text,created_at timestamptz default now());
+create table material_request_items(id uuid primary key default gen_random_uuid(),request_id uuid,inventory_item_id uuid,requested_qty numeric,approved_qty numeric,issued_qty numeric,other_item_name text,line_status text default 'active',approved_by uuid,decided_by uuid);
+create table material_request_item_history(id bigint generated always as identity primary key,request_id uuid,actor_id uuid,created_at timestamptz default now());
+create table inventory_issue_history(id bigint generated always as identity primary key,checkout_room_id uuid,inventory_item_id uuid,qty numeric,staff_id uuid,issued_by uuid,issued_at timestamptz default now());
+create table system_documents(id uuid primary key,file_name text,storage_path text,size_bytes bigint,uploaded_by uuid,category text);
+create table storage.objects(bucket_id text,name text,metadata jsonb);
+alter table storage.objects enable row level security;
+create policy "management delete document files" on storage.objects for delete using(true);
+create function public.amend_material_request_item(uuid,uuid,text,text,uuid,numeric,numeric) returns void language plpgsql as $$begin
+ update public.material_request_items set line_status='cancelled' where id=$2;
+ update public.material_requests set status='rejected' where id=$1;
+end$$;
+insert into profiles values('${admin}','Admin','admin'),('${worker}','Worker','maintenance_staff'),('${viewer}','Viewer','management_viewer');
+insert into blocks values(1,'A');
+insert into checkout_rooms(id,block_id,room_no,assigned_to,created_by,status,utmspace_defects,ready_at) values('${room}',1,'101','${worker}','${admin}','ready_for_occupancy','No Defect',now());
+insert into inventory_items values('${item}','B01','Window Handle','pcs','building',10,true,false);
+insert into inventory_issue_history(checkout_room_id,inventory_item_id,qty,staff_id,issued_by) values('${room}','${item}',3,'${worker}','${admin}');
+`;
+it('archives atomically after both PDFs, retains old records, resets active totals, and isolates every subsequent batch',async()=>{
+ const db=new PGlite();try{
+  await db.exec(fixture);await db.exec(readFileSync('supabase/migrations/20261123081202_checkout_batches_reports.sql','utf8'));
+  const batch=(await db.query<{id:string}>('select id from checkout_batches')).rows[0].id;
+  await db.exec(`set app.uid='${worker}'`);await expect(db.query('select checkout_batch_snapshot($1)',[batch])).rejects.toThrow('Management access required');
+  await expect(db.query('select prepare_checkout_batch_close($1)',[batch])).rejects.toThrow('Administrator access required');
+  await db.exec(`set app.uid='${admin}'`);
+  const token='00000000-0000-4000-8000-000000000099';
+  await db.query('select return_checkout_material($1,$2,$3,$4,$5,$6,$7)',[token,batch,'issue',1,1,'Worker','Unused']);
+  await db.query('select return_checkout_material($1,$2,$3,$4,$5,$6,$7)',[token,batch,'issue',1,1,'Worker','Unused']);
+  expect((await db.query<{balance_qty:string}>('select balance_qty from inventory_items')).rows[0].balance_qty).toBe('11');
+  await expect(db.query('select return_checkout_material(gen_random_uuid(),$1,$2,$3,$4,$5,$6)',[batch,'issue',1,3,'Worker','Too much'])).rejects.toThrow('Return exceeds');
+  await db.query('select record_checkout_stockout($1,$2,$3,$4,$5)',[batch,item,2,'Cleaner','Check-out rooms']);
+  expect((await db.query<{balance_qty:string}>('select balance_qty from inventory_items')).rows[0].balance_qty).toBe('9');
+  await db.exec(`insert into material_requests(checkout_room_id,requested_by,status) values('${room}','${worker}','approved');insert into material_request_items(request_id,inventory_item_id,requested_qty,approved_qty) select id,'${item}',1,1 from material_requests;`);
+  await expect(db.query('select prepare_checkout_batch_close($1)',[batch])).rejects.toThrow('Review and confirm');
+  await db.query('select prepare_checkout_batch_close($1,true)',[batch]);
+  await expect(db.query("update checkout_rooms set status='cleaning' where id=$1",[room])).rejects.toThrow('archived or generating reports');
+  await expect(db.query("insert into checkout_photos(checkout_room_id,storage_path) values($1,'late.jpg')",[room])).rejects.toThrow('archived or generating reports');
+  await expect(db.query('select record_checkout_stockout($1,$2,1,$3,$4)',[batch,item,'Worker','late'])).rejects.toThrow('current active batch');
+  await expect(db.query('select finish_checkout_batch_close($1,$2,$3)',[batch,'bad','bad'])).rejects.toThrow('Invalid report paths');
+  const b=(await db.query<{summary_document_id:string;details_document_id:string}>('select * from checkout_batches where id=$1',[batch])).rows[0];
+  const summary=admin+'/'+b.summary_document_id+'/summary.pdf',details=admin+'/'+b.details_document_id+'/details.pdf';
+  await expect(db.query('select finish_checkout_batch_close($1,$2,$3)',[batch,summary,details])).rejects.toThrow('Both PDF uploads');
+  expect((await db.query<{state:string}>('select state from checkout_batches')).rows[0].state).toBe('closing');
+  await db.query("insert into storage.objects values('system-documents',$1,'{\"size\":100}'),('system-documents',$2,'{\"size\":200}')",[summary,details]);
+  await db.query('select finish_checkout_batch_close($1,$2,$3)',[batch,summary,details]);
+  await db.query('select finish_checkout_batch_close($1,$2,$3)',[batch,summary,details]);
+  expect((await db.query('select id from checkout_batches')).rows).toHaveLength(2);
+  expect((await db.query('select id from system_documents')).rows).toHaveLength(2);
+  expect((await db.query('select id from checkout_room_progress')).rows).toHaveLength(0);
+  expect((await db.query<{r:{total:number}}>("select checkout_status_report(current_date) r")).rows[0].r.total).toBe(0);
+  const snap=(await db.query<{s:{batch:{state:string};rooms:unknown[];issues:unknown[];stockouts:unknown[];returns:unknown[]}}>('select checkout_batch_snapshot($1) s',[batch])).rows[0].s;
+  expect(snap.batch.state).toBe('closed');expect(snap.rooms).toHaveLength(1);expect(snap.issues).toHaveLength(1);expect(snap.stockouts).toHaveLength(1);expect(snap.returns).toHaveLength(1);
+  // The historic inspection remains queryable for the existing 30-day lookup.
+  expect((await db.query('select id from checkout_rooms where id=$1 and deleted_at is null and created_at>now()-interval \'30 days\'',[room])).rows).toHaveLength(1);
+  await expect(db.query('delete from system_documents')).rejects.toThrow('retained in Batch History');
+  await db.exec("insert into checkout_rooms(block_id,room_no,status,utmspace_defects) values(1,'101','second_inspection','No Defect')");
+  expect((await db.query('select id from checkout_room_progress')).rows).toHaveLength(1);
+  expect((await db.query<{r:{total:number}}>("select checkout_status_report(current_date) r")).rows[0].r.total).toBe(1);
+  await db.exec(`set app.uid='${viewer}'`);expect((await db.query('select checkout_batch_snapshot($1)',[batch])).rows).toHaveLength(1);
+  await expect(db.query('select prepare_checkout_batch_close($1)',[batch])).rejects.toThrow('Administrator access required');
+ }finally{await db.close();}
+},30_000);

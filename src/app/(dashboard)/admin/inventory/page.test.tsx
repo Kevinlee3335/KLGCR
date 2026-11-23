@@ -45,6 +45,8 @@ beforeEach(() => {
       eq(column: string, value: string) { if (column === "inventory_group") request.store = value; return query; },
       or(search: string) { request.search = search; return query; },
       order() { return query; },
+      in() { return query; },
+      async maybeSingle() { return {data:table === "checkout_batches" ? {id:"batch-1",batch_no:"COB-2026-0001",state:"active"} : null,error:null}; },
       async range(from: number, to: number) {
         if (table !== "inventory_items") return { data: [], count: 0, error: null };
         inventoryReads.push({ ...request, from, to });

@@ -24,7 +24,7 @@ export async function loadCheckoutProgressPage(db: SupabaseClient, filters: Chec
   else if (search) query = query.or(`search_room.like.%${search}%,search_room_number.like.%${search}%`);
   const result = await query.order("status_rank").order("block_code").order("sort_room_prefix").order("sort_room_number").order("reference_no").order("id").range(offset, offset + PAGE_SIZE);
   if (viewUnavailable(result.error)) {
-    const legacy = await db.from("checkout_rooms").select(LEGACY_COLUMNS).is("deleted_at", null).order("updated_at", { ascending: false });
+    const legacy = await db.from("checkout_rooms").select(LEGACY_COLUMNS).is("deleted_at", null).is("batch_archived_at", null).order("updated_at", { ascending: false });
     return { rows: (legacy.data || []) as unknown as LegacyCheckoutProgressRow[], error: legacy.error, paginated: false, hasNext: false };
   }
   const rows = (result.data || []) as CheckoutProgressRow[];
@@ -55,7 +55,7 @@ export async function loadCheckoutOverviewRooms(db: SupabaseClient) {
 async function loadLegacyCheckoutOverviewRooms(db: SupabaseClient) {
   const { data, error } = await db.from("checkout_rooms")
     .select("id,room_no,status,utmspace_defects,assigned_to,cleaner_id,block:blocks!block_id(code),defects:checkout_defects(description,status)")
-    .is("deleted_at", null);
+    .is("deleted_at", null).is("batch_archived_at", null);
   const rooms = (data || []) as unknown as LegacyCheckoutProgressRow[];
   return {
     rooms: rooms.map(room => {

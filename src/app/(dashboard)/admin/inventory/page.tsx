@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { activeCheckoutBatch } from "@/lib/checkout-batches.server";
 import { AppShell } from "@/components/app-shell";
 import { ItemsToOrder } from "@/components/items-to-order";
 import { InventoryItemFinder } from "@/components/inventory-item-finder";
@@ -39,6 +40,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
+  const checkoutBatch = await activeCheckoutBatch(supabase);
   const store = query.store === "office" ? "office" : query.store === "cleaner" ? "cleaner" : "building";
   const storeTitle = {building:"Building Material",office:"Office Inventory",cleaner:"Cleaner Supplies"}[store];
   const base = `/admin/inventory?store=${store}`;
@@ -107,6 +109,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <div className="section-head compact-head"><div><p className="eyebrow">Stock Movement</p><h3>Stock Out</h3><p className="subtle">Record materials collected by General Staff or other recipients.</p></div><Link className="button secondary-button" prefetch={false} href={`${base}&view=all#inventory-stock-list`}>Stock In / Adjust</Link></div>
       <form action="/admin/inventory/action" method="post" className="inventory-form">
         <input type="hidden" name="action" value="stock_out"/><input type="hidden" name="store" value={store}/>
+        <label className="span-2"><span>Usage / Check-out Batch</span><select name="checkoutBatchId" required defaultValue=""><option value="" disabled>Select the purpose of this stock-out</option>{checkoutBatch?.state === "active" && <option value={checkoutBatch.id}>Check-out rooms · {checkoutBatch.batch_no}</option>}<option value="other">Other work (outside the check-out batch)</option></select></label>
         <StockOutItemPicker items={pickerItems.filter((item) => !item.quantity_unverified)}/>
         <label><span>Quantity</span><input name="qty" type="number" min="0.01" step="0.01" required/></label>
         <label><span>Taken By</span><input name="takenBy" placeholder="Name of person collecting" maxLength={100} required/></label>

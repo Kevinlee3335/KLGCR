@@ -46,6 +46,9 @@ export async function deleteDocument(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.from("system_documents").select("storage_path").eq("id",id).single();
   if (error || !data) throw new Error("Document not found.");
+  const {data:batchReport,error:batchError}=await supabase.from("checkout_batches").select("id").or(`summary_document_id.eq.${id},details_document_id.eq.${id}`).maybeSingle();
+  if(batchError) throw new Error("Unable to verify document protection.");
+  if(batchReport) throw new Error("Batch reports are retained in Batch History and cannot be deleted.");
   const removed = await supabase.storage.from(bucket).remove([data.storage_path]);
   if (removed.error) throw new Error(removed.error.message);
   const deleted = await supabase.from("system_documents").delete().eq("id",id);

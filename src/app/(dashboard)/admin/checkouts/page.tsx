@@ -1,3 +1,4 @@
+import { CheckoutBatchBanner } from "@/components/checkout-batch-banner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
@@ -128,6 +129,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
 
   return <AppShell profile={profile} title="Check-out Rooms">
     <div className="checkout-overview">
+      <CheckoutBatchBanner canManage={isAdmin}/>
       <div className="checkout-overview-header">
         <h2>Check-out room readiness</h2>
         <div className="checkout-overview-actions">

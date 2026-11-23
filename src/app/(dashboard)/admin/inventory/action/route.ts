@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     const qty = numberField(form.get("qty"));
     const takenBy = String(form.get("takenBy") || "").trim();
     const purpose = String(form.get("note") || "").trim();
+    const checkoutBatchId = String(form.get("checkoutBatchId") || "");
     if (!itemId || !Number.isFinite(qty) || qty! <= 0 || Math.abs(qty! * 100 - Math.round(qty! * 100)) > 0.000001 || !takenBy || takenBy.length > 100 || !purpose || purpose.length > 500) {
       url.searchParams.set("error", "Enter a valid quantity, recipient and purpose.");
       return NextResponse.redirect(url, 303);
@@ -105,10 +106,9 @@ export async function POST(request: Request) {
       return NextResponse.redirect(url, 303);
     }
     // The existing RPC locks the item and commits the deduction and audit row together.
-    ({ error } = await supabase.rpc("adjust_inventory_item", {
-      p_item_id: itemId, p_type: "correction_remove", p_qty: qty,
-      p_note: `Stock Out | Taken by: ${takenBy} | Purpose: ${purpose}`,
-    }));
+    ({ error } = checkoutBatchId && checkoutBatchId !== "other"
+      ? await supabase.rpc("record_checkout_stockout", {p_batch_id:checkoutBatchId,p_item_id:itemId,p_qty:qty,p_taken_by:takenBy,p_note:purpose})
+      : await supabase.rpc("adjust_inventory_item", {p_item_id:itemId,p_type:"correction_remove",p_qty:qty,p_note:`Stock Out | Taken by: ${takenBy} | Purpose: ${purpose}`}));
   } else if (action === "adjust") {
     const itemId = String(form.get("itemId") || "");
     const qty = numberField(form.get("qty"));

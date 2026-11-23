@@ -125,7 +125,7 @@ export async function createCheckoutBatch(input:BatchCheckoutInput[]){
   if(roomNo.length>80||defects.some(x=>x.length>2000))return {error:"One room number or defect description is too long."};
   const roomKey=blockId+":"+roomNo.toLowerCase();if(seen.has(roomKey))return {error:"Duplicate room in this file: "+roomNo+"."};seen.add(roomKey);rooms.push({blockId,roomNo,defects});
  }
- const {data:existing,error:existingError}=await db.from("checkout_rooms").select("block_id,room_no").is("deleted_at",null);
+ const {data:existing,error:existingError}=await db.from("checkout_rooms").select("block_id,room_no").is("deleted_at",null).is("batch_archived_at",null);
  if(existingError)return {error:existingError.message};
  const present=new Set((existing||[]).map(r=>String(r.block_id)+":"+String(r.room_no).toLowerCase()));
  const fresh=rooms.filter(r=>!present.has(String(r.blockId)+":"+r.roomNo.toLowerCase()));

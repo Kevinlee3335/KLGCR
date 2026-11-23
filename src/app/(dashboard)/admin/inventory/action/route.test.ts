@@ -41,3 +41,10 @@ it('rejects missing or cross-store categories before allocating any number',asyn
  }
  expect(mocks.numbered).not.toHaveBeenCalled();
 });
+
+it('attributes check-out stock-outs to the chosen batch before stock sync',async()=>{
+ const url=await submit({checkoutBatchId:'11111111-1111-4111-8111-111111111111',store:'cleaner'});
+ expect(mocks.rpc).toHaveBeenCalledWith('record_checkout_stockout',{p_batch_id:'11111111-1111-4111-8111-111111111111',p_item_id:'item',p_qty:2,p_taken_by:'General Staff',p_note:'Paint room A103'});
+ expect(mocks.rpc).not.toHaveBeenCalledWith('adjust_inventory_item',expect.anything());
+ expect(url.searchParams.get('success')).toBe('stock_out');
+});

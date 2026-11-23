@@ -31,6 +31,7 @@ export default async function DocumentsPage() {
   const [{ documents, error }, businessFolders, companyFolders] = await Promise.all([
     loadDocuments(supabase),
     canManage ? Promise.all([
+      { name: "Check-out Batch Reports", href: "/documents/check-out-batches", count: null },
       { name: "Utility Reading History", href: "/documents/utility-readings", count: null },
       { name: "Receipts", href: "/documents/receipts", count: null },
       ...(["rental", "utility"] as const).map(async kind => {

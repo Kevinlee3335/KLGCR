@@ -1,13 +1,14 @@
 export const documentCategories = [
   'Bomba Approved Plans', 'Approved Passive Plans', 'Fire Protection Systems',
-  'Room Layout & Information', 'Room Photos & Mock-ups', 'Site Plans & Survey',
+  'Check-out Batch Reports', 'Room Layout & Information', 'Room Photos & Mock-ups', 'Site Plans & Survey',
   'Furniture & Damage Charges', 'Lift Documents', 'Clinic Plans', 'Other Documents',
 ] as const;
 export type DocumentCategory = typeof documentCategories[number];
 export function classifyDocument(name: string) {
   const value = name.toLowerCase();
   let category: DocumentCategory = 'Other Documents';
-  if (value.includes('approved bomba plan')) category = 'Bomba Approved Plans';
+  if (/cob-\d{4}-\d+|checkout.*batch|check-out.*batch/.test(value)) category = 'Check-out Batch Reports';
+  else if (value.includes('approved bomba plan')) category = 'Bomba Approved Plans';
   else if (value.includes('approved passive plan')) category = 'Approved Passive Plans';
   else if (/key.*location.*layout plan|pelan pra|pengukuran/.test(value)) category = 'Site Plans & Survey';
   else if (/fire alarm|hydrant|hosereel|breaching|water tank.*pump|schematic.*(mrs|main panels)/.test(value)) category = 'Fire Protection Systems';
