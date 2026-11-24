@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ['pdfjs-dist', 'imapflow'],
+  serverExternalPackages: ['pdfjs-dist', 'imapflow', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
+    // PDF.js loads its graphics bindings and worker dynamically. Keep these
+    // runtime assets in every function that reads a Unifi PDF.
+    "/api/cron/unifi-invoices": ["./node_modules/@napi-rs/canvas*/**/*", "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+    "/api/unifi-invoices/sync": ["./node_modules/@napi-rs/canvas*/**/*", "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+    "/api/unifi-invoices/import": ["./node_modules/@napi-rs/canvas*/**/*", "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
     "/api/checkouts/batches/*/close": ["./public/klg-campus-residence-logo.png", "./src/lib/finance-fonts/*.ttf"],
     "/api/cron/billing-mail": ["./public/billing/logo.jpg"],
     "/admin/document-review/*/*": ["./public/billing/logo.jpg", "./public/billing/receipt-letterhead.png", "./src/lib/finance-fonts/*.ttf"],

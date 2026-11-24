@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   try {
     const result = await syncUnifiWebmail();
     if (result.status === 'not_connected') url.searchParams.set('error', 'Connect Webmail before checking for invoices.');
+    else if (result.needsReview) url.searchParams.set('error', `Webmail checked: ${result.imported} invoice(s) imported; ${result.needsReview} attachment(s) failed. See the Webmail connection details below.`);
     else url.searchParams.set('synced', String(result.imported));
   } catch {
     url.searchParams.set('error', 'Unable to check TM Unifi Webmail. Check the connection and try again.');
