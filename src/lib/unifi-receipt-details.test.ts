@@ -41,4 +41,5 @@ it('accepts receipt subjects and strips markup without treating invoice or overd
 it('reads the observed Unifi email receipt template with day-first dates and an AP receipt number',()=>{
  const receipt=unifiReceiptDetails('Payment Receipt\nReceipt\nAP2660253020\nPayment Date\n08-10-2026 16:24:52\nBilling Account 1043057825\nPaid Amount\nRM369.95');
  expect(receipt).toMatchObject({account_number:'1043057825',payment_date:'2026-10-08',receipt_number:'AP2660253020',amount:369.95});
+ expect(unifiReceiptDetails('Receipt\nA2667561037\nPayment Date\n11-11-2026 15:13:39\nBilling Account 1043057825\nPaid Amount\nRM369.95')).toMatchObject({payment_date:'2026-11-11',receipt_number:'A2667561037'});
 });

@@ -29,12 +29,12 @@ export function unifiReceiptDetails(text: string) {
   const normalized = text.normalize('NFKC');
   // Unifi's observed receipt template labels Billing Account and uses DD-MM-YYYY.
   const unifiTemplate = /\bbilling account\s+\d{10}\b/i.test(normalized)
-    && /\breceipt\s+AP\d{8,}\b/i.test(normalized) && /\bpaid amount\b/i.test(normalized);
+    && /\breceipt\s+A(?:P)?\d{8,}\b/i.test(normalized) && /\bpaid amount\b/i.test(normalized);
   const accounts = [...new Set([...normalized.matchAll(/\baccount\s*(?:no\.?|number)?\s*[:#-]?\s*(\d{10})\b/gi)].map(match => match[1]))];
   const dates = [...new Set([...normalized.matchAll(/\b(?:(?:payment|transaction|receipt)\s+date|paid\s+on|payment\s+on|date\s+of\s+payment)\s*[:#-]?\s*([^\n]{4,40})/gi)]
     .map(match => paymentDate(match[1], unifiTemplate)).filter((date): date is string => Boolean(date)))];
   const amount = normalized.match(/\b(?:payment amount|amount paid|paid amount|amount received|total payment|amount)\s*[:=-]?\s*(?:RM|MYR)\s*([\d,]+\.\d{2})\b/i)?.[1];
-  const receiptNumber = normalized.match(/\b(?:receipt\s*(?:no\.?|number)|(?:payment |transaction )?(?:reference|ref\.?|id))\s*[:#]\s*([a-z0-9][a-z0-9/-]{3,80})\b/i)?.[1] ?? normalized.match(/\breceipt\s+(AP\d{8,})\b/i)?.[1] ?? null;
+  const receiptNumber = normalized.match(/\b(?:receipt\s*(?:no\.?|number)|(?:payment |transaction )?(?:reference|ref\.?|id))\s*[:#]\s*([a-z0-9][a-z0-9/-]{3,80})\b/i)?.[1] ?? normalized.match(/\breceipt\s+(A(?:P)?\d{8,})\b/i)?.[1] ?? null;
   return {
     account_number: accounts.length === 1 ? accounts[0] : null,
     payment_date: dates.length === 1 ? dates[0] : null,
