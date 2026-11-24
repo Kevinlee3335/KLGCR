@@ -4,7 +4,12 @@ import { unifiBillingMonth, unifiFirstBillingMonth, unifiFirstPage, unifiInvoice
 import { listUnifiInvoices, storeUnifiInvoice } from './unifi-invoices';
 import { loadUnifiWebmailPassword, recordUnifiWebmailCheck, unifiWebmailAddress, unifiWebmailHost } from './unifi-webmail-connection';
 
-const sender = 'noreply@unifi.com.my';
+import { unifiMailboxes, unifiMailSenders } from './unifi-mailboxes';
+import { syncUnifiReceiptFolder } from './unifi-receipt-webmail';
+import { rematchUnifiReceipts } from './unifi-receipts';
+import { createAdminClient } from './supabase/admin';
+import { isUnifiReceiptSubject } from './unifi-receipt-details';
+
 const invoiceFilePattern = /^INV\d+\.pdf$/i;
 
 export function unifiPdfParts(node?: MessageStructureObject): { part: string; fileName: string }[] {
@@ -44,9 +49,21 @@ export async function verifyUnifiWebmailPassword(password: string) {
 
 export async function syncUnifiWebmail() {
   const password = await loadUnifiWebmailPassword();
-  if (!password) return { status: 'not_connected', imported: 0, needsReview: 0 };
+  if (!password) return { status: 'not_connected', imported: 0, needsReview: 0, receiptImported: 0, receiptErrors: 0, receiptRemaining: 0, folders: [] as string[] };
   try {
     const result = await checkInbox(password);
+    await rematchUnifiReceipts();
+    const receiptStatus = await createAdminClient().from('unifi_webmail_connection').update({
+      receipt_checked_at: new Date().toISOString(),
+      checked_folders: result.folders,
+      receipt_last_error: result.receiptErrors ? `${result.receiptErrors} receipt email(s) could not be archived.`
+        : result.receiptRemaining ? 'Receipt backfill is in progress. Run Sync now again to continue.' : null,
+    }).eq('id', true);
+    if (receiptStatus.error) throw Error('Unable to save the receipt sync status.');
+    if (!result.receiptErrors && !result.receiptRemaining) {
+      const reminders = await createAdminClient().rpc('queue_unifi_payment_checks');
+      if (reminders.error) throw Error('Unable to queue Unifi payment receipt reminders.');
+    }
     await recordUnifiWebmailCheck(result.needsReview
       ? `${result.needsReview} invoice attachment(s) could not be imported. ${result.failures.slice(0, 5).join(' ')}`
       : null, true);
@@ -59,20 +76,22 @@ export async function syncUnifiWebmail() {
 
 async function checkInbox(password: string) {
   const client = imapClient(password);
-  const counts = { status: 'checked', imported: 0, needsReview: 0, failures: [] as string[] };
+  const counts = { status: 'checked', imported: 0, needsReview: 0, failures: [] as string[], receiptImported: 0, receiptErrors: 0, receiptRemaining: 0, folders: [] as string[] };
   try {
     const archived = new Set((await listUnifiInvoices())
       .filter(invoice => invoice.invoice_number)
       .map(invoice => invoice.period + '/' + invoice.invoice_number));
     await client.connect();
-    const lock = await client.getMailboxLock('INBOX', { readOnly: true });
+    for (const folder of await unifiMailboxes(client)) {
+    counts.folders.push(folder);
+    const lock = await client.getMailboxLock(folder, { readOnly: true });
     try {
-      const ids = await client.search({ since: new Date('2026-09-01T00:00:00Z'), from: sender, subject: 'Your Unifi bill for' }, { uid: true });
-      if (!ids || !ids.length) return counts;
-      const messages = await client.fetchAll(ids, { envelope: true, bodyStructure: true, internalDate: true }, { uid: true });
+      const ids = await client.search({ since: new Date('2026-09-01T00:00:00Z'), or: unifiMailSenders.map(from=>({from})) }, { uid: true });
+      const messages = ids && ids.length ? await client.fetchAll(ids, { envelope: true, bodyStructure: true, internalDate: true }, { uid: true }) : [];
       for (const message of messages) {
         const envelope = message.envelope;
-        if (envelope?.from?.length !== 1 || envelope.from[0].address?.trim().toLowerCase() !== sender) continue;
+        if (envelope?.from?.length !== 1 || !unifiMailSenders.includes(envelope.from[0].address?.trim().toLowerCase() || '')
+          || isUnifiReceiptSubject(envelope.subject || '')) continue;
         const month = unifiBillingMonth(envelope.subject ?? '');
         if (!month || month < unifiFirstBillingMonth) continue;
         const parts = unifiPdfParts(message.bodyStructure);
@@ -108,7 +127,7 @@ async function checkInbox(password: string) {
             const item = await storeUnifiInvoice({
               period: month,
               source: 'webmail',
-              sourceMessageId: envelope.messageId || `inbox:${client.mailbox ? client.mailbox.uidValidity : 'unknown'}:${message.uid}`,
+              sourceMessageId: envelope.messageId || `${folder}:${client.mailbox ? client.mailbox.uidValidity : 'unknown'}:${message.uid}`,
               invoiceNumber,
               accountNumber: details.accountNumber,
               dueDate: details.dueDate,
@@ -129,12 +148,17 @@ async function checkInbox(password: string) {
               : error instanceof Error && /worker/i.test(error.message)
                 ? ' (PDF worker unavailable)'
                 : '';
-            counts.failures.push(`${part.fileName}: could not ${step}${reason}.`);
+            counts.failures.push(`${folder}/${part.fileName}: could not ${step}${reason}.`);
           }
         }
       }
+      const receipts = await syncUnifiReceiptFolder(client,folder,unifiMailSenders);
+      counts.receiptImported += receipts.imported;
+      counts.receiptErrors += receipts.errors;
+      counts.receiptRemaining += receipts.remaining;
     } finally {
       lock.release();
+    }
     }
     return counts;
   } finally {

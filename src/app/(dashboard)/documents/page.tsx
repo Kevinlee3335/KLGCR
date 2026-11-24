@@ -34,6 +34,7 @@ export default async function DocumentsPage() {
       { name: "Check-out Batch Reports", href: "/documents/check-out-batches", count: null },
       { name: "Utility Reading History", href: "/documents/utility-readings", count: null },
       { name: "Receipts", href: "/documents/receipts", count: null },
+      { name: "TM Unifi Payment Receipts", href: "/documents/unifi-receipts", count: null },
       ...(["rental", "utility"] as const).map(async kind => {
         const result = await supabase.from("billing_document_index").select("run_id", { count: "exact", head: true }).eq("kind", kind);
         return { name: kind === "rental" ? "Rental" : "Utilities", href: `/documents/billing/${kind}`, count: result.error ? null : result.count || 0 };

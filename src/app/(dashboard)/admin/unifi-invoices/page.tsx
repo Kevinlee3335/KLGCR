@@ -9,9 +9,10 @@ import { isUnifiPendingStage, listUnifiInvoices, unifiInvoicePath } from "@/lib/
 import { getUnifiWebmailConnectionStatus } from "@/lib/unifi-webmail-connection";
 import { compareUnifiInvoicePeriodAndLine, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "./display";
 import styles from "./unifi-invoices.module.css";
+import { listUnifiReceipts, unifiReceiptsPath } from "@/lib/unifi-receipts";
 
 export default async function UnifiInvoicesPage({ searchParams }: {
-  searchParams: Promise<{ imported?: string; connected?: string; synced?: string; error?: string }>;
+  searchParams: Promise<{ imported?: string; connected?: string; synced?: string; receipts?: string; error?: string }>;
 }) {
   const [profile, query] = await Promise.all([requireRole(["admin"]), searchParams]);
   const canConnectWebmail = profile.is_super_admin && profile.username === "kevinlee3335";
@@ -20,6 +21,8 @@ export default async function UnifiInvoicesPage({ searchParams }: {
     canConnectWebmail ? getUnifiWebmailConnectionStatus().catch(() => null) : null,
   ]);
   const reviewer = documentReviewerStage(profile.id);
+  const receipts = await listUnifiReceipts().catch(() => []);
+  const receiptInvoices = new Set(receipts.map(receipt=>receipt.invoice_id));
   const approvedIds = invoices?.filter(invoice => invoice.review_stage === "approved").map(invoice => invoice.id) ?? [];
   const deliveries = approvedIds.length ? await listUnifiInvoiceDeliveries(approvedIds).catch(() => null) : null;
   const approved = approvedIds.length;
@@ -30,6 +33,8 @@ export default async function UnifiInvoicesPage({ searchParams }: {
   return (
     <AppShell profile={profile} title="TM Unifi Invoices">
       <div className={styles.page}>
+        <Link href={unifiReceiptsPath} className={`${controls.button} ${controls.secondary}`}>Payment receipts in Documents</Link>
+        {canConnectWebmail && query.receipts && /^\d+$/.test(query.receipts) && Number(query.receipts)>0 && <p className="success" role="status">Imported {query.receipts} payment receipt email(s) into Documents.</p>}
         {query.imported === "1" && <p className="success" role="status">Invoice saved. Open the record to see its review status.</p>}
         {canConnectWebmail && query.connected === "1" && <p className="success" role="status">Webmail connected.</p>}
         {canConnectWebmail && syncedCount !== null && <p className="success" role="status">
@@ -66,6 +71,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                   <th scope="col">Received date</th>
                   <th scope="col">Due date</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Payment receipt</th>
                   <th scope="col"><span className="sr-only">Actions</span></th>
                 </tr></thead>
                 <tbody>
@@ -96,6 +102,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
                             </span>}
                           </div>
                         </td>
+                        <td><Link href={`${unifiReceiptsPath}?invoice=${invoice.id}`}>{receiptInvoices.has(invoice.id) ? "Receipt received" : "No matched receipt"}</Link></td>
                         <td>
                           <Link href={`${unifiInvoicePath}/${invoice.id}`} className={`${controls.button} ${canReview ? controls.primary : controls.secondary} ${controls.small}`} aria-label={`${canReview ? "Review" : "Open"} ${month} invoice · ${line}`}>
                             {canReview ? "Review" : "Open"} <ArrowUpRight size={15} aria-hidden="true" />
@@ -126,6 +133,9 @@ export default async function UnifiInvoicesPage({ searchParams }: {
           </dl>
           {!connection && <p className="error" role="alert">Unable to check Webmail connection status. Please refresh.</p>}
           {connection?.lastError && <p className="error" role="alert">{connection.lastError}</p>}
+          <p className={styles.description}>Checked folders: {connection?.checkedFolders?.join(", ") || "Inbox and detected Junk / Spam folders"}.</p>
+          <p className={styles.description}>Receipt check: {connection?.receiptCheckedAt ? formatUnifiDateTime(connection.receiptCheckedAt) : "Not checked yet"}</p>
+          {connection?.receiptLastError && <p className="error">{connection.receiptLastError}</p>}
           <div className={styles.connectionActions}>
             <form className={styles.connectionForm} method="post" action="/api/unifi-invoices/connection">
               <label className={controls.label}>Webmail password

@@ -14,7 +14,9 @@ export async function POST(request: Request) {
       || request.headers.get('origin') !== url.origin) return new Response('Forbidden', { status: 403 });
   try {
     const result = await syncUnifiWebmail();
+    url.searchParams.set('receipts', String(result.receiptImported));
     if (result.status === 'not_connected') url.searchParams.set('error', 'Connect Webmail before checking for invoices.');
+    else if (result.receiptErrors || result.receiptRemaining) url.searchParams.set('error', 'Receipt sync needs attention or has more emails to process. See Webmail connection details and run Sync now again.');
     else if (result.needsReview) url.searchParams.set('error', `Webmail checked: ${result.imported} invoice(s) imported; ${result.needsReview} attachment(s) failed. See the Webmail connection details below.`);
     else url.searchParams.set('synced', String(result.imported));
   } catch {

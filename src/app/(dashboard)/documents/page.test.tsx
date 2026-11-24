@@ -79,7 +79,7 @@ it("starts business and supplier folder reads while the document list is pending
   expect(mocks.quotationSelect).toHaveBeenCalledWith("quotes:value->quotes");
   expect(screen.getByText("1 files")).toBeInTheDocument();
   expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual([
-    "Check-out Batch Reports · —", "Utility Reading History · —", "Receipts · —", "Rental · 3", "Utilities · 0",
+    "Check-out Batch Reports · —", "Utility Reading History · —", "Receipts · —", "TM Unifi Payment Receipts · —", "Rental · 3", "Utilities · 0",
     "Purchase Orders · 5", "Quotations · 2", "Sigma · 7", "MFE · —", "Lab Testing · 7",
   ]);
 });

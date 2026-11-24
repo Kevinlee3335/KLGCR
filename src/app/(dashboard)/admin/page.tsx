@@ -9,6 +9,7 @@ import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
 import { PaymentMailFollowUp } from "@/components/payment-mail-follow-up";
 import { PoApprovalQueue } from "@/components/po-approval-queue";
 import { SupplierMailSummary } from "@/components/supplier-mail-summary";
+import { UnifiPaymentFollowUp } from "@/components/unifi-payment-follow-up";
 import { UnifiInvoiceFollowUp } from "@/components/unifi-invoice-follow-up";
 import { UnifiReviewFollowUp } from "@/components/unifi-review-follow-up";
 import { loadAdminDashboardWorkload } from "@/lib/admin-dashboard-workload";
@@ -208,6 +209,7 @@ export default async function AdminPage() {
     {isAdmin && <Suspense fallback={null}><ComplianceReviewFollowUp userId={profile.id}/></Suspense>}
     {isAdmin && <Suspense fallback={null}><UnifiReviewFollowUp userId={profile.id}/></Suspense>}
     {isAdmin && <Suspense fallback={null}><UnifiInvoiceFollowUp/></Suspense>}
+    {isAdmin && <Suspense fallback={null}><UnifiPaymentFollowUp/></Suspense>}
     <Suspense fallback={null}><SupplierMailSummary/></Suspense>
     <Suspense fallback={<DashboardSummaryLoading/>}>
       <DashboardContent name={profile.full_name} summary={summary}>

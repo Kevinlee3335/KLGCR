@@ -40,21 +40,29 @@ export async function unifiFirstPage(bytes: Uint8Array) {
   return first.save();
 }
 
-export async function unifiInvoiceDetails(bytes: Uint8Array) {
+export async function unifiPdfText(bytes: Uint8Array, allPages = false) {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const task = getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, useSystemFonts: true });
   try {
     const document = await task.promise;
-    const page = await document.getPage(1);
-    const content = await page.getTextContent();
-    const text = content.items.map(item => 'str' in item ? item.str : '').join(' ');
+    const parts: string[] = [];
+    for (let number = 1; number <= (allPages ? Math.min(document.numPages, 10) : 1); number++) {
+      const page = await document.getPage(number);
+      const content = await page.getTextContent();
+      parts.push(content.items.map(item => 'str' in item ? item.str : '').join(' '));
+    }
+    return parts.join('\n').slice(0,200000);
+  } finally {
+    await task.destroy().catch(() => {});
+  }
+}
+
+export async function unifiInvoiceDetails(bytes: Uint8Array) {
+    const text = await unifiPdfText(bytes);
     return {
       period: unifiBillingMonth(text),
       invoiceNumber: unifiInvoiceNumber(text),
       accountNumber: text.match(/\bAccount\s+No\s*:\s*(\d{10})\b/i)?.[1] ?? null,
       dueDate: unifiDueDate(text),
     };
-  } finally {
-    await task.destroy().catch(() => {});
-  }
 }

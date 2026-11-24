@@ -12,6 +12,8 @@ import { getUnifiInvoice, isUnifiPendingStage, unifiInvoicePath } from "@/lib/un
 import { canManageUnifiInvoiceEmail, formatUnifiBillingMonth, formatUnifiDate, formatUnifiDateTime, formatUnifiLine, unifiEmailLabel, unifiReviewLabel } from "../display";
 import styles from "../unifi-invoices.module.css";
 import { retryUnifiInvoiceEmail, reviewUnifiInvoice } from "./actions";
+import { listUnifiReceipts, unifiReceiptsPath } from "@/lib/unifi-receipts";
+import { unifiPaymentCheckDate } from "@/lib/unifi-receipt-details";
 
 export const maxDuration = 60;
 
@@ -25,6 +27,7 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
   const invoice = await getUnifiInvoice(id);
   if (!invoice) notFound();
 
+  const receipts = (await listUnifiReceipts()).filter(receipt=>receipt.invoice_id===id);
   const stage = invoice.review_stage;
   const reviewPending = isUnifiPendingStage(stage);
   const reviewer = documentReviewerStage(profile.id);
@@ -112,6 +115,11 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
             </SubmitButton>
           </form>}
         </section>}
+        <section className="panel" aria-labelledby="unifi-payment-receipts">
+          <h2 className={styles.panelTitle} id="unifi-payment-receipts">Payment receipts</h2>
+          {receipts.length ? <p>{receipts.length} payment receipt(s) received and matched to this invoice.</p> : <p>No matched payment receipt received. {invoice.due_date && <>Follow-up starts {formatUnifiDate(unifiPaymentCheckDate(invoice.due_date))}, 7 days before the due date.</>}</p>}
+          <Link href={`${unifiReceiptsPath}${receipts.length ? `?invoice=${invoice.id}` : ''}`} className={`${controls.button} ${controls.secondary}`}>View payment receipts in Documents</Link>
+        </section>
         <section className="panel" aria-labelledby="unifi-invoice-preview">
           <div className={styles.detailHeader}>
             <div className={styles.heading}>
