@@ -79,25 +79,30 @@ export async function followUpMonitoringJob(jobId: string, data: FormData) {
 export async function superAdminUpdateJob(jobId:string,data:FormData) {
  await requireSuperAdmin();
  const parsed=z.object({
-  status:z.enum(["assigned","in_progress","pending_material","under_monitoring","completed","cancelled"]),
+  status:z.enum(["assigned","in_progress","pending_material","waiting_checkout","under_monitoring","completed","cancelled"]),
   reason:z.string().trim().min(3).max(2000),
+  checkoutDate:z.union([z.string().date("Choose a valid check-out date."),z.literal("")]),
   reviewDate:z.string().optional()
  }).safeParse({
   status:data.get("status"),
   reason:data.get("reason"),
+  checkoutDate:data.get("checkoutDate")||"",
   reviewDate:data.get("reviewDate")||""
  });
  if(!parsed.success)redirect(`/admin/jobs/${jobId}?error=${encodeURIComponent(parsed.error.issues[0]?.message||"Invalid update")}`);
- const {status,reason,reviewDate}=parsed.data;
+ const {status,reason,reviewDate,checkoutDate}=parsed.data;
+ if(status==="waiting_checkout"&&!checkoutDate)redirect(`/admin/jobs/${jobId}?error=Choose%20the%20check-out%20date`);
  if(status==="under_monitoring"&&(!reviewDate||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(reviewDate)))
   redirect(`/admin/jobs/${jobId}?error=Choose%20a%20future%20review%20date`);
  const db=await createClient();
- const {error}=await db.rpc("super_admin_update_maintenance_job",{
-  p_job:jobId,p_status:status,p_reason:reason,
-  p_review_at:status==="under_monitoring"?`${reviewDate}T09:00:00+08:00`:null
- });
+ const {error}=status==="waiting_checkout"
+  ? await db.rpc("super_admin_wait_for_checkout",{p_job:jobId,p_checkout_date:checkoutDate,p_reason:reason})
+  : await db.rpc("super_admin_update_maintenance_job",{
+    p_job:jobId,p_status:status,p_reason:reason,
+    p_review_at:status==="under_monitoring"?`${reviewDate}T09:00:00+08:00`:null
+   });
  if(error)redirect(`/admin/jobs/${jobId}?error=${encodeURIComponent(error.message)}`);
- for(const path of ["/admin","/admin/jobs",`/admin/jobs/${jobId}`,"/admin/complaints","/admin/super-admin","/staff","/staff/tasks","/staff/monitoring"])
+ for(const path of ["/admin","/admin/jobs",`/admin/jobs/${jobId}`,"/admin/complaints","/admin/super-admin","/staff","/staff/tasks","/staff/monitoring",`/staff/jobs/${jobId}`])
   revalidatePath(path);
  redirect(`/admin/jobs/${jobId}?superAdminUpdated=1`);
 }

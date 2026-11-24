@@ -4034,3 +4034,11 @@ button.calendar-item {
 .procurement-controls .procurement-managed td:last-child .button{font-size:12px;padding:10px 12px;display:inline-flex;margin:3px 0}
 
 .procurement-feedback{position:fixed;bottom:24px;right:24px;z-index:1000;max-width:min(520px,calc(100vw - 32px));display:flex;align-items:center;gap:16px;padding:16px 20px;border-radius:12px;border:1px solid #b89b58;background:#242219;color:#fff5d8;box-shadow:0 8px 30px #0003;font-size:14px}.procurement-feedback .button{flex-shrink:0}@media(max-width:600px){.procurement-feedback{bottom:16px;right:16px;flex-wrap:wrap}}
+
+.status-waiting_checkout { background: #fff1cc; color: #785a0e; }
+.job-checkout-date { display: block; margin-top: 6px; font-size: .875rem; color: #785a0e; }
+.job-checkout-notice { margin-bottom: 18px; border-left: 4px solid #b58c33; }
+.checkout-confirmation { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+.checkout-confirmation input { width: 20px; height: 20px; flex: none; }
+
+.job-status-info { display: inline-flex; flex-direction: column; align-items: flex-start; }

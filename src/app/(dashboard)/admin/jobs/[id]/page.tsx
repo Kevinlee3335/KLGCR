@@ -1,3 +1,5 @@
+import { SuperAdminJobForm } from "@/components/super-admin-job-form";
+import { JobCheckoutNotice } from "@/components/job-checkout-notice";
 import { SubmitButton } from "@/components/submit-button";
 import { signEvidencePhotos } from "@/lib/evidence-urls";
 import { notFound } from "next/navigation";
@@ -19,7 +21,7 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
   const message: {error?:string;appointment?:string;followUp?:string;superAdminUpdated?:string} = await (searchParams ?? Promise.resolve({}));
   const supabase = await createClient();
   const { data, error } = await supabase.from("maintenance_jobs")
-    .select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no,complainant_name,complainant_contact,reporter_name,reporter_phone,reporter_email,availability_date,availability_time,room_access_permission,submitted_at,reviewed_at,reviewer:profiles!reviewed_by(full_name))")
+    .select("id,job_no,room_no,category,description,priority,status,assigned_at,updated_at,started_at,completed_at,action_taken,monitoring_note,monitoring_started_at,monitoring_review_at,pending_material_note,checkout_date,checkout_note,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name),complaint:complaints!complaint_id(complaint_no,complainant_name,complainant_contact,reporter_name,reporter_phone,reporter_email,availability_date,availability_time,room_access_permission,submitted_at,reviewed_at,reviewer:profiles!reviewed_by(full_name))")
     .eq("id", id).maybeSingle();
   if (error) throw new Error(`Unable to load maintenance job: ${error.message}`);
   if (!data) notFound();
@@ -50,28 +52,12 @@ export default async function AdminJobDetail({ params, searchParams }: { params:
   return <AppShell profile={profile} title="Maintenance Job Detail">
     <div className="section-head"><div><p className="eyebrow">{job.job_no}</p><h2>Block {job.block?.code} · {job.room_no}</h2><p className="subtle">Assigned {formatDate(job.assigned_at)}</p></div><div className="actions"><PriorityBadge value={job.priority}/><StatusBadge value={job.status}/></div></div>
     <section className="panel detail-grid" style={{marginBottom:18}}><div><span>Complaint</span><strong>{job.complaint?.complaint_no}</strong></div><div><span>Assigned Staff</span><strong>{job.assignee?.full_name||"—"}</strong></div><div><span>Category</span><strong>{job.category}</strong></div><div className="field-wide"><span>Description</span><p>{job.description}</p></div></section>
+    {job.status === "waiting_checkout" && <JobCheckoutNotice date={job.checkout_date} note={job.checkout_note}/>}
     {profile.role === "admin" && !["completed","cancelled"].includes(job.status) && <section className="panel"><h3>Transfer task</h3><form action={transferJob.bind(null,id)} className="form-grid"><label className="field">Assign to<select name="staffId" required defaultValue=""><option value="">Choose employee</option>{staff?.filter(person => person.id !== job.assignee?.id && person.profile_blocks.some(block => block.block_id === job.block?.id)).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label className="field">Reason<input name="reason" required maxLength={1000}/></label><button className="button">Transfer task</button></form></section>}
     {profile.is_super_admin&&<section className="panel" style={{marginBottom:18}}>
       <h3>Super Admin · Update Maintenance Work</h3>
       <p className="subtle">Update the assigned maintenance team&apos;s job on their behalf. Every change requires a reason and is recorded in History and the Super Admin Audit. Completing a job may automatically close its Complaint.</p>
-      <form action={superAdminUpdateJob.bind(null,id)} className="form-grid">
-       <label className="field">Change status
-        <select name="status" required defaultValue="">
-         <option value="" disabled>Select new status (currently {job.status.replaceAll("_"," ")})</option>
-         <option value="assigned">Assigned</option>
-         <option value="in_progress">In Progress</option>
-         <option value="pending_material">Pending Material</option>
-         <option value="under_monitoring">Under Monitoring</option>
-         <option value="completed">Completed</option>
-         <option value="cancelled">Cancelled (duplicate / invalid job)</option>
-        </select>
-       </label>
-       <label className="field">Next monitoring review (only if Under Monitoring)<input name="reviewDate" type="date"/></label>
-       <label className="field field-wide">Reason / work update
-        <textarea name="reason" minLength={3} maxLength={2000} rows={3} required placeholder="Describe the work completed, correction or reason for changing the status."/>
-       </label>
-       <div className="field-wide"><SubmitButton pendingText="Updating…">Save as Super Admin</SubmitButton></div>
-      </form>
+      <SuperAdminJobForm action={superAdminUpdateJob.bind(null,id)} status={job.status} checkoutDate={job.checkout_date}/>
       {message.superAdminUpdated&&<p className="success">Maintenance status updated by Super Admin.</p>}
      </section>}
     {profile.role === "admin" && job.status === "under_monitoring" && <section className="panel" id="monitoring-follow-up" style={{marginBottom:18}}>

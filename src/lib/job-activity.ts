@@ -78,6 +78,7 @@ function materialDetails(request: MaterialRequestRow, quantity: "requested_qty" 
 
 function transitionAction(row: JobHistoryRow, priorMonitoring: boolean) {
   if (row.new_status === "in_progress") return row.previous_status === "pending_material" ? "Resume Work / In Progress" : "Start Job / In Progress";
+  if (row.new_status === "waiting_checkout") return "Waiting for Check-out / Repair after Check-out";
   if (row.new_status === "pending_material") return "Pending Material";
   if (row.new_status === "under_monitoring") return priorMonitoring || row.previous_status === "under_monitoring" ? "Monitoring Update" : "Under Monitoring";
   if (row.new_status === "completed") return "Completed";

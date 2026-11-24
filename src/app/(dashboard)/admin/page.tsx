@@ -1,3 +1,4 @@
+import { CheckoutDefectFollowUp } from "@/components/checkout-defect-follow-up";
 import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ComplianceExpiryFollowUp } from "@/components/compliance-expiry-follow-up";
@@ -217,6 +218,7 @@ export default async function AdminPage() {
         {gymSummary && <Suspense fallback={null}><GymFollowUps summary={gymSummary}/></Suspense>}
         {isAdmin && <PaymentMailFollowUp/>}
         {isAdmin && <Suspense fallback={null}><ComplianceExpiryFollowUp/></Suspense>}
+        <Suspense fallback={null}><CheckoutDefectFollowUp/></Suspense>
         <Suspense fallback={null}><MonitoringFollowUp/></Suspense>
       </DashboardContent>
     </Suspense>

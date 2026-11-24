@@ -8,8 +8,8 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<{ 
   const profile = await requireRole(["maintenance_staff"]);
   const filters = await searchParams;
   const supabase = await createClient();
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false });
-  query = filters.status ? query.eq("status", filters.status) : query.in("status", ["assigned", "in_progress"]);
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,checkout_date,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false });
+  query = filters.status ? query.eq("status", filters.status) : query.in("status", ["assigned", "in_progress", "waiting_checkout"]);
   const { data, error } = await query;
   const jobs = (data || []) as unknown as JobRow[];
   const complaintIds = [...new Set(jobs.map((job) => job.complaint?.id).filter((id): id is string => Boolean(id)))];

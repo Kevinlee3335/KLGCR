@@ -83,3 +83,13 @@ describe("JobWorkflowActions", () => {
     expect(screen.queryByText("Tenant Not Available")).not.toBeInTheDocument();
   });
 });
+
+it('holds future checkout repairs and requires an explicit checkout confirmation when due', () => {
+ const {rerender}=render(<JobWorkflowActions jobId="job-id" status="waiting_checkout" checkoutDate="2099-01-01" hasActionableAppointment/>);
+ expect(screen.queryByRole('button')).not.toBeInTheDocument();
+ expect(screen.queryByText('Tenant Not Available')).not.toBeInTheDocument();
+ rerender(<JobWorkflowActions jobId="job-id" status="waiting_checkout" checkoutDate="2000-01-01"/>);
+ expect(screen.getByRole('checkbox', {name:'I have confirmed the tenant has checked out.'})).toBeRequired();
+ expect(screen.getByRole('button', {name:'Start repairs after Check-out'})).toBeInTheDocument();
+ expect(screen.queryByText('Complete Job')).not.toBeInTheDocument();
+});

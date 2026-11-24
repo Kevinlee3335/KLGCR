@@ -77,7 +77,7 @@ async function runJobRpc(id: string, rpc: string, parameters: Record<string, unk
 }
 
 export async function startJob(id: string, data: FormData) {
-  await runJobRpc(id, "start_assigned_job", {}, "started", data.get("returnTo"));
+  await runJobRpc(id, "start_assigned_job", {p_checkout_confirmed:data.get("checkoutConfirmed")==="yes"}, "started", data.get("returnTo"));
 }
 
 export async function completeJob(id: string, data: FormData) {

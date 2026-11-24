@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { CheckoutDefectFollowUp } from "@/components/checkout-defect-follow-up";
 import Link from "next/link";
 import { ArrowUpRight, DoorOpen } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -32,7 +34,7 @@ export default async function StaffPage() {
   const today = malaysiaDate();
   const [statusResult, recentResult, appointmentResult, followUps, checkoutResult] = await Promise.all([
     supabase.from("maintenance_jobs").select("status").eq("assigned_to", profile.id),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false }).limit(5),
+    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,checkout_date,assigned_to,assigned_at,updated_at,complaint:complaints!complaint_id(id,complaint_no,availability_date,availability_time,room_access_permission),block:blocks!block_id(id,code)").eq("assigned_to", profile.id).order("assigned_at", { ascending: false }).limit(5),
     supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,complaint:complaints!complaint_id(room_no,category,complainant_contact,availability_date,availability_time,room_access_permission,block:blocks!block_id(code))").eq("appointment_date",today).not("status","in",'("completed","cancelled","no_show")').order("appointment_date").order("appointment_time").limit(10),
     getStaffMonitoringFollowUps(supabase, profile.id, today),
     supabase.from("checkout_rooms").select("id", { count: "exact", head: true })
@@ -60,6 +62,8 @@ export default async function StaffPage() {
 
   return <AppShell profile={profile} title="My Dashboard">
     <Dashboard kind="staff" name={profile.full_name} blocks={blocks} values={[count("assigned"), count("in_progress"), count("pending_material"), count("completed")]} hrefs={["/staff/tasks?status=assigned", "/staff/tasks?status=in_progress", "/staff/tasks?status=pending_material", "/staff/tasks?status=completed"]}/>
+    {count("waiting_checkout") > 0 && <p><Link className="button secondary" href="/staff/tasks?status=waiting_checkout">Waiting for Check-out · {count("waiting_checkout")}</Link></p>}
+    <Suspense fallback={null}><CheckoutDefectFollowUp staffId={profile.id}/></Suspense>
     {(pendingCheckouts > 0 || checkoutResult.error) && <section className={followUpStyles.panel} aria-labelledby="staff-checkout-rooms">
       <header className={followUpStyles.header}>
         <div className={followUpStyles.heading}>

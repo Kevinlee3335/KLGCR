@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState, type MouseEvent } from "react";
 import { checkJobMaterialApproval, markTenantNotAvailable, monitorJob, resumeJob, setPendingMaterial, startJob } from "@/app/(dashboard)/staff/jobs/actions";
+import { canStartAfterCheckout } from "@/lib/job-checkout";
 import { availableJobActions } from "@/lib/job-workflow";
 import { SubmitButton } from "@/components/submit-button";
 import { CompleteJobForm } from "@/components/complete-job-form";
@@ -56,7 +57,11 @@ function CompletionAction({ jobId, returnTo }: { jobId: string; returnTo: string
   </>;
 }
 
-export function JobWorkflowActions({ jobId, status, monitoringNote, hasActionableAppointment = false, returnTo = "/staff/tasks" }: { jobId: string; status: string; monitoringNote?: string | null; hasActionableAppointment?: boolean; returnTo?: string }) {
+export function JobWorkflowActions({ jobId, status, checkoutDate, monitoringNote, hasActionableAppointment = false, returnTo = "/staff/tasks" }: { jobId: string; status: string; checkoutDate?: string | null; monitoringNote?: string | null; hasActionableAppointment?: boolean; returnTo?: string }) {
+  if (status === "waiting_checkout") {
+    if (!canStartAfterCheckout(checkoutDate)) return null;
+    return <form action={startJob.bind(null, jobId)} className="start-action"><input type="hidden" name="returnTo" value={returnTo}/><label className="checkout-confirmation"><input type="checkbox" name="checkoutConfirmed" value="yes" required/> I have confirmed the tenant has checked out.</label><SubmitButton pendingText="Starting…">Start repairs after Check-out</SubmitButton></form>;
+  }
   const actions = availableJobActions(status);
   if (!actions.length && !hasActionableAppointment) return null;
   const startAction = actions.includes("start") && <form action={startJob.bind(null, jobId)} className="start-action"><input type="hidden" name="returnTo" value={returnTo}/><SubmitButton pendingText="Starting…">Start Job</SubmitButton></form>;
