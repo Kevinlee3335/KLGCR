@@ -47,7 +47,7 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
   const [
     { data: countRows, error: countError }, { jobs, inventory }, { data: complaints },
     { data: tasks }, { count: todayAppointments },
-    { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError },
+    { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError }, {count: waitingCheckout, error: waitingError},
   ] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
     loadAdminDashboardWorkload(supabase),
@@ -57,7 +57,9 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
     supabase.from("maintenance_jobs").select("*", { count: "exact", head: true }).eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00"),
     loadTenantNoShows(supabase),
     supabase.rpc("complaint_intake_summary", { p_date: today, p_group: "ALL" }),
+    supabase.from("maintenance_jobs").select("id", { count: "exact", head: true }).eq("status", "waiting_checkout"),
   ]);
+  if (waitingError) console.error("Waiting check-out count failed", waitingError.message);
   if (intakeError) console.error("Complaint intake summary failed", intakeError.message);
   if (countError) console.error("admin_dashboard_counts failed", countError.message);
 
@@ -77,7 +79,7 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
     },
     complaintIntake: intakeError ? null : complaintIntake,
     tenantNoShows,
-    jobs,
+    jobs: {...jobs, waiting_checkout: waitingCheckout ?? 0},
     complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"],
     tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"],
     inventory,

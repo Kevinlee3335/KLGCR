@@ -10,7 +10,7 @@ type Complaint = { id: string; complaint_no: string; room_no: string; category: 
 type Task = { id: string; job_no: string; room_no: string; description: string; status: string; scheduled_for: string | null; assigned_at: string; block: { code: string } | null; assignee: { full_name: string } | null };
 type InventorySummary = { outOfStock: number; nearReorder: number };
 type TenantNoShow = { id: string; job_id: string; appointment_date: string; appointment_time: string; attended_at: string | null; no_show_remarks: string | null; attendee: { full_name: string } | null; job: { id: string; job_no: string; status: string; room_no: string; block: { code: string } | null } | null };
-type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number>;
+type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number> & { waiting_checkout?: number };
 
 export type AdminDashboardData = {
   kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number };
@@ -53,6 +53,7 @@ function AdminDashboard({ name, data, monitoringFollowUp }: Omit<AdminDashboardP
     ["Completed", data.jobs.completed, "#3f8b69"], ["In Progress", data.jobs.in_progress, "#6d58a8"],
     ["Pending Material", data.jobs.pending_material, "#d49a31"], ["Under Monitoring", data.jobs.under_monitoring, "#9672bd"],
     ["Assigned", data.jobs.assigned, "#4b77a8"],
+    ["Waiting for Check-out", data.jobs.waiting_checkout ?? 0, "#a77b28"],
   ] as const;
   const totalJobs = jobSegments.reduce((sum, [, count]) => sum + count, 0);
   let accumulated = 0;
