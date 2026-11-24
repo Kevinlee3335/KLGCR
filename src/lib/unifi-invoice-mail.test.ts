@@ -35,7 +35,7 @@ vi.mock('./supabase/admin', () => ({
 vi.mock('./billing-mail', () => ({ gmailGateway: mocks.gateway }));
 vi.mock('./unifi-invoices', () => ({
   getUnifiInvoice: mocks.invoice,
-  downloadUnifiInvoice: mocks.attachment,
+  downloadReviewedUnifiInvoice: mocks.attachment,
 }));
 
 import { dispatchUnifiInvoiceMail } from './unifi-invoice-mail';
@@ -66,7 +66,7 @@ beforeEach(async () => {
   }));
 });
 
-it('emails the archived first page only to Joey after approval and persists the confirmed send', async () => {
+it('emails the reviewed first page only to Joey after approval and persists the confirmed send', async () => {
   expect(await dispatchUnifiInvoiceMail(invoiceId)).toMatchObject({ status: 'sent', sent_at: sentAt, error: null });
   expect(mocks.claim).toHaveBeenCalledWith('claim_unifi_invoice_delivery', {
     p_invoice_id: invoiceId, p_claim_token: expect.any(String),

@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import type { DocumentReviewStage } from './document-review-status';
 import { createAdminClient } from './supabase/admin';
+import { signatureSchema, type Signature } from './purchase-orders/signature';
+import { createClient } from './supabase/server';
+import { unifiReviewedPdf } from './unifi-reviewed-pdf';
 
 export const unifiInvoicePath = '/admin/unifi-invoices';
 export type UnifiPendingStage = DocumentReviewStage | 'verification';
@@ -27,6 +30,7 @@ export type UnifiInvoice = {
   fikri_verified_at: string | null;
   kevin_verified_at: string | null;
   james_approved_at: string | null;
+  review_signatures?: Partial<Record<DocumentReviewStage, Signature>>;
 };
 
 type UnifiInvoiceInput = {
@@ -43,6 +47,7 @@ type UnifiInvoiceInput = {
 };
 
 const invoiceFields = 'id,period,source,source_message_id,invoice_number,account_number,received_at,due_date,file_name,review_stage,created_at,fikri_verified_at,kevin_verified_at,james_approved_at';
+const invoiceDetailFields = `${invoiceFields},review_signatures` as const;
 const bucketName = 'unifi-invoices';
 const maximumPageSize = 12 * 1024 * 1024;
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -138,7 +143,7 @@ export async function listUnifiInvoices(reviewer?: DocumentReviewStage): Promise
 export async function getUnifiInvoice(id: string): Promise<UnifiInvoice | null> {
   const db = createAdminClient();
   const [result, lines] = await Promise.all([
-    db.from('unifi_invoices').select(invoiceFields).eq('id', id).maybeSingle(),
+    db.from('unifi_invoices').select(invoiceDetailFields).eq('id', id).maybeSingle(),
     unifiAccountLines(db),
   ]);
   if (result.error) throw Error('Unable to load the TM Unifi invoice.');
@@ -156,11 +161,24 @@ export async function downloadUnifiInvoice(id: string): Promise<{ bytes: Uint8Ar
 }
 
 export async function advanceUnifiInvoiceReview(id: string, expectedStage: DocumentReviewStage, actorId: string): Promise<UnifiPendingStage | 'approved'> {
-  const result = await createAdminClient().rpc('advance_unifi_invoice_review', {
+  const session = await createClient();
+  const saved = await session.from('user_e_signatures').select('signature').eq('user_id', actorId).maybeSingle();
+  const signature = signatureSchema.safeParse(saved.data?.signature);
+  if (saved.error || !signature.success) throw Error('Save your personal E-signature before reviewing.');
+  const result = await createAdminClient().rpc('advance_signed_unifi_invoice_review', {
     p_invoice_id: id,
     p_expected_stage: expectedStage,
     p_actor_id: actorId,
+    p_signature: signature.data,
   });
   if (result.error || !result.data) throw Error('Unable to save this review. Refresh and check the current reviewer.');
   return result.data as UnifiPendingStage | 'approved';
+}
+
+// The archive keeps the original first page for deduplication. Preview, print
+// and email all use this same signed version, drawn from review snapshots.
+export async function downloadReviewedUnifiInvoice(id: string) {
+  const [attachment, invoice] = await Promise.all([downloadUnifiInvoice(id), getUnifiInvoice(id)]);
+  if (!attachment || !invoice) return null;
+  return { ...attachment, bytes: await unifiReviewedPdf(attachment.bytes, invoice) };
 }

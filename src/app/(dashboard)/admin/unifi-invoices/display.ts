@@ -42,7 +42,7 @@ export function compareUnifiInvoicePeriodAndLine(
 export function unifiReviewLabel(stage: UnifiInvoiceStage) {
   if (stage === "approved") return "Approved by James";
   if (stage === "archived") return "Archived";
-  if (stage === "verification") return "Pending Fikri and Kevin verification";
+  if (stage === "verification") return "Pending Fikri or Kevin verification";
   const reviewer = documentReviewerForStage[stage].name;
   return `Pending ${reviewer} ${stage === "james" ? "approval" : "verification"}`;
 }

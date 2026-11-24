@@ -33,10 +33,14 @@ export default async function UnifiInvoicePage({ params, searchParams }: {
   const canCheckDelivery = delivery !== null && delivery.status !== "sent" && canManageUnifiInvoiceEmail(profile);
   const month = formatUnifiBillingMonth(invoice.period);
   const line = formatUnifiLine(invoice.line_number);
-  const pdfUrl = `/api/unifi-invoices/${invoice.id}/pdf`;
+  const reviewVersion = invoice.james_approved_at || invoice.kevin_verified_at || invoice.fikri_verified_at || "original";
+  const pdfUrl = `/api/unifi-invoices/${invoice.id}/pdf?review=${encodeURIComponent(reviewVersion)}`;
+  const verified = [
+    { title: "Verified by Fikri", at: invoice.fikri_verified_at },
+    { title: "Verified by Kevin", at: invoice.kevin_verified_at },
+  ].filter(step => step.at).sort((a, b) => a.at!.localeCompare(b.at!))[0];
   const history = [
-    { title: "Fikri Verify", at: invoice.fikri_verified_at },
-    { title: "Kevin Verify", at: invoice.kevin_verified_at },
+    verified || { title: "Fikri or Kevin Verify", at: null },
     { title: "James Approve", at: invoice.james_approved_at },
   ];
 

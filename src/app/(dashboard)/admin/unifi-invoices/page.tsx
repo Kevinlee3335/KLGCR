@@ -42,7 +42,7 @@ export default async function UnifiInvoicesPage({ searchParams }: {
               <span className={styles.icon}><FileText size={22} aria-hidden="true" /></span>
               <div>
                 <h2 id="unifi-invoice-list">TM Unifi invoices</h2>
-                <p>Fikri and Kevin verify new invoices in either order before James approves.</p>
+                <p>Fikri or Kevin verifies the invoice. James then approves and it is emailed to Joey.</p>
               </div>
             </div>
             {invoices && <dl className={styles.counts}>

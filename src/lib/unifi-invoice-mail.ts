@@ -3,7 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import { gmailGateway } from './billing-mail';
 import { BILLING_MAIL_FROM, BILLING_MAIL_TO } from './billing-mail-settings';
 import { createAdminClient } from './supabase/admin';
-import { downloadUnifiInvoice, getUnifiInvoice } from './unifi-invoices';
+import { downloadReviewedUnifiInvoice, getUnifiInvoice } from './unifi-invoices';
 
 export type UnifiInvoiceDelivery = {
   invoice_id: string;
@@ -54,7 +54,7 @@ async function sendInvoice(invoiceId: string): Promise<Outcome> {
       return { status: 'failed', sent_at: null, error: 'James approval is required before sending this invoice.' };
     }
 
-    const attachment = await downloadUnifiInvoice(invoiceId);
+    const attachment = await downloadReviewedUnifiInvoice(invoiceId);
     if (!attachment || attachment.bytes.length > maxEmailPdfBytes) {
       return { status: 'failed', sent_at: null, error: 'The invoice first page is missing or exceeds the 12 MB email limit.' };
     }
