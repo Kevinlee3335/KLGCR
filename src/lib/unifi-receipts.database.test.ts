@@ -23,7 +23,7 @@ it('keeps receipt archives private, unique and tied to a real invoice',async()=>
     await db.exec('reset role;set role service_role');
     expect((await db.query('select queue_unifi_payment_checks() as count')).rows).toEqual([{count:1}]);
     expect((await db.query('select queue_unifi_payment_checks() as count')).rows).toEqual([{count:0}]);
-    const insert=(message:string,hash:string)=>db.query(`insert into unifi_payment_receipts(source_message_id,source_folder,sender,subject,received_at,body_text,content_hash,email_path)
+    const insert=(message:string,hash:string)=>db.query<{id:string}>(`insert into unifi_payment_receipts(source_message_id,source_folder,sender,subject,received_at,body_text,content_hash,email_path)
       values($1,'Junk','noreply@unifi.com.my','Payment receipt',now(),'Receipt body',$2,'receipt.eml') returning id`,[message,hash.repeat(64)]);
     const row=(await insert('message-1','a')).rows[0];
     await expect(insert('message-1','b')).rejects.toThrow('unique');

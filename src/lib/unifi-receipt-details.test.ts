@@ -37,3 +37,8 @@ it('accepts receipt subjects and strips markup without treating invoice or overd
   expect(unifiEmailText('<style>ignore</style><p>Account No: 1043057882</p><script>ignore</script>')).toContain('Account No: 1043057882');
   expect(unifiEmailText('<script>ignore</script>')).not.toContain('ignore');
 });
+
+it('reads the observed Unifi email receipt template with day-first dates and an AP receipt number',()=>{
+ const receipt=unifiReceiptDetails('Payment Receipt\nReceipt\nAP2660253020\nPayment Date\n08-10-2026 16:24:52\nBilling Account 1043057825\nPaid Amount\nRM369.95');
+ expect(receipt).toMatchObject({account_number:'1043057825',payment_date:'2026-10-08',receipt_number:'AP2660253020',amount:369.95});
+});

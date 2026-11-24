@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createAdminClient } from './supabase/admin';
-import { matchUnifiReceipt, type unifiReceiptDetails } from './unifi-receipt-details';
+import { matchUnifiReceipt, unifiReceiptDetails } from './unifi-receipt-details';
 import { listUnifiInvoices } from './unifi-invoices';
 
 export const unifiReceiptsPath = '/documents/unifi-receipts';
@@ -8,7 +8,7 @@ export const unifiReceiptBucket = 'unifi-payment-receipts';
 export type UnifiReceiptAttachment = { name: string; mime_type: string; storage_path: string; size_bytes: number };
 export type UnifiReceipt = ReturnType<typeof unifiReceiptDetails> & {
   id: string; source_message_id: string; source_aliases: string[]; source_folder: string; sender: string; subject: string;
-  received_at: string; body_text: string; invoice_id: string | null; match_method: 'auto' | 'manual' | null;
+  received_at: string; body_text: string; extracted_text?: string; invoice_id: string | null; match_method: 'auto' | 'manual' | null;
   email_path: string; attachments: UnifiReceiptAttachment[];
 };
 export async function listUnifiReceipts(): Promise<UnifiReceipt[]> {
@@ -82,11 +82,14 @@ export async function matchUnifiReceiptToInvoice(receiptId: string, invoiceId: s
 
 export async function rematchUnifiReceipts() {
   const [receipts,invoices] = await Promise.all([listUnifiReceipts(),listUnifiInvoices()]);
-  for (const receipt of receipts.filter(item=>!item.invoice_id)) {
-    const invoiceId = matchUnifiReceipt(receipt,invoices);
-    if (!invoiceId) continue;
-    const result = await createAdminClient().from('unifi_payment_receipts').update({invoice_id:invoiceId,match_method:'auto',matched_at:new Date().toISOString()})
-      .eq('id',receipt.id).is('invoice_id',null);
+  for (const receipt of receipts) {
+    const details = receipt.extracted_text ? unifiReceiptDetails(receipt.extracted_text) : receipt;
+    const invoiceId = receipt.invoice_id || matchUnifiReceipt(details,invoices);
+    const match = !receipt.invoice_id && invoiceId ? {invoice_id:invoiceId,match_method:'auto',matched_at:new Date().toISOString()} : {};
+    let update = createAdminClient().from('unifi_payment_receipts').update({account_number:details.account_number,payment_date:details.payment_date,amount:details.amount,receipt_number:details.receipt_number,invoice_references:details.invoice_references,confirmed:details.confirmed,...match})
+      .eq('id',receipt.id);
+    if (!receipt.invoice_id) update = update.is('invoice_id',null);
+    const result = await update;
     if (result.error) throw Error('Unable to match archived Unifi receipts.');
   }
 }

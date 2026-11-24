@@ -9,7 +9,7 @@ export function unifiEmailText(html: string) {
     .replace(/[\t ]+/g, ' ').trim();
 }
 
-function paymentDate(value: string) {
+function paymentDate(value: string, dayFirst = false) {
   const normalized = value.replace(/,/g, '').trim();
   let iso: string | undefined;
   const machine = normalized.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
@@ -19,7 +19,7 @@ function paymentDate(value: string) {
   else if (named) {
     const month = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(named[2].slice(0,3).toLowerCase()) + 1;
     iso = `${named[3]}-${String(month).padStart(2,'0')}-${named[1].padStart(2,'0')}`;
-  } else if (numeric && Number(numeric[1]) > 12 && Number(numeric[2]) <= 12) {
+  } else if (numeric && (dayFirst || Number(numeric[1]) > 12) && Number(numeric[2]) <= 12) {
     iso = `${numeric[3]}-${numeric[2].padStart(2,'0')}-${numeric[1].padStart(2,'0')}`;
   }
   return iso && Number.isFinite(Date.parse(iso)) && new Date(iso).toISOString().slice(0,10) === iso ? iso : null;
@@ -27,11 +27,14 @@ function paymentDate(value: string) {
 
 export function unifiReceiptDetails(text: string) {
   const normalized = text.normalize('NFKC');
+  // Unifi's observed receipt template labels Billing Account and uses DD-MM-YYYY.
+  const unifiTemplate = /\bbilling account\s+\d{10}\b/i.test(normalized)
+    && /\breceipt\s+AP\d{8,}\b/i.test(normalized) && /\bpaid amount\b/i.test(normalized);
   const accounts = [...new Set([...normalized.matchAll(/\baccount\s*(?:no\.?|number)?\s*[:#-]?\s*(\d{10})\b/gi)].map(match => match[1]))];
   const dates = [...new Set([...normalized.matchAll(/\b(?:(?:payment|transaction|receipt)\s+date|paid\s+on|payment\s+on|date\s+of\s+payment)\s*[:#-]?\s*([^\n]{4,40})/gi)]
-    .map(match => paymentDate(match[1])).filter((date): date is string => Boolean(date)))];
+    .map(match => paymentDate(match[1], unifiTemplate)).filter((date): date is string => Boolean(date)))];
   const amount = normalized.match(/\b(?:payment amount|amount paid|paid amount|amount received|total payment|amount)\s*[:=-]?\s*(?:RM|MYR)\s*([\d,]+\.\d{2})\b/i)?.[1];
-  const receiptNumber = normalized.match(/\b(?:receipt\s*(?:no\.?|number)|(?:payment |transaction )?(?:reference|ref\.?|id))\s*[:#]\s*([a-z0-9][a-z0-9/-]{3,80})\b/i)?.[1] ?? null;
+  const receiptNumber = normalized.match(/\b(?:receipt\s*(?:no\.?|number)|(?:payment |transaction )?(?:reference|ref\.?|id))\s*[:#]\s*([a-z0-9][a-z0-9/-]{3,80})\b/i)?.[1] ?? normalized.match(/\breceipt\s+(AP\d{8,})\b/i)?.[1] ?? null;
   return {
     account_number: accounts.length === 1 ? accounts[0] : null,
     payment_date: dates.length === 1 ? dates[0] : null,
