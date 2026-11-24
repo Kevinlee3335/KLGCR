@@ -47,7 +47,9 @@ export async function syncUnifiWebmail() {
   if (!password) return { status: 'not_connected', imported: 0, needsReview: 0 };
   try {
     const result = await checkInbox(password);
-    await recordUnifiWebmailCheck(result.needsReview ? `${result.needsReview} invoice attachment(s) need manual review.` : null, true);
+    await recordUnifiWebmailCheck(result.needsReview
+      ? `${result.needsReview} invoice attachment(s) could not be imported. ${result.failures.slice(0, 5).join(' ')}`
+      : null, true);
     return result;
   } catch (error) {
     await recordUnifiWebmailCheck('Could not check Webmail. Verify the mailbox connection and try again.', false).catch(() => {});
@@ -57,7 +59,7 @@ export async function syncUnifiWebmail() {
 
 async function checkInbox(password: string) {
   const client = imapClient(password);
-  const counts = { status: 'checked', imported: 0, needsReview: 0 };
+  const counts = { status: 'checked', imported: 0, needsReview: 0, failures: [] as string[] };
   try {
     const archived = new Set((await listUnifiInvoices())
       .filter(invoice => invoice.invoice_number)
@@ -74,23 +76,35 @@ async function checkInbox(password: string) {
         const month = unifiBillingMonth(envelope.subject ?? '');
         if (!month || month < unifiFirstBillingMonth) continue;
         const parts = unifiPdfParts(message.bodyStructure);
-        if (!parts.length) counts.needsReview++;
+        if (!parts.length) {
+          counts.needsReview++;
+          counts.failures.push(`Message UID ${message.uid}: no recognised invoice PDF attachment.`);
+        }
         for (const part of parts) {
           const invoiceNumber = part.fileName.slice(0, -4).toUpperCase();
           const key = month + '/' + invoiceNumber;
           if (archived.has(key)) continue;
+          let step = 'download attachment';
           try {
             const download = await client.download(message.uid, part.part, { uid: true, maxBytes: unifiWebmailPdfLimit + 1 });
             if (!download.content) throw Error('Missing invoice attachment');
             const buffers: Buffer[] = [];
             for await (const chunk of download.content) buffers.push(Buffer.from(chunk));
+            step = 'open PDF and extract page one';
             const bytes = await unifiFirstPage(Buffer.concat(buffers));
+            step = 'read PDF invoice details';
             const details = await unifiInvoiceDetails(bytes);
             const received = message.internalDate && new Date(message.internalDate);
-            if (details.period !== month || details.invoiceNumber !== invoiceNumber || !details.accountNumber
-                || !details.dueDate || !received || !Number.isFinite(received.getTime())) {
-              throw Error('Invoice metadata differs from Webmail');
-            }
+            const invalid = [
+              details.period !== month && 'billing month',
+              details.invoiceNumber !== invoiceNumber && 'invoice number',
+              !details.accountNumber && 'account number',
+              !details.dueDate && 'due date',
+              (!received || !Number.isFinite(received.getTime())) && 'received date',
+            ].filter(Boolean);
+            step = `validate invoice details (${invalid.join(', ')})`;
+            if (invalid.length || !received || !details.accountNumber || !details.dueDate) throw Error('Invoice metadata differs from Webmail');
+            step = 'save invoice PDF and record';
             const item = await storeUnifiInvoice({
               period: month,
               source: 'webmail',
@@ -107,8 +121,15 @@ async function checkInbox(password: string) {
               counts.imported++;
               await dispatchDocumentReviewPushes(item.id).catch(() => {});
             }
-          } catch {
+          } catch (error) {
             counts.needsReview++;
+            // Store only controlled diagnostics, never raw IMAP/server error text.
+            const reason = error instanceof Error && /DOMMatrix|Path2D|ImageData/.test(error.message)
+              ? ' (PDF runtime graphics support missing)'
+              : error instanceof Error && /worker/i.test(error.message)
+                ? ' (PDF worker unavailable)'
+                : '';
+            counts.failures.push(`${part.fileName}: could not ${step}${reason}.`);
           }
         }
       }
