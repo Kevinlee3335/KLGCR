@@ -47,7 +47,7 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
   const [
     { data: countRows, error: countError }, { jobs, inventory }, { data: complaints },
     { data: tasks }, { count: todayAppointments },
-    { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError }, {count: waitingCheckout, error: waitingError},
+    { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError }, {count: waitingCheckout, error: waitingError}, {count: kivComplaints, error: kivError},
   ] = await Promise.all([
     supabase.rpc("admin_dashboard_counts"),
     loadAdminDashboardWorkload(supabase),
@@ -58,7 +58,9 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
     loadTenantNoShows(supabase),
     supabase.rpc("complaint_intake_summary", { p_date: today, p_group: "ALL" }),
     supabase.from("maintenance_jobs").select("id", { count: "exact", head: true }).eq("status", "waiting_checkout"),
+    supabase.from("complaints").select("id", { count: "exact", head: true }).eq("status", "kiv"),
   ]);
+  if (kivError) console.error("KIV complaint count failed", kivError.message);
   if (waitingError) console.error("Waiting check-out count failed", waitingError.message);
   if (intakeError) console.error("Complaint intake summary failed", intakeError.message);
   if (countError) console.error("admin_dashboard_counts failed", countError.message);
@@ -68,6 +70,7 @@ async function loadDashboardData(supabase: DashboardClient, today: string): Prom
   return {
     kpis: {
       tenantNotAvailable: tenantNoShows.length,
+      kivComplaints: kivError ? undefined : kivComplaints ?? 0,
       newComplaints: Number(counts?.new_complaints ?? 0),
       todayJobs: Number(counts?.today_tasks ?? 0),
       inProgress: jobs.in_progress,

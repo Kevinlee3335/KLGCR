@@ -10,7 +10,7 @@ export function summarize(complaints: Complaint[], jobs: Job[], appointments: Ap
     const old = latest.get(appointment.job_id);
     if (!old || appointment.created_at > old.created_at) latest.set(appointment.job_id, appointment);
   }
-  const counts = { total: complaints.length, rooms: new Set<string>(), completed: 0, inProgress: 0, pendingMaterial: 0, monitoring: 0, tenantUnavailable: 0, assigned: 0, pending: 0, rejected: 0 };
+  const counts = { total: complaints.length, rooms: new Set<string>(), completed: 0, inProgress: 0, pendingMaterial: 0, monitoring: 0, tenantUnavailable: 0, assigned: 0, pending: 0, kiv: 0, rejected: 0 };
   const roomFullyCompleted = new Map<string, boolean>();
   for (const complaint of complaints) {
     const room = `${complaint.block_id}:${complaint.room_no.trim().toUpperCase()}`;
@@ -19,6 +19,7 @@ export function summarize(complaints: Complaint[], jobs: Job[], appointments: Ap
     const fullyCompleted = complaint.status !== "rejected" && items.length > 0 && items.every(job => job.status === "completed");
     roomFullyCompleted.set(room, (roomFullyCompleted.get(room) ?? true) && fullyCompleted);
     if (complaint.status === "rejected") counts.rejected++;
+    else if (complaint.status === "kiv") counts.kiv++;
     else if (fullyCompleted) counts.completed++;
     else if (items.some(job => job.status === "pending_material")) counts.pendingMaterial++;
     else if (items.some(job => job.status === "under_monitoring")) counts.monitoring++;

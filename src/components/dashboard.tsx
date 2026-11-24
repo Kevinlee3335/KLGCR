@@ -13,8 +13,8 @@ type TenantNoShow = { id: string; job_id: string; appointment_date: string; appo
 type JobCounts = Record<"assigned" | "in_progress" | "pending_material" | "under_monitoring" | "completed", number> & { waiting_checkout?: number };
 
 export type AdminDashboardData = {
-  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number };
-  complaintIntake?: { date: string; total: number; dispatched: number; completed: number; under_monitoring: number; pending_material: number; in_progress: number; assigned: number; unassigned: number; rejected: number; cancelled: number } | null;
+  kpis: { tenantNotAvailable: number; newComplaints: number; todayJobs: number; inProgress: number; pendingMaterial: number; underMonitoring: number; completedToday: number; completionPhotos: number; todayAppointments?:number;pendingAppointments?:number;kivComplaints?:number };
+  complaintIntake?: { date: string; kiv?: number; total: number; dispatched: number; completed: number; under_monitoring: number; pending_material: number; in_progress: number; assigned: number; unassigned: number; rejected: number; cancelled: number } | null;
   tenantNoShows: TenantNoShow[];
   jobs: JobCounts;
   complaints: Complaint[];
@@ -25,7 +25,7 @@ export type AdminDashboardData = {
 type StaffDashboardProps = { kind: "staff"; name: string; blocks?: string; values: number[]; hrefs?: string[] };
 type AdminDashboardProps = { kind: "admin"; name: string; data: AdminDashboardData; monitoringFollowUp?: ReactNode };
 
-const statusLabel = (status: string) => status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const statusLabel = (status: string) => status === "kiv" ? "KIV" : status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const malaysiaDate = (date: string, options?: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", ...options }).format(new Date(date));
 
 function AdminDashboard({ name, data, monitoringFollowUp }: Omit<AdminDashboardProps, "kind">) {
@@ -35,6 +35,7 @@ function AdminDashboard({ name, data, monitoringFollowUp }: Omit<AdminDashboardP
   const kpis = [
     { title: "New Complaints", value: data.kpis.newComplaints, subtitle: "Needs triage", href: "/admin/complaints?status=new", icon: ShieldAlert, tone: "blue" },
     { title: "Today's Complaints", value: data.complaintIntake?.total ?? "—", subtitle: "Received today · includes completed", href: `/admin/complaints?summaryFrom=${data.complaintIntake?.date ?? ""}&summaryTo=${data.complaintIntake?.date ?? ""}`, icon: ShieldAlert, tone: "blue" },
+    { title: "KIV Complaints", value: data.kpis.kivComplaints ?? 0, subtitle: "On hold · pending follow-up", href: "/admin/complaints?status=kiv", icon: Clock3, tone: "amber" },
     { title: "Tenant Not Available", value: data.kpis.tenantNotAvailable, subtitle: "Needs rescheduling", href: "/admin/notifications#tenant-not-available", icon: UserX, tone: "danger" },
     { title: "Today's Jobs", value: data.kpis.todayJobs, subtitle: "Assigned today", href: "/admin/jobs?scope=today-active", icon: ClipboardList, tone: "gold" },
     { title: "In Progress", value: data.kpis.inProgress, subtitle: "Active now", href: "/admin/jobs?status=in_progress", icon: PlayCircle, tone: "violet" },

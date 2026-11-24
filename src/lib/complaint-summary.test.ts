@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { dateRange, summarize } from "./complaint-summary";
 
 describe("complaint report summary", () => {
+  it("keeps KIV visible without reducing received totals or counting it as completed", () => {
+    expect(summarize([{id:"held",block_id:1,room_no:"407",status:"kiv"}],[],[]))
+      .toMatchObject({total:1,kiv:1,pending:0,completed:0,completedRooms:0});
+  });
   it("counts a room once and completes a report only when all its defects are done", () => {
     const complaints = [
       { id: "a", block_id: 1, room_no: "201", status: "assigned" },
