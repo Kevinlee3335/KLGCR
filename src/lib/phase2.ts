@@ -1,8 +1,8 @@
-export const complaintStatuses = ["new","under_review","assigned","rejected","closed"] as const;
+export const complaintStatuses = ["new","under_review","kiv","assigned","rejected","closed"] as const;
 export const priorities = ["low","normal","high","urgent"] as const;
 export const sources = ["google_form","manual","cleaning","flex","other"] as const;
 export const jobStatuses = ["assigned","in_progress","pending_material","waiting_checkout","under_monitoring","completed","cancelled"] as const;
-export const titleCase = (value: string) => value === "waiting_checkout" ? "Waiting for Check-out" : value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+export const titleCase = (value: string) => value === "kiv" ? "KIV" : value === "waiting_checkout" ? "Waiting for Check-out" : value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const dateFormatter = new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kuala_Lumpur" });
 export const formatDate = (value: string) => dateFormatter.format(new Date(value));
 

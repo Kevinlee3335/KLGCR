@@ -99,7 +99,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   }
 
   const emptyResult = { data: null, error: null };
-  const [{ data, error }, { data: deletedRows, error: deletedError }, { data: blocks }, { data: categoryRows }, { data: staff }, { count: newCount }, { count: reviewCount }, { count: assignedToday }, { count: urgentCount }] = await Promise.all([
+  const [{ data, error }, { data: deletedRows, error: deletedError }, { data: blocks }, { data: categoryRows }, { data: staff }, { count: newCount }, { count: reviewCount }, { count: kivCount }, { count: assignedToday }, { count: urgentCount }] = await Promise.all([
     isDeleted ? emptyResult : activeQuery.range(offset, offset + PAGE_SIZE),
     isDeleted ? deletedQuery.range(offset, offset + PAGE_SIZE) : emptyResult,
     searchedBlocks ?? blocksQuery,
@@ -107,6 +107,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     isDeleted ? emptyResult : supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name"),
     supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "new"),
     supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "under_review"),
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "kiv"),
     supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "assigned").gte("assigned_at", new Date().toISOString().slice(0, 10)),
     supabase.from("complaints").select("*", { count: "exact", head: true }).eq("priority", "urgent").not("status", "in", "(rejected,closed)"),
   ]);
@@ -156,7 +157,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       {profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}
     </div>
     <section className="metrics compact complaint-intake-metrics">
-      {[["New", newCount], ["Under review", reviewCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => (
+      {[["New", newCount], ["Under review", reviewCount], ["KIV", kivCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => (
         <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>
       ))}
     </section>
@@ -166,7 +167,6 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     <form className="panel filter-bar">
       {q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}
       {q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}
-      {!isDeleted && selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}
       {!isDeleted && <input type="hidden" name="sort" value={sort.value} />}
       {q.category && <input type="hidden" name="category" value={q.category} />}
       {q.assigned && <input type="hidden" name="assigned" value={q.assigned} />}

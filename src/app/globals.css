@@ -4042,3 +4042,6 @@ button.calendar-item {
 .checkout-confirmation input { width: 20px; height: 20px; flex: none; }
 
 .job-status-info { display: inline-flex; flex-direction: column; align-items: flex-start; }
+
+.status-kiv { background: #fff2d2; color: #805b13; border: 1px solid #e6c77e; }
+.super-admin-complaint-panel { margin-bottom: 18px; border-top: 3px solid var(--gold); }

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireSuperAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { appointmentTimeValues, validateComplaintAppointmentSelection } from "@/lib/appointments";
 import { createAppNotifications } from "@/lib/app-notifications";
@@ -69,7 +69,7 @@ export async function markComplaintUnderReview(id:string,data:FormData){
   revalidatePath("/admin");revalidatePath("/admin/complaints");revalidatePath(`/admin/complaints/${id}`);
   redirect(`/admin/complaints/${id}?underReview=1`);
 }
-export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
+export async function rejectComplaint(id:string){const actor=await requireRole(["admin"]);const s=await createClient();const {error}=await s.from("complaints").update({status:"rejected",reviewed_at:new Date().toISOString(),reviewed_by:actor.id}).eq("id",id).in("status",["new","under_review","kiv"]);if(error)redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);revalidatePath("/admin/complaints");redirect("/admin/complaints?rejected=1")}
 
 export async function deleteComplaint(id:string){
   await requireRole(["admin"]);
@@ -110,4 +110,21 @@ export async function updateAppointment(complaintId:string,appointmentId:string,
   const s=await createClient();const {error}=await s.from("appointments").update({status:status.data}).eq("id",appointmentId).eq("complaint_id",complaintId);
   if(error)redirect(`/admin/complaints/${complaintId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");revalidatePath("/admin/daily-tasks");revalidatePath("/staff");revalidatePath(`/admin/complaints/${complaintId}`);redirect(`/admin/complaints/${complaintId}?appointment=1`);
+}
+
+export async function superAdminUpdateComplaint(id: string, data: FormData) {
+  await requireSuperAdmin();
+  const parsed = z.object({
+    status: z.enum(["new", "under_review", "kiv", "rejected"]),
+    reason: z.string().trim().min(3).max(1000),
+  }).safeParse({ status: data.get("status"), reason: data.get("reason") });
+  if (!parsed.success) redirect(`/admin/complaints/${id}?error=${encodeURIComponent(parsed.error.issues[0]?.message || "Invalid complaint update")}`);
+  const db = await createClient();
+  const { error } = await db.rpc("super_admin_update_complaint", {
+    p_complaint: id, p_status: parsed.data.status, p_reason: parsed.data.reason,
+  });
+  if (error) redirect(`/admin/complaints/${id}?error=${encodeURIComponent(error.message)}`);
+  for (const path of ["/admin", "/admin/complaints", `/admin/complaints/${id}`, "/admin/super-admin"])
+    revalidatePath(path);
+  redirect(`/admin/complaints/${id}?superAdminUpdated=1`);
 }

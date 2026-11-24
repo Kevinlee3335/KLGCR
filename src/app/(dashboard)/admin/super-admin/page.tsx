@@ -32,11 +32,11 @@ function RecordGroup({id,eyebrow,title,subtitle,count,icon,children}:RecordGroup
  </section>;
 }
 function Status({value}:{value:string}){
- const label=value.replaceAll("_"," ");
+ const label=value==="kiv"?"KIV":value.replaceAll("_"," ");
  const tone=["completed","closed","ready_for_occupancy"].includes(value)
   ?styles.statusDone
   :["cancelled","rejected"].includes(value)?styles.statusInactive
-  :["under_monitoring","pending_material"].includes(value)?styles.statusAttention
+  :["under_monitoring","pending_material","kiv"].includes(value)?styles.statusAttention
   :styles.statusWorking;
  return <span className={`${styles.status} ${tone}`}><span className={styles.statusDot}/>{label}</span>;
 }
@@ -170,7 +170,7 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
      </RecordGroup>
 
      <RecordGroup id="complaints" eyebrow="CASE RECORDS / 03" title="Complaints"
-      subtitle="Review records and remove eligible duplicate reports"
+      subtitle="Review complaints, set KIV and resume pending reports"
       count={activeComplaints.length} icon={<FileText size={19}/>}>
       {activeComplaints.map(complaint=><Link className={styles.record} key={complaint.id}
        href={`/admin/complaints/${complaint.id}`}>
