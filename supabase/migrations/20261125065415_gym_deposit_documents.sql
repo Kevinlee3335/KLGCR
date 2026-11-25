@@ -73,6 +73,9 @@ alter table public.deposit_receipts enable row level security;
 alter table public.payment_vouchers enable row level security;
 revoke all on public.financial_document_counters, public.deposit_receipts, public.payment_vouchers from public, anon, authenticated;
 grant all on public.financial_document_counters, public.deposit_receipts, public.payment_vouchers to service_role;
+-- BYPASSRLS does not grant SELECT. Cash RPCs snapshot the actual employee's
+-- saved signature through the server-only client; browser grants stay unchanged.
+grant select on public.user_e_signatures to service_role;
 
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 values ('deposit-documents','deposit-documents',false,5242880,array['application/pdf'])

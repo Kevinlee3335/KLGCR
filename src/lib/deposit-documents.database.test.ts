@@ -34,7 +34,7 @@ describe('atomic Gym deposit documents', () => {
         deleted_at timestamptz,deleted_by uuid,
         check(source <> 'manual' or (kind = 'access_card_deposit' and amount = 10 and created_by is not null))
       );
-      grant all on public.profiles,public.memberships,public.user_e_signatures,public.membership_activity,public.membership_payment_ledger to service_role;
+      grant all on public.profiles,public.memberships,public.membership_activity,public.membership_payment_ledger to service_role;
       insert into public.profiles values
         ('${kevin}','KEVIN LEE','admin',true,null),('${fikri}','FIKRI','admin',true,null),
         ('${unsigned}','UNSIGNED STAFF','admin',true,null),('${patrol}','GYM PATROL','gym_patrol',true,null),
@@ -46,6 +46,9 @@ describe('atomic Gym deposit documents', () => {
         ('${memberC}','Member C','c@example.com','outsider','GYM-C','');
     `);
     await db.query('insert into user_e_signatures values ($1,$2),($3,$4)', [kevin, JSON.stringify(signature), fikri, JSON.stringify(secondSignature)]);
+    // Production deliberately lacks a service-role signature SELECT grant;
+    // the new migration must provide it rather than relying on BYPASSRLS.
+    expect((await db.query<{allowed:boolean}>("select has_table_privilege('service_role','public.user_e_signatures','SELECT') as allowed")).rows[0].allowed).toBe(false);
     await db.exec(migration);
     const clock = (await db.query<{ today: string; issue_year: number }>("select to_char(now() at time zone 'Asia/Kuala_Lumpur','YYYY-MM-DD') as today,extract(year from now() at time zone 'Asia/Kuala_Lumpur')::int as issue_year")).rows[0];
     today = clock.today; year = clock.issue_year;
@@ -149,6 +152,7 @@ describe('atomic Gym deposit documents', () => {
       await db.exec('reset role');
     }
     await db.exec('set role service_role');
+    expect((await db.query<{signature:unknown}>('select signature from public.user_e_signatures where user_id=$1', [kevin])).rows[0].signature).toEqual(signature);
     expect((await receive(21, memberB)).status).toBe('held');
     expect((await refund(30, 20)).refunded_by).toBe(kevin);
     await db.exec('reset role');
