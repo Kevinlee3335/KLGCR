@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { membershipEnabled, reminderDates } from "@/lib/membership";
 import { deliverMembershipEmails } from "@/lib/membership-email";
+import { retryDepositDocuments } from "@/lib/deposit-documents";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -31,9 +32,12 @@ export async function GET(request: NextRequest) {
     if (members.length < 500) break;
    }
   }
-  const sent = await deliverMembershipEmails();
+  const [sent, depositDocuments] = await Promise.all([deliverMembershipEmails(), retryDepositDocuments().catch(error => {
+   console.error("Deposit document retry pending", error);
+   return {attempted:0,sent:0,pendingRetry:true};
+  })]);
   await deliverDueGymReports();
   if(reportError) return NextResponse.json({error:"Committee report generation pending retry.",sent},{status:500});
-  return NextResponse.json({ok:true,sent,reports,date:dates.day});
+  return NextResponse.json({ok:true,sent,reports,depositDocuments,date:dates.day});
  } catch (error) { console.error("Membership cron failed",error); return NextResponse.json({error:"Membership reminders could not be completed."},{status:500}); }
 }
