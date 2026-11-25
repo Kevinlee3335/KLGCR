@@ -20,7 +20,7 @@ export type DepositReceiptRecord = DeliveryFields & {
   status: 'held' | 'refunded';
 };
 export type PaymentVoucherRecord = DeliveryFields & {
-  voucher_no: string; source_module: string; deposit_receipt_id: string; paid_on: string;
+  voucher_no: string; source_module: string; member_id: string; origin: 'deposit_refund' | 'legacy_refund'; deposit_receipt_id: string | null; paid_on: string;
   refunded_by: string; refunded_by_name: string; refund_signature: Signature;
 };
 export const depositDocumentTable = (kind: DepositDocumentKind) => kind === 'receipt' ? 'deposit_receipts' : 'payment_vouchers';
@@ -65,9 +65,13 @@ export async function ensureDepositDocumentPdf(kind: DepositDocumentKind, row: D
       const voucher = row as PaymentVoucherRecord;
       const parsed = signatureSchema.safeParse(voucher.refund_signature);
       if (!parsed.success) throw new Error('The refunding staff signature needs review.');
-      const original = await db.from('deposit_receipts').select('receipt_no').eq('id', voucher.deposit_receipt_id).single();
-      if (original.error || !original.data) throw new Error('Unable to load the original deposit receipt.');
-      bytes = await paymentVoucherPdf({ ...voucher, amount: Number(voucher.amount), refund_signature: parsed.data, original_receipt_no: original.data.receipt_no });
+      let originalReceiptNo: string | null = null;
+      if (voucher.origin !== 'legacy_refund') {
+        const original = await db.from('deposit_receipts').select('receipt_no').eq('id', voucher.deposit_receipt_id).single();
+        if (original.error || !original.data) throw new Error('Unable to load the original deposit receipt.');
+        originalReceiptNo = original.data.receipt_no;
+      }
+      bytes = await paymentVoucherPdf({ ...voucher, amount: Number(voucher.amount), refund_signature: parsed.data, original_receipt_no: originalReceiptNo });
     }
     const uploaded = await db.storage.from(bucket).upload(path, bytes, { contentType: 'application/pdf', upsert: false });
     if (uploaded.error) {

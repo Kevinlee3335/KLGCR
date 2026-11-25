@@ -4,6 +4,7 @@ import { getSessionProfile } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { signatureSchema } from '@/lib/purchase-orders/signature';
 import { deliverDepositDocument, ensureDepositDocumentPdf, loadDepositDocument } from '@/lib/deposit-documents';
+import {gymDepositStartDate, newGymDepositsAvailable} from '@/lib/gym-deposit-availability';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,7 +16,7 @@ const filters = z.object({
   from: z.string().date().optional(), to: z.string().date().optional(), page: z.coerce.number().int().min(1).max(100000).default(1),
 });
 const receiptColumns = 'id,receipt_no,source_module,member_id,payer,email,member_reference,amount,received_on,received_by_name,origin,original_receipt_no,note,status,created_at,pdf_path,pdf_error,email_status,email_error,emailed_at,payment_vouchers(id,voucher_no)';
-const voucherColumns = 'id,voucher_no,source_module,deposit_receipt_id,payer,email,member_reference,amount,paid_on,refunded_by_name,created_at,pdf_path,pdf_error,email_status,email_error,emailed_at,deposit_receipts!inner(member_id,receipt_no)';
+const voucherColumns = 'id,voucher_no,source_module,member_id,origin,deposit_receipt_id,payer,email,member_reference,amount,paid_on,refunded_by_name,created_at,pdf_path,pdf_error,email_status,email_error,emailed_at,deposit_receipts(receipt_no)';
 
 export async function GET(request: NextRequest) {
   const profile = await getSessionProfile();
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
   const db = createAdminClient();
   let receipts = db.from('deposit_receipts').select(receiptColumns, { count: 'exact' }).eq('source_module', 'gym').order('received_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
   let vouchers = db.from('payment_vouchers').select(voucherColumns, { count: 'exact' }).eq('source_module', 'gym').order('paid_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
-  if (f.member) { receipts = receipts.eq('member_id', f.member); vouchers = vouchers.eq('deposit_receipts.member_id', f.member); }
+  if (f.member) { receipts = receipts.eq('member_id', f.member); vouchers = vouchers.eq('member_id', f.member); }
   if (f.status) receipts = receipts.eq('status', f.status);
   if (f.from) { receipts = receipts.gte('received_on', f.from); vouchers = vouchers.gte('paid_on', f.from); }
   if (f.to) { receipts = receipts.lte('received_on', f.to); vouchers = vouchers.lte('paid_on', f.to); }
@@ -38,26 +39,29 @@ export async function GET(request: NextRequest) {
   }
   const offset = (f.page - 1) * 25;
   try {
-    const [receiptRows, voucherRows, summary, signature, held] = await Promise.all([
+    const [receiptRows, voucherRows, summary, signature, held, history, legacy] = await Promise.all([
       receipts.range(offset, offset + 24), vouchers.range(offset, offset + 24), db.rpc('get_deposit_document_summary'),
       profile.role === 'admin' ? db.from('user_e_signatures').select('signature').eq('user_id', profile.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
       f.member ? db.from('deposit_receipts').select('id', { count: 'exact', head: true }).eq('source_module', 'gym').eq('member_id', f.member).eq('status', 'held') : Promise.resolve({ count: 0, error: null }),
+      f.member ? db.from('deposit_receipts').select('id', { count: 'exact', head: true }).eq('source_module', 'gym').eq('member_id', f.member) : Promise.resolve({ count: 0, error: null }),
+      f.member ? db.from('payment_vouchers').select('id', { count: 'exact', head: true }).eq('source_module', 'gym').eq('member_id', f.member).eq('origin', 'legacy_refund') : Promise.resolve({ count: 0, error: null }),
     ]);
-    if (receiptRows.error || voucherRows.error || summary.error || signature.error || held.error) throw new Error('Unable to load deposit records. Please refresh and try again.');
+    if (receiptRows.error || voucherRows.error || summary.error || signature.error || held.error || history.error || legacy.error) throw new Error('Unable to load deposit records. Please refresh and try again.');
     const publicReceiptRows = (receiptRows.data || []).map(({ pdf_path, payment_vouchers, ...row }) => {
       const related = payment_vouchers as unknown as {id:string;voucher_no:string} | {id:string;voucher_no:string}[] | null;
       const linked = Array.isArray(related) ? related[0] : related;
       return { ...row, pdf_ready: Boolean(pdf_path), voucher_id: linked?.id || null, voucher_no: linked?.voucher_no || null };
     });
     const publicVoucherRows = (voucherRows.data || []).map(({ pdf_path, deposit_receipts, ...row }) => {
-      const relation = deposit_receipts as unknown as { member_id: string; receipt_no: string } | { member_id: string; receipt_no: string }[];
+      const relation = deposit_receipts as unknown as { receipt_no: string } | { receipt_no: string }[] | null;
       const original = Array.isArray(relation) ? relation[0] : relation;
-      return { ...row, member_id: original.member_id, original_receipt_no: original.receipt_no, pdf_ready: Boolean(pdf_path) };
+      return { ...row, original_receipt_no: original?.receipt_no || null, pdf_ready: Boolean(pdf_path) };
     });
     return json({ receipts: publicReceiptRows, vouchers: publicVoucherRows, receiptCount: receiptRows.count || 0, voucherCount: voucherRows.count || 0,
       summary: summary.data, canManage: profile.role === 'admin', actorName: profile.full_name,
       signatureReady: profile.role === 'admin' && signatureSchema.safeParse(signature.data?.signature).success,
-      ...(f.member ? { memberHasHeldDeposit: Boolean(held.count) } : {}),
+      newDepositsAvailable: newGymDepositsAvailable(), depositStartDate: gymDepositStartDate,
+      ...(f.member ? { memberHasHeldDeposit: Boolean(held.count), hasDepositHistory: Boolean(history.count), legacyRefunded: Boolean(legacy.count) } : {}),
     });
   } catch (error) { return json({ error: error instanceof Error ? error.message : 'Unable to load deposit records.' }, 503); }
 }
@@ -66,6 +70,7 @@ const receive = z.object({ action: z.literal('receive'), request_id: z.string().
   origin: z.enum(['received', 'existing']).default('received'), original_receipt_no: z.string().trim().max(100).default(''), note: z.string().trim().max(1000).default(''),
 }).strict();
 const refund = z.object({ action: z.literal('refund'), request_id: z.string().uuid(), deposit_id: z.string().uuid() }).strict();
+const legacyRefund = z.object({action: z.literal('refund_legacy'), request_id: z.string().uuid(), member_id: z.string().uuid()}).strict();
 const retry = z.object({ action: z.enum(['resend', 'retry_pdf']), document_kind: z.enum(['receipt', 'voucher']), id: z.string().uuid() }).strict();
 
 function scheduleDelivery(kind: 'receipt' | 'voucher', id: string) {
@@ -83,8 +88,9 @@ export async function POST(request: NextRequest) {
   if (raw.length > 6000) return json({ error: 'The request is too large.' }, 413);
   let input: unknown;
   try { input = JSON.parse(raw); } catch { return json({ error: 'Invalid request.' }, 400); }
-  const receiveInput = receive.safeParse(input), refundInput = refund.safeParse(input), retryInput = retry.safeParse(input);
-  if (!receiveInput.success && !refundInput.success && !retryInput.success) return json({ error: 'Check the deposit details and try again.' }, 400);
+  const receiveInput = receive.safeParse(input), refundInput = refund.safeParse(input), legacyInput = legacyRefund.safeParse(input), retryInput = retry.safeParse(input);
+  if (!receiveInput.success && !refundInput.success && !legacyInput.success && !retryInput.success) return json({ error: 'Check the deposit details and try again.' }, 400);
+  if (receiveInput.success && receiveInput.data.origin === 'received' && (!newGymDepositsAvailable() || receiveInput.data.received_on < gymDepositStartDate)) return json({error: 'New cash deposit receipts start on 1 December 2026.', available_from: gymDepositStartDate}, 409);
   try {
     const db = createAdminClient();
     if (receiveInput.success) {
@@ -102,6 +108,14 @@ export async function POST(request: NextRequest) {
       scheduleDelivery('voucher', data.id);
       return json({ ok: true, id: data.id, document_kind: 'voucher', voucher_no: data.voucher_no, mail: data.email_status,
         already_refunded: data.id !== v.request_id, refunded_by_name: data.refunded_by_name });
+    }
+    if (legacyInput.success) {
+      const v = legacyInput.data;
+      const {data, error} = await db.rpc('refund_legacy_gym_deposit', {p_id: v.request_id, p_member: v.member_id, p_actor: profile.id});
+      if (error) return json({error: error.message}, /already|identifier|recorded|tracked/i.test(error.message) ? 409 : 400);
+      scheduleDelivery('voucher', data.id);
+      return json({ok: true, id: data.id, document_kind: 'voucher', voucher_no: data.voucher_no, mail: data.email_status,
+        already_refunded: data.id !== v.request_id, refunded_by_name: data.refunded_by_name});
     }
     const v = retryInput.data!;
     const document = await loadDepositDocument(v.document_kind, v.id);

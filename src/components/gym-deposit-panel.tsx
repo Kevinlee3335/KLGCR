@@ -37,10 +37,12 @@ export type GymDepositReceipt = DocumentState & {
 
 export type GymPaymentVoucher = DocumentState & {
   voucher_no: string;
-  deposit_receipt_id: string;
+  member_id: string;
+  origin: 'deposit_refund' | 'legacy_refund';
+  deposit_receipt_id: string | null;
   paid_on: string;
   refunded_by_name: string;
-  original_receipt_no: string;
+  original_receipt_no: string | null;
 };
 
 export type GymDepositSummary = {
@@ -61,6 +63,10 @@ export type GymDepositListResponse = {
   canManage: boolean;
   summary: GymDepositSummary;
   memberHasHeldDeposit?: boolean;
+  hasDepositHistory: boolean;
+  legacyRefunded: boolean;
+  newDepositsAvailable: boolean;
+  depositStartDate: string;
 };
 
 export type GymDepositPanelProps = {
@@ -71,11 +77,10 @@ export type GymDepositPanelProps = {
 
 type Kind = 'receipts' | 'vouchers';
 type DocumentKind = 'receipt' | 'voucher';
-type Origin = 'received' | 'existing';
 type Filters = {q: string; from: string; to: string; status: string};
 const pageSize = 25;
 const cash = (value: number | string) => `RM ${Number(value).toFixed(2)}`;
-const malaysiaDay = () => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+const malaysiaDay = () => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(Date.now()));
 const dateLabel = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value || '—';
   return new Intl.DateTimeFormat('en-GB', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${value}T00:00:00Z`));
@@ -95,8 +100,9 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>({q: '', from: '', to: '', status: ''});
   const [pending, setPending] = useState<string | null>(null);
-  const [formOrigin, setFormOrigin] = useState<Origin | null>(null);
+  const [receiveFormOpen, setReceiveFormOpen] = useState(false);
   const receiveRequestId = useRef('');
+  const legacyRefundRequestId = useRef('');
   const refundRequestIds = useRef(new Map<string, string>());
   const today = malaysiaDay();
 
@@ -125,7 +131,8 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
   useEffect(() => {
     receiveRequestId.current = '';
-    setFormOrigin(null);
+    legacyRefundRequestId.current = '';
+    setReceiveFormOpen(false);
     setNotice('');
     setActionError('');
     setPage(1);
@@ -133,6 +140,11 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
   const canManage = Boolean(data?.canManage) && !readOnly;
   const memberHasHeld = data?.memberHasHeldDeposit ?? data?.receipts.some(receipt => receipt.status === 'held') ?? false;
+  const hasDepositHistory = data?.hasDepositHistory ?? Boolean(data?.receiptCount || data?.voucherCount);
+  const canRefundLegacy = Boolean(member && data && !memberHasHeld && !hasDepositHistory && !data.legacyRefunded);
+  const newDepositsAvailable = data?.newDepositsAvailable === true;
+  const depositStartDate = data?.depositStartDate || '2026-12-01';
+  const minimumCollectionDate = depositStartDate > `${today.slice(0, 4)}-01-01` ? depositStartDate : `${today.slice(0, 4)}-01-01`;
   const count = kind === 'receipts' ? data?.receiptCount || 0 : data?.voucherCount || 0;
   const busy = pending !== null || loading;
 
@@ -164,17 +176,17 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
   async function receive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!member || !formOrigin || memberHasHeld) return;
+    if (!member || !receiveFormOpen || memberHasHeld || !newDepositsAvailable || member.memberType !== 'outsider') return;
     const form = new FormData(event.currentTarget);
     if (!receiveRequestId.current) receiveRequestId.current = crypto.randomUUID();
     const saved = await post('receive', {
       action: 'receive', request_id: receiveRequestId.current, member_id: member.id,
-      received_on: String(form.get('received_on') || ''), origin: formOrigin,
-      original_receipt_no: String(form.get('original_receipt_no') || ''), note: String(form.get('note') || ''),
+      received_on: String(form.get('received_on') || ''), origin: 'received',
+      note: String(form.get('note') || ''),
     });
     if (saved) {
       receiveRequestId.current = '';
-      setFormOrigin(null);
+      setReceiveFormOpen(false);
       setKind('receipts');
       setPage(1);
     }
@@ -185,6 +197,17 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
     if (!refundRequestIds.current.has(receipt.id)) refundRequestIds.current.set(receipt.id, crypto.randomUUID());
     const saved = await post(`refund:${receipt.id}`, {action: 'refund', request_id: refundRequestIds.current.get(receipt.id), deposit_id: receipt.id});
     if (saved) refundRequestIds.current.delete(receipt.id);
+  }
+
+  async function refundLegacy() {
+    if (!member || !canRefundLegacy || !data?.signatureReady) return;
+    if (!legacyRefundRequestId.current) legacyRefundRequestId.current = crypto.randomUUID();
+    const saved = await post('refund_legacy', {action: 'refund_legacy', request_id: legacyRefundRequestId.current, member_id: member.id});
+    if (saved) {
+      legacyRefundRequestId.current = '';
+      setKind('vouchers');
+      setPage(1);
+    }
   }
 
   function changeKind(next: Kind) {
@@ -222,9 +245,8 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
     {!member && data && <div className="gym-deposit-summary" aria-label="Deposit balances">
       <div><span>Cash deposits received</span><strong>{cash(data.summary.receivedAmount)}</strong></div>
-      <div><span>Existing deposits recorded</span><strong>{cash(data.summary.openingAmount)}</strong></div>
       <div><span>Cash refunded</span><strong>{cash(data.summary.refundedAmount)}</strong></div>
-      <div className="gym-deposit-balance"><span>Deposits held · {data.summary.heldCount}</span><strong>{cash(data.summary.heldAmount)}</strong></div>
+      <div className="gym-deposit-balance"><span>Recorded deposits held · {data.summary.heldCount}</span><strong>{cash(data.summary.heldAmount)}</strong></div>
     </div>}
 
     {notice && <p className="gym-deposit-notice" role="status">{notice}</p>}
@@ -234,22 +256,23 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
     {member && canManage && !loadError && <div className="gym-deposit-member-tools">
       {memberHasHeld ? <p className="gym-deposit-held-note"><Banknote size={17} aria-hidden="true"/><strong>Deposit Already Held</strong> · Use the existing receipt below.</p> : <div className="gym-deposit-buttons">
-        {member.memberType === 'outsider' && <button type="button" className="button" disabled={busy} onClick={() => {setFormOrigin('received'); setActionError('');}} aria-expanded={formOrigin === 'received'}>Receive RM10 cash deposit</button>}
-        <button type="button" className="button secondary" disabled={busy} onClick={() => {setFormOrigin('existing'); setActionError('');}} aria-expanded={formOrigin === 'existing'}>Record existing deposit</button>
-        {member.memberType !== 'outsider' && <p className="subtle">New RM10 gym deposits apply to Non Residence members. An existing deposit can be recorded with its original receipt.</p>}
+        {member.memberType === 'outsider' && <button type="button" className="button" disabled={busy || !newDepositsAvailable} onClick={() => {setReceiveFormOpen(true); setActionError('');}} aria-expanded={receiveFormOpen}>Receive RM10 cash deposit</button>}
+        {!newDepositsAvailable && <p className="subtle">New deposit receipts start on {dateLabel(depositStartDate)}.</p>}
+        {member.memberType !== 'outsider' && <p className="subtle">New RM10 gym deposits apply to Non Residence members.</p>}
       </div>}
-      {formOrigin && !memberHasHeld && <form className="gym-deposit-receive-form" onSubmit={receive}>
-        <div className="gym-deposit-form-heading"><h3>{formOrigin === 'received' ? 'Receive cash deposit' : 'Record an existing deposit'}</h3><p>{formOrigin === 'received' ? `Record only after ${data?.actorName || 'the logged-in employee'} has received RM10 cash from ${member.name}.` : 'Opening balance only. Keep the original receipt number and collection date. This does not record new cash or automatically email a new receipt.'}</p></div>
+      {canRefundLegacy && <div className="gym-deposit-legacy-refund"><div><h3>Old handwritten deposit</h3><p>For deposits collected before December with a handwritten receipt. After returning the member&apos;s RM10 cash, issue the Payment Voucher directly.</p><p><strong>Refunded by: {data?.actorName || 'the logged-in employee'}</strong> · Staff signature and K HOTEL company seal.</p></div><button type="button" className="button secondary" disabled={busy || !data?.signatureReady} onClick={() => void refundLegacy()}>{pending === 'refund_legacy' ? 'Recording…' : 'Refund old handwritten deposit'}</button></div>}
+      {data?.legacyRefunded && <p className="gym-deposit-legacy-complete">The old handwritten deposit has already been refunded. <button type="button" className="gym-deposit-text-button" disabled={busy} onClick={() => changeKind('vouchers')}>View payment vouchers</button></p>}
+      {receiveFormOpen && !memberHasHeld && newDepositsAvailable && member.memberType === 'outsider' && <form className="gym-deposit-receive-form" onSubmit={receive}>
+        <div className="gym-deposit-form-heading"><h3>Receive cash deposit</h3><p>{`Record only after ${data?.actorName || 'the logged-in employee'} has received RM10 cash from ${member.name}.`}</p></div>
         <label>Member<input value={member.name} readOnly/></label>
-        <label>{formOrigin === 'received' ? 'Collection date' : 'Original collection date'}<input type="date" name="received_on" defaultValue={today} min={formOrigin === 'received' ? `${today.slice(0, 4)}-01-01` : '2000-01-01'} max={today} required disabled={busy}/></label>
+        <label>Collection date<input type="date" name="received_on" defaultValue={today} min={minimumCollectionDate} max={today} required disabled={busy}/></label>
         <label>Deposit amount<input value="RM 10.00 · Cash" readOnly/></label>
-        {formOrigin === 'existing' && <label>Original Deposit Receipt No.<input name="original_receipt_no" maxLength={100} required disabled={busy} placeholder="Number on the original receipt"/></label>}
         <label className="gym-deposit-note-field">Note (optional)<input name="note" maxLength={1000} disabled={busy}/></label>
-        <div className="gym-deposit-form-actions"><button type="submit" className="button" disabled={busy}>{pending === 'receive' ? 'Saving…' : formOrigin === 'received' ? 'Record cash & issue receipt' : 'Save existing deposit'}</button><button type="button" className="button secondary" disabled={busy} onClick={() => {setFormOrigin(null); receiveRequestId.current = '';}}>Cancel</button></div>
+        <div className="gym-deposit-form-actions"><button type="submit" className="button" disabled={busy}>{pending === 'receive' ? 'Saving…' : 'Record cash & issue receipt'}</button><button type="button" className="button secondary" disabled={busy} onClick={() => {setReceiveFormOpen(false); receiveRequestId.current = '';}}>Cancel</button></div>
       </form>}
     </div>}
 
-    {!member && canManage && <p className="gym-deposit-choose-member">To receive or record a deposit, <Link href="/admin/members">choose a member in Membership</Link>.</p>}
+    {!member && canManage && <p className="gym-deposit-choose-member">To receive a new deposit or refund an old handwritten deposit, <Link href="/admin/members">choose a member in Membership</Link>.</p>}
 
     <div className="gym-deposit-tabs" role="tablist" aria-label="Deposit document lists">
       <button type="button" role="tab" id={`${panelId}-receipts-tab`} aria-controls={`${panelId}-records`} aria-selected={kind === 'receipts'} disabled={pending !== null} onClick={() => changeKind('receipts')}>Deposit Receipts{data && <span>{data.receiptCount}</span>}</button>
@@ -278,10 +301,10 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
             <td data-label="Amount / Status"><strong>{cash(receipt.amount)}</strong><span className={`gym-deposit-status gym-deposit-status-${receipt.status}`}>{receipt.status === 'held' ? 'Deposit held' : 'Refunded'}</span></td>
             <td data-label="Documents / Actions">{documents(receipt, 'receipt', receipt.receipt_no)}{canManage && receipt.status === 'held' && <button type="button" className="button gym-deposit-refund-button" disabled={busy || !data.signatureReady} onClick={() => void refund(receipt)} aria-label={`Record RM10 refund for ${receipt.payer}`}>{pending === `refund:${receipt.id}` ? 'Recording…' : 'Record RM10 refund'}</button>}{voucherId && voucherNumber && <a className="gym-deposit-related" href={pdfHref('voucher', voucherId)} target="_blank" rel="noopener noreferrer">PV: {voucherNumber}</a>}</td>
           </tr>;
-        })}</tbody></table></div> : <div className="gym-deposit-empty"><FileText size={25} aria-hidden="true"/><p>{member ? 'No deposit is recorded for this member.' : filters.q || filters.from || filters.to || filters.status ? 'No deposit receipts match these filters.' : 'No deposit receipts have been recorded yet.'}</p></div> : data.vouchers.length ? <div className="gym-deposit-table-wrap"><table className="table gym-deposit-table"><thead><tr><th scope="col">PV / Date</th><th scope="col">Paid to</th><th scope="col">Original deposit receipt</th><th scope="col">Refunded by / Amount</th><th scope="col">Documents / Email</th></tr></thead><tbody>{data.vouchers.map(voucher => <tr key={voucher.id}>
+        })}</tbody></table></div> : <div className="gym-deposit-empty"><FileText size={25} aria-hidden="true"/><p>{member ? 'No deposit receipt is recorded for this member.' : filters.q || filters.from || filters.to || filters.status ? 'No deposit receipts match these filters.' : 'No deposit receipts have been recorded yet.'}</p></div> : data.vouchers.length ? <div className="gym-deposit-table-wrap"><table className="table gym-deposit-table"><thead><tr><th scope="col">PV / Date</th><th scope="col">Paid to</th><th scope="col">Deposit reference / Purpose</th><th scope="col">Refunded by / Amount</th><th scope="col">Documents / Email</th></tr></thead><tbody>{data.vouchers.map(voucher => <tr key={voucher.id}>
           <td data-label="PV / Date"><strong>{voucher.voucher_no}</strong><small>{dateLabel(voucher.paid_on)}</small><span className="gym-deposit-status gym-deposit-status-refunded">Refunded</span></td>
           <td data-label="Paid to"><strong>{voucher.payer}</strong><small>{voucher.member_reference || 'No member reference'}</small><small>{voucher.email || 'Email not recorded'}</small></td>
-          <td data-label="Original deposit receipt"><a href={pdfHref('receipt', voucher.deposit_receipt_id)} target="_blank" rel="noopener noreferrer">{voucher.original_receipt_no}</a></td>
+          <td data-label="Deposit reference / Purpose">{voucher.origin === 'legacy_refund' ? <span className="gym-deposit-opening">Old handwritten deposit refund</span> : voucher.deposit_receipt_id && voucher.original_receipt_no ? <a href={pdfHref('receipt', voucher.deposit_receipt_id)} target="_blank" rel="noopener noreferrer">{voucher.original_receipt_no}</a> : 'Gym deposit refund'}</td>
           <td data-label="Refunded by / Amount"><strong>{voucher.refunded_by_name}</strong><small>{cash(voucher.amount)} · Cash</small></td>
           <td data-label="Documents / Email">{documents(voucher, 'voucher', voucher.voucher_no)}</td>
         </tr>)}</tbody></table></div> : <div className="gym-deposit-empty"><FileText size={25} aria-hidden="true"/><p>{filters.q || filters.from || filters.to ? 'No payment vouchers match these filters.' : 'No deposit refunds have been recorded yet.'}</p></div>}
