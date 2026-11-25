@@ -52,7 +52,7 @@ function receipt(overrides: Partial<DepositReceiptRecord> = {}): DepositReceiptR
 }
 function voucher(overrides: Partial<PaymentVoucherRecord> = {}): PaymentVoucherRecord {
   return {
-    id: 'voucher-a', voucher_no: 'KLGPV-2600001', source_module: 'gym', deposit_receipt_id: 'receipt-a',
+    id: 'voucher-a', voucher_no: 'KLGPV-2600001', source_module: 'gym', member_id: 'member-a', origin: 'deposit_refund', deposit_receipt_id: 'receipt-a',
     payer: 'Member A', email: 'member@example.test', member_reference: 'GYM-001', amount: '10.00', paid_on: '2026-11-25',
     refunded_by: 'staff-a', refunded_by_name: 'KEVIN LEE', refund_signature: signature as PaymentVoucherRecord['refund_signature'],
     created_at: '2026-11-25T01:00:00Z', pdf_path: null, pdf_error: null, email_status: 'pending', email_error: null,
@@ -93,6 +93,15 @@ describe('deposit document archive', () => {
     db.upload.mockResolvedValue({ error: { message: 'already exists' } });
     expect(await ensureDepositDocumentPdf('receipt', receipt())).toEqual(winner);
     expect(db.upload).toHaveBeenCalledWith('receipts/receipt-a.pdf', Buffer.from('new receipt'), { contentType: 'application/pdf', upsert: false });
+  });
+
+  it('archives a handwritten-deposit refund without looking up or inventing a receipt', async () => {
+    const db = database([{error:null}]);
+    db.download.mockResolvedValue({error:{message:'not found'}});
+    db.upload.mockResolvedValue({error:null});
+    await ensureDepositDocumentPdf('voucher', voucher({origin:'legacy_refund',deposit_receipt_id:null}));
+    expect(mocks.voucherPdf).toHaveBeenCalledWith(expect.objectContaining({origin:'legacy_refund',original_receipt_no:null,refunded_by_name:'KEVIN LEE'}));
+    expect(db.queries.every(query => query.table === 'payment_vouchers')).toBe(true);
   });
 
   it('renders a voucher with its immutable actual refunder signature and original receipt number', async () => {

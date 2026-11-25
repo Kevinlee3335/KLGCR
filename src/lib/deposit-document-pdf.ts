@@ -37,7 +37,8 @@ export type PaymentVoucherPdfData = {
   paid_on: string;
   refunded_by_name: string;
   refund_signature: Signature;
-  original_receipt_no: string;
+  original_receipt_no?: string | null;
+  origin?: 'deposit_refund' | 'legacy_refund';
 };
 
 const MARGIN = 28;
@@ -74,6 +75,7 @@ type DocumentInput = {
   signature?: Signature | null;
   existing?: boolean;
   originalReceipt?: string | null;
+  legacyRefund?: boolean;
 };
 
 function clean(value: string) {
@@ -278,10 +280,10 @@ async function render(input: DocumentInput): Promise<Buffer> {
   text('AMOUNT (RM)', right - 10, tableTop + 14, 8.2, true, INK, 'right');
   text(input.kind === 'voucher' ? 'Refund of gym deposit - Cash' : input.existing ? 'Existing refundable gym deposit - Cash' : 'Refundable gym deposit - Cash', MARGIN + 10, tableTop + 38, 9.3);
   text(Number(input.amount).toFixed(2), right - 10, tableTop + 38, 10.5, true, INK, 'right');
-  const description = input.kind === 'voucher' ? `Original Deposit Receipt No.: ${input.originalReceipt}` : input.existing ? 'Recorded for tracking only. No new cash collection.' : 'Deposit held separately from the RM40 membership fee.';
-  const descriptionLines = wrapped(description, regularLayout, 8.1, right - MARGIN - 20);
+  const description = input.kind === 'voucher' ? input.legacyRefund ? null : `Original Deposit Receipt No.: ${input.originalReceipt}` : input.existing ? 'Recorded for tracking only. No new cash collection.' : 'Deposit held separately from the RM40 membership fee.';
+  const descriptionLines = description === null ? [] : wrapped(description, regularLayout, 8.1, right - MARGIN - 20);
   descriptionLines.forEach((value, i) => text(value, MARGIN + 10, tableTop + 52 + i * 10, 8.1, false, MUTED));
-  const totalTop = tableTop + 78 + (descriptionLines.length - 1) * 10;
+  const totalTop = tableTop + 78 + Math.max(0, descriptionLines.length - 1) * 10;
   rule(totalTop - 17);
   text(amountWords(input.amount), MARGIN + 10, totalTop, 8.5, false, MUTED);
   text('TOTAL', right - 114, totalTop, 8.6, true, INK, 'right');
@@ -316,7 +318,8 @@ export function depositReceiptPdf(data: DepositReceiptPdfData): Promise<Buffer> 
 }
 
 export function paymentVoucherPdf(data: PaymentVoucherPdfData): Promise<Buffer> {
-  if (!clean(data.original_receipt_no)) return Promise.reject(new Error('The original deposit receipt number is required.'));
+  const legacyRefund = data.origin === 'legacy_refund';
+  if (!legacyRefund && !clean(data.original_receipt_no || '')) return Promise.reject(new Error('The original deposit receipt number is required.'));
   return render({kind: 'voucher', number: data.voucher_no, date: data.paid_on, payer: data.payer, reference: data.member_reference,
-    amount: Number(data.amount), actor: data.refunded_by_name, signature: data.refund_signature, originalReceipt: data.original_receipt_no});
+    amount: Number(data.amount), actor: data.refunded_by_name, signature: data.refund_signature, originalReceipt: data.original_receipt_no, legacyRefund});
 }

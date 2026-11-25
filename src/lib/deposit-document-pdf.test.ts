@@ -47,6 +47,30 @@ it('renders the approved signed PV on one A5 landscape page without a recipient 
   expect(text).not.toMatch(/Refund date|MYT|Confirmed at|I confirm|Sample|SAMPLE/);
 });
 
+it.each([null, undefined])('renders an old handwritten deposit refund without a prior receipt reference (%s)', async original_receipt_no => {
+  const bytes = await paymentVoucherPdf({...voucher, origin: 'legacy_refund', original_receipt_no});
+  const pdf = await PDFDocument.load(bytes);
+  expect(pdf.getPageCount()).toBe(1);
+  expect(pdf.getPage(0).getWidth()).toBeCloseTo(595.2756, 3);
+  expect(pdf.getPage(0).getHeight()).toBeCloseTo(419.5276, 3);
+  const text = await content(bytes);
+  expect(text).toContain('PAYMENT VOUCHER');
+  expect(text).toContain('KLGPV-2600001');
+  expect(text).toContain(voucher.payer);
+  expect(text).toContain(voucher.member_reference);
+  expect(text).toContain('25 Nov 2026');
+  expect(text).toContain('Refund of gym deposit - Cash');
+  expect(text).toContain('RM 10.00');
+  expect(text).toContain("The recipient's signature is not required for this payment voucher.");
+  expect(text).toContain('Refunded by:');
+  expect(text).toContain('KEVIN LEE');
+  expect(text).toContain('Refunding staff signature');
+  expect(text).not.toMatch(/Original Deposit Receipt|KLGDR-|N\/A|null|undefined|Refund date|I confirm/);
+  await expect(paymentVoucherPdf({...voucher, origin: 'deposit_refund', original_receipt_no})).rejects.toThrow('original deposit receipt');
+  await expect(paymentVoucherPdf({...voucher, original_receipt_no})).rejects.toThrow('original deposit receipt');
+  await expect(paymentVoucherPdf({...voucher, origin: 'legacy_refund', original_receipt_no, refund_signature: {strokes: []}})).rejects.toThrow('staff signature is required');
+});
+
 it('preserves long Unicode names and member references rather than stripping their characters', async () => {
   const payer = 'José Łukasz Nguyễn '.repeat(7).trim();
   const text = await content(await paymentVoucherPdf({...voucher, payer, member_reference: 'NONRESIDENT-2026-REGISTER-00000123456789'}));

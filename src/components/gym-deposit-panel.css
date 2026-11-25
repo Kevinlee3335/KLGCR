@@ -8,7 +8,7 @@
 .gym-deposit-panel .button{font-size:.875rem;min-height:38px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;line-height:1.25;border-radius:8px;text-decoration:none;white-space:normal}
 .gym-deposit-panel button:disabled{cursor:not-allowed;opacity:.55}
 .gym-deposit-refresh{flex-shrink:0}
-.gym-deposit-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--deposit-line);border-radius:12px;overflow:hidden;margin-bottom:20px;background:var(--deposit-wash)}
+.gym-deposit-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--deposit-line);border-radius:12px;overflow:hidden;margin-bottom:20px;background:var(--deposit-wash)}
 .gym-deposit-summary>div{display:grid;gap:7px;padding:15px;border-right:1px solid var(--deposit-line)}
 .gym-deposit-summary>div:last-child{border:0;background:#f2ead8}
 .gym-deposit-summary span{font-size:.78rem;color:#74664b}
@@ -20,6 +20,11 @@
 .gym-deposit-signature-check{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .gym-deposit-signature-check p{font-size:.82rem;color:var(--deposit-muted);margin:6px 0}
 .gym-deposit-member-tools{margin-bottom:18px}
+.gym-deposit-legacy-refund{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:14px 16px;margin-top:13px;border:1px solid var(--deposit-line);border-radius:10px;background:var(--deposit-wash)}
+.gym-deposit-legacy-refund h3{font-size:1rem;margin:0 0 5px}
+.gym-deposit-legacy-refund p{font-size:.82rem;color:var(--deposit-muted);line-height:1.5;margin:3px 0}
+.gym-deposit-legacy-refund .button{flex-shrink:0}
+.gym-deposit-legacy-complete{font-size:.85rem;line-height:1.6;color:#396349;margin:13px 0 0}
 .gym-deposit-held-note{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:.88rem;padding:11px 13px;margin:0;background:var(--deposit-wash);border-radius:8px;color:#725d32}
 .gym-deposit-buttons{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 .gym-deposit-buttons .subtle{flex-basis:100%;font-size:.82rem;margin:0}
@@ -72,6 +77,6 @@
 .gym-deposit-empty p{font-size:.87rem;margin:0}
 .gym-deposit-loading{padding:22px 0;color:var(--deposit-muted);font-size:.88rem}
 .gym-deposit-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:.8rem;color:var(--deposit-muted)}
-@media(max-width:1050px){.gym-deposit-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-deposit-summary>div:nth-child(2){border-right:0}.gym-deposit-summary>div:nth-child(-n+2){border-bottom:1px solid var(--deposit-line)}.gym-deposit-receive-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1050px){.gym-deposit-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-deposit-summary>div:nth-child(2){border-right:0}.gym-deposit-summary>div:nth-child(-n+2){border-bottom:1px solid var(--deposit-line)}.gym-deposit-summary>div:last-child{grid-column:1/-1}.gym-deposit-receive-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.gym-deposit-panel{padding:16px;border-radius:12px}.gym-deposit-heading{gap:10px}.gym-deposit-heading h2{font-size:1.12rem}.gym-deposit-heading .subtle{font-size:.8rem}.gym-deposit-refresh{font-size:0!important;gap:0!important;padding:10px!important}.gym-deposit-refresh svg{width:16px;height:16px}.gym-deposit-receive-form{grid-template-columns:minmax(0,1fr);padding:14px}.gym-deposit-tabs button{padding:10px 8px;font-size:.8rem}.gym-deposit-table-wrap{overflow:visible;border:0;border-radius:0}.gym-deposit-table,.gym-deposit-table tbody,.gym-deposit-table tr,.gym-deposit-table td{display:block;width:100%}.gym-deposit-table thead{display:none}.gym-deposit-table tr{padding:12px;border:1px solid var(--deposit-line);border-radius:10px;margin-bottom:11px;background:#fff}.gym-deposit-table td{display:grid;grid-template-columns:minmax(95px,.7fr) minmax(0,1.7fr);column-gap:10px;padding:8px 0;border:0}.gym-deposit-table td::before{content:attr(data-label);grid-column:1;grid-row:1/20;color:#8b7956;font-size:.73rem}.gym-deposit-table td>*{grid-column:2}.gym-deposit-table td>small{margin-top:3px}.gym-deposit-table td[data-label="Received by"]{display:block;padding-left:calc((100% - 10px)*.2917 + 10px);position:relative}.gym-deposit-table td[data-label="Received by"]::before{position:absolute;left:0}.gym-deposit-table .gym-deposit-document-actions{display:flex}.gym-deposit-summary>div{padding:12px}.gym-deposit-summary strong{font-size:1.08rem}.gym-deposit-summary span{font-size:.7rem}.gym-deposit-filters label{flex-basis:130px}.gym-deposit-filters .gym-deposit-search-field{flex-basis:100%}.gym-deposit-filters .button{min-height:39px}.gym-deposit-status{justify-self:start}.gym-deposit-panel input,.gym-deposit-panel select{font-size:16px}}
 @media(pointer:coarse){.gym-deposit-panel .button,.gym-deposit-text-button,.gym-deposit-download{min-height:44px}.gym-deposit-document-actions{gap:5px}.gym-deposit-text-button{padding:6px 0}}

@@ -12,7 +12,7 @@ const receipt: GymDepositReceipt = {
   created_at: '2026-11-25T04:00:00Z', pdf_ready: true, pdf_error: null, email_status: 'sent', email_error: null, emailed_at: '2026-11-25T04:01:00Z',
 };
 const voucher: GymPaymentVoucher = {
-  id: '00000000-0000-4000-8000-000000000012', voucher_no: 'KLGPV-2600001', deposit_receipt_id: receipt.id,
+  id: '00000000-0000-4000-8000-000000000012', voucher_no: 'KLGPV-2600001', member_id: member.id, origin: 'deposit_refund', deposit_receipt_id: receipt.id,
   payer: member.name, email: receipt.email, member_reference: receipt.member_reference, amount: 10,
   paid_on: '2026-11-25', refunded_by_name: 'Kevin Lee', original_receipt_no: receipt.receipt_no,
   created_at: '2026-11-25T05:00:00Z', pdf_ready: true, pdf_error: null, email_status: 'failed', email_error: 'Email gateway unavailable', emailed_at: null,
@@ -22,14 +22,15 @@ function result(overrides: Partial<GymDepositListResponse> = {}): GymDepositList
   return {
     receipts: [receipt], vouchers: [], receiptCount: 1, voucherCount: 0, signatureReady: true, actorName: 'Kevin Lee', canManage: true,
     summary: {receivedAmount: 10, openingAmount: 0, refundedAmount: 0, heldAmount: 10, heldCount: 1}, memberHasHeldDeposit: true,
+    hasDepositHistory: true, legacyRefunded: false, newDepositsAvailable: true, depositStartDate: '2026-12-01',
     ...overrides,
   };
 }
 
 const response = (body: unknown, ok = true) => ({ok, json: async () => body});
 const fetchMock = vi.fn();
-beforeEach(() => vi.stubGlobal('fetch', fetchMock));
-afterEach(() => {cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks();});
+beforeEach(() => {vi.stubGlobal('fetch', fetchMock); vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-12-02T04:00:00Z').getTime());});
+afterEach(() => {cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks();});
 
 it('shows saved documents but no cash or email actions in read-only mode', async () => {
   fetchMock.mockResolvedValue(response(result()));
@@ -77,21 +78,61 @@ it('retains the collection request id after a failure and succeeds on retry', as
   const requests = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse(init.body));
   expect(requests).toHaveLength(2);
   expect(requests[1].request_id).toBe(requests[0].request_id);
-  expect(requests[0]).toMatchObject({action: 'receive', member_id: member.id, origin: 'received', original_receipt_no: ''});
+  expect(requests[0]).toMatchObject({action: 'receive', member_id: member.id, origin: 'received'});
+  expect(requests[0]).not.toHaveProperty('original_receipt_no');
 });
 
-it('records legacy cash with the original receipt and date without claiming a new collection', async () => {
-  fetchMock.mockImplementation(async (_url, init) => init?.method === 'POST' ? response({ok: true, document: {id: receipt.id, number: 'OLD-123', kind: 'receipt'}}) : response(result({receipts: [], receiptCount: 0, memberHasHeldDeposit: false})));
+it('refunds an old handwritten deposit directly with a stable retry id and no receipt prerecording', async () => {
+  let attempts = 0, refunded = false;
+  const legacyVoucher: GymPaymentVoucher = {...voucher, origin: 'legacy_refund', deposit_receipt_id: null, original_receipt_no: null};
+  fetchMock.mockImplementation(async (_url, init) => {
+    if (init?.method === 'POST') {
+      if (++attempts === 1) return response({error: 'Network interrupted. Please retry.'}, false);
+      refunded = true;
+      return response({ok: true, voucher_no: legacyVoucher.voucher_no});
+    }
+    return response(result({receipts: [], receiptCount: 0, vouchers: refunded ? [legacyVoucher] : [], voucherCount: refunded ? 1 : 0, memberHasHeldDeposit: false, hasDepositHistory: false, legacyRefunded: refunded}));
+  });
   render(<GymDepositPanel member={{...member, memberType: 'resident'}}/>);
-  fireEvent.click(await screen.findByRole('button', {name: 'Record existing deposit'}));
+  const refundButton = await screen.findByRole('button', {name: 'Refund old handwritten deposit'});
   expect(screen.queryByRole('button', {name: 'Receive RM10 cash deposit'})).not.toBeInTheDocument();
-  expect(screen.getByText(/does not record new cash or automatically email/)).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Original Deposit Receipt No.'), {target: {value: 'OLD-123'}});
-  fireEvent.change(screen.getByLabelText('Original collection date'), {target: {value: '2025-10-02'}});
-  fireEvent.click(screen.getByRole('button', {name: 'Save existing deposit'}));
-  await screen.findByText(/OLD-123 saved/);
-  const payload = JSON.parse(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')![1].body);
-  expect(payload).toMatchObject({action: 'receive', member_id: member.id, origin: 'existing', original_receipt_no: 'OLD-123', received_on: '2025-10-02'});
+  expect(screen.queryByRole('button', {name: 'Record existing deposit'})).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Original Deposit Receipt No.')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Original collection date')).not.toBeInTheDocument();
+  fireEvent.click(refundButton);
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', {name: 'Refund old handwritten deposit'}));
+  await screen.findByText('Old handwritten deposit refund');
+  const requests = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse(init.body));
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEqual({action: 'refund_legacy', request_id: expect.any(String), member_id: member.id});
+  expect(requests[1].request_id).toBe(requests[0].request_id);
+  expect(screen.queryByRole('button', {name: 'Refund old handwritten deposit'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', {name: /KLGDR/})).not.toBeInTheDocument();
+});
+
+it('disables new receipt collection until December while old handwritten refunds remain available', async () => {
+  vi.mocked(Date.now).mockReturnValue(new Date('2026-11-25T04:00:00Z').getTime());
+  fetchMock.mockResolvedValue(response(result({receipts: [], receiptCount: 0, memberHasHeldDeposit: false, hasDepositHistory: false, newDepositsAvailable: false})));
+  render(<GymDepositPanel member={member}/>);
+  expect(await screen.findByRole('button', {name: 'Receive RM10 cash deposit'})).toBeDisabled();
+  expect(screen.getByText('New deposit receipts start on 1 Dec 2026.')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Refund old handwritten deposit'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', {name: 'Receive RM10 cash deposit'}));
+  expect(screen.queryByRole('button', {name: 'Record cash & issue receipt'})).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+});
+
+it('guards direct legacy refunds with staff signature and complete history independent of current filters', async () => {
+  fetchMock.mockResolvedValue(response(result({receipts: [], receiptCount: 0, memberHasHeldDeposit: false, hasDepositHistory: false, signatureReady: false})));
+  const view = render(<GymDepositPanel member={member}/>);
+  expect(await screen.findByRole('button', {name: 'Refund old handwritten deposit'})).toBeDisabled();
+  expect(screen.getByText('My saved signature editor')).toBeInTheDocument();
+  view.unmount();
+  fetchMock.mockResolvedValue(response(result({receipts: [], receiptCount: 0, voucherCount: 0, memberHasHeldDeposit: false, hasDepositHistory: true, signatureReady: true})));
+  render(<GymDepositPanel member={member}/>);
+  await screen.findByText('No deposit receipt is recorded for this member.');
+  expect(screen.queryByRole('button', {name: 'Refund old handwritten deposit'})).not.toBeInTheDocument();
 });
 
 it('records a refund with no member acknowledgment and keeps the refunded state if email fails', async () => {
