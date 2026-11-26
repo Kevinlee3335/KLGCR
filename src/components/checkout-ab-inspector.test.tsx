@@ -98,6 +98,17 @@ it("sends refreshed repair status into an existing inspection iframe",()=>{
  expect(post).toHaveBeenCalledWith({type:"klg-inspection-records",records:refreshed},window.location.origin);
 });
 
+it.each(["AB","CD"] as const)("sends an empty snapshot and refreshes on focus for %s after End Batch",blocks=>{
+ state.refresh.mockReset();
+ const {rerender}=render(<CheckoutABInspector blocks={blocks} initialInspections={[{checklist:record(),created_at:"2026-11-20T03:00:00Z"}]}/>);
+ const frame=screen.getByTitle(blocks==="AB"?"Block A and B room inspection":"Block C and D room inspection") as HTMLIFrameElement;
+ const post=vi.spyOn(frame.contentWindow!,"postMessage");
+ rerender(<CheckoutABInspector blocks={blocks} initialInspections={[]}/>);
+ expect(post).toHaveBeenCalledWith({type:"klg-inspection-records",records:[]},window.location.origin);
+ act(()=>window.dispatchEvent(new Event("focus")));
+ expect(state.refresh).toHaveBeenCalledTimes(1);
+});
+
 it("submits the C/D checklist and all category photos, and preserves a failed form for retry",async()=>{
  const {CD_CATEGORIES}=await import('@/lib/checkout-cd-inspection');
  const cd={id:'00000000-0000-4000-8000-000000000050',b:'C',room:218,l:2,t:6,round:1,date:'2026-11-20',by:'Kevin',reason:'Inspection',it:Object.fromEntries(CD_CATEGORIES.flatMap(([,items],ci)=>items.map((_,si)=>[`${ci}.${si}`,0]))),nt:{1:'Fan stopped'},ph:{1:['data:image/jpeg;base64,cGhvdG8=']}};

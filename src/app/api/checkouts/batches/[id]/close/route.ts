@@ -43,7 +43,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
   const run=randomUUID(),summaryPath=`${profile.id}/${snapshot.batch.summary_document_id}/summary-${run}.pdf`,detailsPath=`${profile.id}/${snapshot.batch.details_document_id}/details-${run}.pdf`;
   for(const [path,bytes]of [[summaryPath,summary],[detailsPath,details]] as const){const upload=await db.storage.from('system-documents').upload(path,bytes,{contentType:'application/pdf',upsert:false});if(upload.error)throw new Error('Report upload failed. Retry End Batch; your records are preserved.');}
   const result=await db.rpc('finish_checkout_batch_close',{p_batch_id:id,p_summary_path:summaryPath,p_details_path:detailsPath});if(result.error)throw new Error(result.error.message);
-  revalidatePath('/admin/checkouts');revalidatePath('/documents');revalidatePath('/documents/check-out-batches');revalidatePath('/staff/checkouts');
+  revalidatePath('/admin/checkouts');revalidatePath('/admin/checkouts/inspection');revalidatePath('/documents');revalidatePath('/documents/check-out-batches');revalidatePath('/staff/checkouts');
   return NextResponse.json({ok:true,href:'/admin/checkouts/batches/'+id});
  }catch(e){console.error('Check-out batch close failed',e instanceof Error?e.message:'Unknown error');return NextResponse.json({error:e instanceof Error?e.message:'Unable to generate reports. Retry End Batch.'},{status:409});}
 }

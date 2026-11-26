@@ -32,7 +32,6 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPE
   frame.current?.contentWindow?.postMessage({type:"klg-inspection-records",records:initialInspections},window.location.origin);
  },[initialInspections]);
  useEffect(()=>{
-  if(blocks!=="CD")return;
   const refresh=()=>{if(document.visibilityState==="visible"&&!pending.current)router.refresh();};
   const timer=window.setInterval(refresh,60000);
   window.addEventListener("focus",refresh);
@@ -41,7 +40,7 @@ export function CheckoutABInspector({isAdmin=true,initialInspections=EMPTY_INSPE
  useEffect(()=>{
   async function receive(event:MessageEvent){
    if(event.origin!==window.location.origin||event.source!==frame.current?.contentWindow||pending.current)return;
-   if(blocks==="CD"&&event.data?.type==="klg-inspection-refresh"){router.refresh();return;}
+   if(event.data?.type==="klg-inspection-refresh"){router.refresh();return;}
    if(!isAdmin&&event.data?.type==="klg-inspection-recent"){
     if(event.data.startAfter)frame.current?.contentWindow?.postMessage({type:"klg-inspection-continue",room:event.data.room,request:event.data.request},window.location.origin);
     return;

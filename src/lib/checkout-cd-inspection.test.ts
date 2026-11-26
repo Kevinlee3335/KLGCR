@@ -78,3 +78,23 @@ it('converts and tracks all 35 C/D checklist items, without missing window or ha
  const defects=findings.map(f=>({description:f.description,status:'rectified'}));
  expect(inspectionRepairKeys(r,defects)).toHaveLength(35);
 });
+
+it('replaces C/D snapshots after End Batch, clears stale reports, and retains local drafts',()=>{
+ const {dom,w,ui}=setup();try{
+  ui.start('C','1',101);ui.A.draft();
+  const r=record();
+  ui.mergeSubmitted([{checklist:r,created_at:'2026-11-20T03:00:00Z'}]);
+  ui.A.rep(r.id);expect(ui.S.report).not.toBeNull();
+  const draft=w.localStorage.getItem('klg-checkout-cd-drafts');
+  ui.mergeSubmitted([]);
+  expect(ui.S.report).toBeNull();expect(ui.S.tab).toBe('sum');
+  expect(ui.S.recs.filter((r:{submitted:boolean})=>r.submitted)).toHaveLength(0);
+  expect(w.localStorage.getItem('klg-checkout-cd-drafts')).toBe(draft);
+  w.eval("S.level='2';render();");
+  expect(w.document.querySelectorAll('.st b')[1].textContent).toBe('0');
+  expect(w.document.querySelector('.summary-table tbody')!.textContent).not.toContain('✅');
+  const next={...record(),id:'new-batch-inspection',room:219};
+  ui.mergeSubmitted([{checklist:next,created_at:'2026-11-26T03:00:00Z'}]);
+  expect(ui.S.recs.filter((r:{submitted:boolean})=>r.submitted).map((r:{id:string})=>r.id)).toEqual([next.id]);
+ }finally{dom.window.close();}
+});

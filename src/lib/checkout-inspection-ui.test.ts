@@ -60,3 +60,25 @@ it("updates the summary from linked repair status while retaining original findi
  expect(summary()).toContain('title="Chair">❌');
  }finally{dom.window.close()}
 });
+
+it("resets A/B summary and totals on an empty current-batch snapshot without deleting local drafts",()=>{
+ const {dom,w,ui}=setup();try{
+ ui.start("A104");ui.getRecord().by="Inspector";ui.save(false);
+ const draft=w.localStorage.getItem("klgcr-ab-inspection-system-v1");
+ const r=JSON.parse(draft!)[0];
+ w.eval(`mergeSubmitted(${JSON.stringify([{checklist:r,created_at:"2026-11-20T03:00:00Z"}])});tab='sum';block='A';level='1';render();`);
+ const row=()=>w.document.querySelector('[onclick*="A104"]')!.closest('tr')!;
+ expect(row().textContent).toContain("✅");
+ w.eval("mergeSubmitted([]);render();");
+ expect(row().textContent).not.toContain("✅");
+ expect(row().textContent).toContain("0%");
+ expect(w.document.querySelectorAll('.st b')[1].textContent).toBe("0");
+ expect(w.eval("latest('A104',true)")).toBeUndefined();
+ expect(w.localStorage.getItem("klgcr-ab-inspection-system-v1")).toBe(draft);
+ // New-batch inspections appear immediately, and old rooms stay empty.
+ ui.start("A107");const next=structuredClone(ui.getRecord());
+ w.eval(`mergeSubmitted(${JSON.stringify([{checklist:next,created_at:"2026-11-26T03:00:00Z"}])});tab='sum';render();`);
+ expect(row().textContent).toContain("0%");
+ expect(w.eval("latest('A107',true).id")).toBe(next.id);
+ }finally{dom.window.close()}
+});
