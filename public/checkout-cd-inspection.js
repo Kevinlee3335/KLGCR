@@ -41,7 +41,8 @@ function checkRecentInspection(room,startAfter=false){const request=++recentRequ
  window.parent.postMessage({type:'klg-inspection-recent',room,request,startAfter},location.origin);
 }
 function requestStart(b,l,room){if(photoPending)return toast('Please wait for photos to finish processing.');checkRecentInspection(b+room,true);}
-function mergeSubmitted(rows){for(const row of rows){const r=row.checklist;if(!r||!ROOMS[r.b+r.room]||!r.it)continue;const copy={...structuredClone(r),nt:r.nt||{},ph:r.ph||{},dt:r.dt||{},submitted:true,saved:row.created_at,rectifiedItems:row.rectifiedItems||[],checkoutId:row.checkoutId,roomStatus:row.roomStatus,repair:row.repair};const i=S.recs.findIndex(x=>x.id===r.id);if(i<0)S.recs.push(copy);else S.recs[i]=copy;}if(S.report){const fresh=S.recs.find(r=>r.id===S.report.id);if(fresh)S.report=fresh;}}
+// Each message is the complete current-batch snapshot, including an empty new batch.
+function mergeSubmitted(rows){S.recs=S.recs.filter(r=>!r.submitted);for(const row of rows){const r=row.checklist;if(!r||!ROOMS[r.b+r.room]||!r.it)continue;const copy={...structuredClone(r),nt:r.nt||{},ph:r.ph||{},dt:r.dt||{},submitted:true,saved:row.created_at,rectifiedItems:row.rectifiedItems||[],checkoutId:row.checkoutId,roomStatus:row.roomStatus,repair:row.repair};const i=S.recs.findIndex(x=>x.id===r.id);if(i<0)S.recs.push(copy);else S.recs[i]=copy;}if(S.report){const fresh=S.recs.find(r=>r.id===S.report.id);if(fresh)S.report=fresh;else{S.report=null;if(S.tab==='rep')S.tab='sum';}}}
 window.addEventListener('message',event=>{if(event.source!==window.parent||event.origin!==location.origin)return;const data=event.data||{};
  if(data.type==='klg-inspection-records'&&Array.isArray(data.records)){mergeSubmitted(data.records);render();}
  if(data.type==='klg-inspection-continue'&&data.request===recentRequest&&ROOMS[data.room]){const info=ROOMS[data.room];start(info.b,info.l,info.room);}

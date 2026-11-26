@@ -15,7 +15,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{blocks?
  const inspections:{checklist:unknown;created_at:string;rectifiedItems:string[];checkoutId:string;roomStatus:string;repair:{total:number;completed:number;remaining:number}}[]=[];
  let loadError=false;
  for(let offset=0;;offset+=500){
-  const {data,error}=await db.from("checkout_rooms").select("id,status,inspection_checklist,created_at,checkout_defects(description,status)").is("deleted_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
+  const {data,error}=await db.from("checkout_rooms").select("id,status,inspection_checklist,created_at,checkout_defects(description,status)").is("deleted_at",null).is("batch_archived_at",null).not("inspection_checklist","is",null).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+499);
   if(error){loadError=true;break;}
   inspections.push(...(data||[]).map(row=>({checklist:row.inspection_checklist,created_at:row.created_at,checkoutId:row.id,roomStatus:row.status,repair:checkoutProgress(row.checkout_defects||[]),rectifiedItems:inspectionRepairKeys(row.inspection_checklist,row.checkout_defects||[])})));
   if(!data||data.length<500)break;
