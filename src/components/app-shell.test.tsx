@@ -20,14 +20,21 @@ const workLinks = [
   ["Waste Collection", "/admin/waste-collection"],
 ];
 
-it("uses direct same-tab links only for the five Work Management entries in both menus", () => {
+const dailyLinks = [
+  ["All Daily Tasks", "/admin/daily-tasks"],
+  ["Admin Task", "/admin/daily-tasks?category=admin"],
+  ["Operation Task", "/admin/daily-tasks?category=operation"],
+  ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping"],
+];
+
+it("uses direct same-tab links for the Work Management and Daily Tasks entries in both menus", () => {
   render(<AppShell profile={profile} title="New Complaints">Page</AppShell>);
   const menus = screen.getAllByRole("navigation", { name: "Main navigation", hidden: true });
   expect(menus).toHaveLength(2);
   for (const menu of menus) {
     const links = within(menu).getAllByRole("link", { hidden: true });
     const nativeLinks = links.filter(link => !link.hasAttribute("data-client-navigation"));
-    expect(nativeLinks.map(link => [link.textContent, link.getAttribute("href")])).toEqual(workLinks);
+    expect(nativeLinks.map(link => [link.textContent, link.getAttribute("href")])).toEqual([...workLinks, ...dailyLinks]);
     for (const link of nativeLinks) {
       expect(link).not.toHaveAttribute("target");
       expect(link).not.toHaveAttribute("download");
@@ -43,6 +50,22 @@ it("keeps Flex hidden in both Work Management menus for management viewers", () 
   expect(menus).toHaveLength(2);
   for (const menu of menus) {
     expect(menu.querySelector('a[href="/flex-inspections"]')).toBeNull();
-    expect(menu.querySelectorAll(".work-management-link")).toHaveLength(4);
+    const links = menu.querySelectorAll("a.native-menu-link");
+    expect(Array.from(links, link => link.textContent)).toEqual(
+      [...workLinks, ...dailyLinks].map(([label]) => label).filter(label => label !== "Flex Fire Safety Inspection")
+    );
+  }
+});
+
+it.each(dailyLinks)("marks only %s as current in both Daily Tasks menus", (label, href) => {
+  const title = label === "All Daily Tasks" ? "Daily Tasks" : label;
+  render(<AppShell profile={profile} title={title}>Page</AppShell>);
+
+  for (const menu of screen.getAllByRole("navigation", { name: "Main navigation", hidden: true })) {
+    const active = menu.querySelectorAll('a[aria-current="page"]');
+    expect(active).toHaveLength(1);
+    expect(active[0]).toHaveTextContent(label);
+    expect(active[0]).toHaveAttribute("href", href);
+    expect(active[0].closest(".admin-nav-group")).toHaveClass("is-active");
   }
 });
