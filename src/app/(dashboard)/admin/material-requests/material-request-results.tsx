@@ -4,7 +4,6 @@ import { MaterialLineActions } from "@/components/material-line-actions";
 import { MaterialRequestHistory } from "@/components/material-request-history";
 import { MatchMaterialItem } from "@/components/match-material-item";
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
 import { Suspense } from "react";
 
 const PAGE_SIZE = 25;
@@ -68,11 +67,11 @@ export function MaterialRequestResults({ isAdmin, query }: { isAdmin: boolean; q
     <Suspense fallback={null}><TotalsError totals={totals}/></Suspense>
     <nav className="material-request-kpis" aria-label="Filter material requests">
       {filters.map((filter, index) => <article key={filter.status}>
-        <Link href={`/admin/material-requests?status=${filter.status}`} aria-current={status === filter.status ? "page" : undefined}>
+        <a href={`/admin/material-requests?status=${filter.status}`} aria-current={status === filter.status ? "page" : undefined}>
           <span>{filter.label}</span><strong><Suspense fallback={<span aria-busy="true">—</span>}>
             <RequestCount total={totals[index]}/>
           </Suspense></strong><small>{filter.hint}</small>
-        </Link>
+        </a>
       </article>)}
     </nav>
     <Suspense fallback={<div className="panel" role="status" aria-busy="true"><p className="subtle">Loading material requests…</p></div>}>
@@ -103,7 +102,7 @@ async function RequestList({ selection, status, isAdmin }: {
 
   return <>
     {error && <p className="error">{error.message}</p>}
-    <div className="material-request-results"><h3>{activeLabel}</h3><p className="subtle">{selectedCount != null && !total.error ? `${selectedCount} request${selectedCount === 1 ? "" : "s"} · ` : ""}Showing {rows.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + rows.length}</p>{status !== "all" && <Link className="text-link" href="/admin/material-requests?status=all">Clear filter</Link>}</div>
+    <div className="material-request-results"><h3>{activeLabel}</h3><p className="subtle">{selectedCount != null && !total.error ? `${selectedCount} request${selectedCount === 1 ? "" : "s"} · ` : ""}Showing {rows.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + rows.length}</p>{status !== "all" && <a className="text-link" href="/admin/material-requests?status=all">Clear filter</a>}</div>
 
     <section className="material-request-list" aria-label={activeLabel}>{error ? null : rows.length === 0 ? <div className="panel"><p className="dashboard-empty">{status === "pending" ? "No requests waiting for approval." : status === "approved" ? "No approved requests waiting to be issued." : "No material requests yet."}</p></div> : rows.map((request: any) => <article className={`panel request-card request-${request.status}`} key={request.id}>
       <div className="request-card-head"><div><div className="request-title-row"><strong>{request.request_no}</strong><span className={`status-badge status-${request.status}`}>{materialRequestLabel(request.status,request.items||[])}</span></div><p>{request.checkout?.reference_no || request.job?.job_no || "No job"} · Block {request.checkout?.block?.code || request.job?.block?.code || "–"} · Room {request.checkout?.room_no || request.job?.room_no || "–"}</p></div><div className="request-staff"><span>Requested by</span><strong>{request.staff?.full_name || "—"}</strong><small>{requestDateTime.format(new Date(request.created_at))}</small></div></div>
@@ -117,9 +116,9 @@ async function RequestList({ selection, status, isAdmin }: {
 
     </article>)}</section>
     {!error && pageCount > 1 && <nav className="material-request-pagination" aria-label="Material request pages">
-      {page > 1 && <Link className="button secondary" href={pageHref(page - 1)}>Previous</Link>}
+      {page > 1 && <a className="button secondary" href={pageHref(page - 1)}>Previous</a>}
       <span>Page {page} of {pageCount}</span>
-      {page < pageCount && <Link className="button secondary" href={pageHref(page + 1)}>Next</Link>}
+      {page < pageCount && <a className="button secondary" href={pageHref(page + 1)}>Next</a>}
     </nav>}
   </>;
 }

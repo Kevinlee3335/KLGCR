@@ -135,10 +135,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <section id="inventory-stock-list" className="panel inventory-stock-card">
         <div className="section-head compact-head">
           <div><h3>Stock List</h3><p className="subtle">Grouped by store category and ordered by Item Code.</p></div>
-          <Link className="button secondary-button" prefetch={false} aria-expanded={hasStockFilter}
+          <a className="button secondary-button" aria-expanded={hasStockFilter}
             href={hasStockFilter ? `${base}#inventory-stock-list` : `${base}&view=all#inventory-stock-list`}>
             {hasStockFilter ? "Hide List" : "View All"}
-          </Link>
+          </a>
         </div>
         <form method="get" className="inventory-form inventory-search">
           <input type="hidden" name="store" value={store} />
@@ -154,8 +154,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           <div>
             <button className="button" type="submit">Search</button>
             {(search || category) && <>
-              <Link className="button secondary-button" prefetch={false} href={`${base}&view=all#inventory-stock-list`}>View All</Link>
-              <Link className="button secondary-button" prefetch={false} href={base}>Clear</Link>
+              <a className="button secondary-button" href={`${base}&view=all#inventory-stock-list`}>View All</a>
+              <a className="button secondary-button" href={base}>Clear</a>
             </>}
           </div>
         </form>
@@ -164,7 +164,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         </Suspense> : <p className="dashboard-empty">Click View All to see the full stock list, or select an inventory group / search by Item Code or name.</p>}
       </section>
       {canManage && <section className="panel inventory-form-card" id="stock-out">
-        <div className="section-head compact-head"><div><p className="eyebrow">Stock Movement</p><h3>Stock Out</h3><p className="subtle">Record materials collected by General Staff or other recipients.</p></div><Link className="button secondary-button" prefetch={false} href={`${base}&view=all#inventory-stock-list`}>Stock In / Adjust</Link></div>
+        <div className="section-head compact-head"><div><p className="eyebrow">Stock Movement</p><h3>Stock Out</h3><p className="subtle">Record materials collected by General Staff or other recipients.</p></div><a className="button secondary-button" href={`${base}&view=all#inventory-stock-list`}>Stock In / Adjust</a></div>
         <form action="/admin/inventory/action" method="post" className="inventory-form">
           <input type="hidden" name="action" value="stock_out"/><input type="hidden" name="store" value={store}/>
           <label className="span-2"><span>Usage / Check-out Batch</span><Suspense fallback={<select name="checkoutBatchId" required defaultValue="" aria-busy="true"><option value="">Loading check-out batch…</option></select>}>
