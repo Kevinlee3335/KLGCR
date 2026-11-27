@@ -1,10 +1,11 @@
+import { requireRole } from "@/lib/auth";
+import { ComplaintSummaryDisclosure } from "./complaint-summary-disclosure";
 import { createClient } from "@/lib/supabase/server";
 import { dateRange, malaysiaDate, summarize, type Appointment, type Complaint, type Job } from "@/lib/complaint-summary";
 
 type Block = { id: number; code: string };
 
-export async function ComplaintSummary({ from, to, block, blocks, filters }: { from?: string; to?: string; block?: string; blocks: Block[]; filters: Record<string, string | undefined> }) {
-  const dates = dateRange(from, to, malaysiaDate(new Date()));
+async function readSummary(dates: ReturnType<typeof dateRange>, block?: string) {
   const db = await createClient();
   async function pages<T>(run: (start: number, end: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
     const result: T[] = [];
@@ -41,9 +42,21 @@ export async function ComplaintSummary({ from, to, block, blocks, filters }: { f
     data = { ...summarize(complaints, jobs, appointments), completedJobs: completed.length, completedDuringPeriod: new Set(completed.map(j => j.complaint_id)).size, roomsCompletedDuringPeriod: new Set(completed.map(j => `${j.block_id}:${j.room_no.trim().toUpperCase()}`)).size };
   } catch (caught) { error = caught instanceof Error ? caught.message : "Unable to load summary."; }
 
-  return <details className="panel complaint-summary" open={Boolean(from || to)}>
-    <summary><strong>Report Summary</strong><span className="complaint-summary-toggle">View date summary <span aria-hidden="true">⌄</span></span></summary>
-    <div className="complaint-summary-content">
+  return { data, error };
+}
+
+export async function ComplaintSummary({ from, to, block, blocks, filters }: { from?: string; to?: string; block?: string; blocks: Block[]; filters: Record<string, string | undefined> }) {
+  const dates = dateRange(from, to, malaysiaDate(new Date()));
+  const initiallyOpen = Boolean(from || to);
+  async function loadOnOpen() {
+    "use server";
+    await requireRole(["admin", "management_viewer"]);
+    return readSummary(dates, block);
+  }
+
+  return <ComplaintSummaryDisclosure key={JSON.stringify([dates.from, dates.to, block, initiallyOpen])}
+    initiallyOpen={initiallyOpen} initialResult={initiallyOpen ? await readSummary(dates, block) : null}
+    loadOnOpen={loadOnOpen}>
     <form method="get" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end", marginBottom: 12 }}>
       {(["search", "status", "priority", "source", "date", "needAppointment"] as const).map(key => filters[key] && <input key={key} type="hidden" name={key} value={filters[key]} />)}
       <label>From<br /><input aria-label="Summary from" type="date" name="summaryFrom" defaultValue={dates.from} required /></label>
@@ -51,10 +64,7 @@ export async function ComplaintSummary({ from, to, block, blocks, filters }: { f
       <label>Block<br /><select aria-label="Summary block" name="block" defaultValue={block || ""}><option value="">All blocks</option>{blocks.map(b => <option key={b.id} value={b.id}>Block {b.code}</option>)}</select></label>
       <button className="button" type="submit">View summary</button>
     </form>
-    {error ? <p className="error">Summary unavailable: {error}</p> : data && <>
-      <div className="metrics compact">{[["New reports received", data.total], ["Rooms reported", data.rooms], ["Completed reports (current)", data.completed], ["Completed rooms (current)", data.completedRooms], ["In progress", data.inProgress], ["Pending material", data.pendingMaterial], ["Under monitoring", data.monitoring], ["Tenant not available", data.tenantUnavailable], ["Assigned / not started", data.assigned], ["Pending / not assigned", data.pending], ["KIV", data.kiv], ["Rejected", data.rejected]].map(([label, value]) => <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value}</div></article>)}</div>
-      <p style={{ marginBottom: 0 }}><strong>Completion rate:</strong> {data.completionRate}% of reports received in this range are fully completed. <strong>Completed during this range:</strong> {data.completedJobs} jobs across {data.completedDuringPeriod} reports and {data.roomsCompletedDuringPeriod} rooms (including reports received earlier).</p>
-    </>}
-    </div>
-  </details>;
+  </ComplaintSummaryDisclosure>;
 }
+
+export type ComplaintSummaryResult = Awaited<ReturnType<typeof readSummary>>;

@@ -53,27 +53,125 @@ function DeletedComplaintList({ rows, blocks }: { rows: DeletedComplaint[]; bloc
   return <><div className="desktop-table table-wrap" role="region" aria-label="Deleted complaints table" tabIndex={0}><table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Category / description</th><th>Source</th><th>Priority</th><th>Submitted</th><th>Status</th><th>Deleted by</th><th>Deleted</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.complaint_no}</td><td>{location(row)}</td><td><strong>{row.category || "—"}</strong><br /><span className="truncate">{row.description || "—"}</span></td><td>Archived</td><td><PriorityBadge value={row.priority} /></td><td>{row.submitted_at ? formatDate(row.submitted_at) : "—"}</td><td><StatusBadge value="deleted" /></td><td>{row.deleted_by_name || "—"}</td><td>{formatDate(row.deleted_at)}</td></tr>)}</tbody></table></div><div className="mobile-cards">{rows.map((row) => <article className="panel record-card" key={row.id}><div className="record-head"><strong>{row.complaint_no}</strong><StatusBadge value="deleted" /></div><h3>{location(row)}</h3><p>{row.category || "—"} — {row.description || "—"}</p><div className="record-meta"><PriorityBadge value={row.priority} /><span>Deleted by {row.deleted_by_name || "—"} · {formatDate(row.deleted_at)}</span></div></article>)}</div></>;
 }
 
-export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+type Filters = Record<string, string | undefined>;
+type Database = Awaited<ReturnType<typeof createClient>>;
+
+async function getBlocks(db: Database) {
+  return await db.from("blocks").select("id,code").order("code");
+}
+type BlocksRequest = ReturnType<typeof getBlocks>;
+
+async function resolveFilters(input: Filters, blocks: BlocksRequest): Promise<Filters> {
+  const room = parseRoomSearch(input.search);
+  if (!room) return input;
+  const { data, error } = await blocks;
+  if (error) throw new Error(error.message);
+  const block = data?.find(row => row.code.toUpperCase() === room.blockCode);
+  // An unknown block must never broaden the search to other buildings.
+  return { ...input, block: block?.id || "00000000-0000-0000-0000-000000000000" };
+}
+
+export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
-  const q = await searchParams;
-  const supabase = await createClient();
+  const [supabase, input] = await Promise.all([createClient(), searchParams]);
+  const blocks = getBlocks(supabase);
+  const filters = resolveFilters(input, blocks);
+  return <AppShell profile={profile} title="New Complaints">
+    <div className="section-head">
+      <div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>
+      {profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}
+    </div>
+    <Suspense fallback={<MetricCards/>}>
+      <ComplaintMetrics supabase={supabase}/>
+    </Suspense>
+    <Suspense fallback={<p className="subtle" role="status">Loading report summary…</p>}>
+      <ReportSummary filters={filters} blocks={blocks}/>
+    </Suspense>
+    <Suspense fallback={<p className="subtle" role="status">Loading filters…</p>}>
+      <ComplaintFilters filters={filters} blocks={blocks}/>
+    </Suspense>
+    {input.deleted && <p className="success">Complaint deleted.</p>}
+    <Suspense key={JSON.stringify(input)} fallback={<p className="panel subtle" role="status">Loading complaints…</p>}>
+      <ComplaintResults supabase={supabase} filters={filters} blocks={blocks} canDelete={profile.role === "admin"}/>
+    </Suspense>
+  </AppShell>;
+}
+
+async function ComplaintMetrics({ supabase }: { supabase: Database }) {
+  const [{ count: newCount }, { count: reviewCount }, { count: kivCount }, { count: assignedToday }, { count: urgentCount }] = await Promise.all([
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "new"),
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "under_review"),
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "kiv"),
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "assigned").gte("assigned_at", new Date().toISOString().slice(0, 10)),
+    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("priority", "urgent").not("status", "in", "(rejected,closed)"),
+  ]);
+  return <MetricCards counts={[newCount, reviewCount, kivCount, assignedToday, urgentCount]}/>;
+}
+
+function MetricCards({ counts }: { counts?: (number | null)[] }) {
+  return <section className="metrics compact complaint-intake-metrics" aria-label="Complaint totals" aria-busy={!counts}>
+    {["New", "Under review", "KIV", "Assigned today", "Urgent"].map((label, i) => (
+      <article className="panel metric" key={label}><span className="subtle">{label}</span><div className="value">{counts ? counts[i] ?? 0 : "—"}</div></article>
+    ))}
+  </section>;
+}
+
+type FilterContext = { filters: Promise<Filters>; blocks: BlocksRequest };
+
+async function ReportSummary({ filters, blocks }: FilterContext) {
+  const [q, { data }] = await Promise.all([filters, blocks]);
+  return <ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={data || []} filters={q}/>;
+}
+
+async function BlockSelect({ blocks, selected }: { blocks: BlocksRequest; selected?: string }) {
+  const { data } = await blocks;
+  return <select aria-label="Block" name="block" defaultValue={selected || ""}>
+    <option value="">All blocks</option>{data?.map(row => <option key={row.id} value={row.id}>Block {row.code}</option>)}
+  </select>;
+}
+
+async function ComplaintFilters({ filters, blocks }: FilterContext) {
+  const q = await filters;
+  const isDeleted = q.status === "deleted";
+  const sort = selectedComplaintSort(q);
+  return <form className="panel filter-bar">
+      {q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}
+      {q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}
+      {!isDeleted && <input type="hidden" name="sort" value={sort.value} />}
+      {q.category && <input type="hidden" name="category" value={q.category} />}
+      {q.assigned && <input type="hidden" name="assigned" value={q.assigned} />}
+      <input aria-label="Search complaints" name="search" defaultValue={q.search} placeholder="Search A421, B511, complaint, name…" />
+      <select aria-label="Status" name="status" defaultValue={q.status || ""}>
+        <option value="">All statuses</option>{[...complaintStatuses, "deleted"].map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
+      </select>
+      <Suspense fallback={<>
+        {q.block && <input type="hidden" name="block" value={q.block}/>}
+        <select aria-label="Block" disabled><option>Loading blocks…</option></select>
+      </>}>
+        <BlockSelect blocks={blocks} selected={q.block}/>
+      </Suspense>
+      <select aria-label="Priority" name="priority" defaultValue={q.priority || ""}>
+        <option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}
+      </select>
+      <select aria-label="Source" name="source" defaultValue={q.source || ""} disabled={isDeleted}>
+        <option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}
+      </select>
+      <input aria-label="Submitted date" type="date" name="date" defaultValue={q.date} />
+      <button className="button">Filter</button>
+    </form>;
+}
+
+async function ComplaintResults({ supabase, filters, blocks, canDelete }: FilterContext & { supabase: Database; canDelete: boolean }) {
+  const q = await filters;
   const pageNumber = Number(q.page);
   const page = Number.isSafeInteger(pageNumber * PAGE_SIZE) && Number.isInteger(pageNumber) && pageNumber > 0 ? pageNumber : 1;
   const offset = (page - 1) * PAGE_SIZE;
-  const blocksQuery = supabase.from("blocks").select("id,code").order("code");
   const roomSearch = parseRoomSearch(q.search);
-  const searchedBlocks = roomSearch ? await blocksQuery : null;
-  if (roomSearch && searchedBlocks) {
-    if (searchedBlocks.error) throw new Error(searchedBlocks.error.message);
-    const block = searchedBlocks.data?.find(row => row.code.toUpperCase() === roomSearch.blockCode);
-    // An unknown block must never broaden the search to other buildings.
-    q.block = block?.id || "00000000-0000-0000-0000-000000000000";
-  }
   const isDeleted = q.status === "deleted";
   const selectedStatuses = selectedComplaintStatuses(q);
   const statusesShownInMenu = selectedStatuses.length ? selectedStatuses : [...complaintStatuses];
   const sort = selectedComplaintSort(q);
-  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,source_reference,room_no,complainant_name,complainant_contact,category,description,priority,status,submitted_at,assigned_at,availability_date,availability_time,room_access_permission,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)");
+  let activeQuery = supabase.from("complaints").select("id,complaint_no,source,room_no,category,description,priority,status,submitted_at,block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)");
   let deletedQuery = supabase.from("deleted_complaints").select("id,complaint_no,block_id,room_no,category,description,priority,submitted_at,deleted_at,deleted_by_name").order("deleted_at", { ascending: false }).order("id");
 
   if (isDeleted) {
@@ -98,21 +196,9 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     activeQuery = activeQuery.order(sort.sortBy, { ascending: sort.ascending }).order("id");
   }
 
-  const emptyResult = { data: null, error: null };
-  const [{ data, error }, { data: deletedRows, error: deletedError }, { data: blocks }, { data: categoryRows }, { data: staff }, { count: newCount }, { count: reviewCount }, { count: kivCount }, { count: assignedToday }, { count: urgentCount }] = await Promise.all([
-    isDeleted ? emptyResult : activeQuery.range(offset, offset + PAGE_SIZE),
-    isDeleted ? deletedQuery.range(offset, offset + PAGE_SIZE) : emptyResult,
-    searchedBlocks ?? blocksQuery,
-    isDeleted ? emptyResult : supabase.from("complaints").select("category").order("category"),
-    isDeleted ? emptyResult : supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name"),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "new"),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "under_review"),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "kiv"),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "assigned").gte("assigned_at", new Date().toISOString().slice(0, 10)),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("priority", "urgent").not("status", "in", "(rejected,closed)"),
-  ]);
-  const resultError = isDeleted ? deletedError : error;
-  const hasNext = ((isDeleted ? deletedRows : data)?.length ?? 0) > PAGE_SIZE;
+  const { data, error } = await (isDeleted ? deletedQuery : activeQuery).range(offset, offset + PAGE_SIZE);
+  const deletedBlocks = isDeleted ? (await blocks).data : null;
+  const hasNext = (data?.length ?? 0) > PAGE_SIZE;
   const pageHref = (nextPage: number) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(q)) {
@@ -122,8 +208,6 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     const query = params.toString();
     return query ? `/admin/complaints?${query}` : "/admin/complaints";
   };
-  const statusOptions = [...complaintStatuses, "deleted"];
-  const categories = [...new Set((categoryRows || []).map((row) => row.category).filter(Boolean))].map((category) => ({ value: category, label: category }));
   const sharedFilters: PreservedValue[] = [{ name: "search", value: q.search }, { name: "block", value: q.block }, { name: "category", value: q.category }, { name: "priority", value: q.priority }, { name: "source", value: q.source }, { name: "date", value: q.date }, { name: "assigned", value: q.assigned }, ...selectedStatuses.map((status) => ({ name: `status_${status}`, value: status }))];
   const preservedExcept = (name: string) => sharedFilters.filter((item) => item.name !== name);
   const statusFilter = <StatusColumnFilter
@@ -142,60 +226,41 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       { name: "assigned", value: q.assigned },
     ]}
   />;
+  async function LocationFilter() {
+    const { data: choices } = await blocks;
+    return <ColumnFilter label="Location" action="/admin/complaints" name="block" selectedValue={q.block} options={[...(choices || []).map((block) => ({ value: String(block.id), label: `Block ${block.code}` })), { value: "external", label: "External Area" }]} preserved={preservedExcept("block")} />;
+  }
+
+  async function CategoryFilter() {
+    const { data } = await supabase.from("complaints").select("category").order("category");
+    const categories = [...new Set((data || []).map(row => row.category).filter(Boolean))];
+    return <ColumnFilter label="Category / description" action="/admin/complaints" name="category" selectedValue={q.category} options={categories.map(value => ({ value, label: value }))} preserved={preservedExcept("category")} />;
+  }
+
+  async function AssigneeFilter() {
+    const { data } = await supabase.from("profiles").select("id,full_name").eq("role", "maintenance_staff").eq("is_active", true).order("full_name");
+    return <ColumnFilter label="Assigned" action="/admin/complaints" name="assigned" selectedValue={q.assigned} options={[{ value: "unassigned", label: "Unassigned" }, ...(data || []).map(member => ({ value: member.id, label: member.full_name }))]} preserved={preservedExcept("assigned")} />;
+  }
+
   const columnFilters = {
-    location: <ColumnFilter label="Location" action="/admin/complaints" name="block" selectedValue={q.block} options={[...(blocks || []).map((block) => ({ value: String(block.id), label: `Block ${block.code}` })), { value: "external", label: "External Area" }]} preserved={preservedExcept("block")} />,
-    category: <ColumnFilter label="Category / description" action="/admin/complaints" name="category" selectedValue={q.category} options={categories} preserved={preservedExcept("category")} />,
+    location: <Suspense fallback="Location"><LocationFilter /></Suspense>,
+    category: <Suspense fallback="Category / description"><CategoryFilter /></Suspense>,
     source: <ColumnFilter label="Source" action="/admin/complaints" name="source" selectedValue={q.source} options={sources.map((source) => ({ value: source, label: titleCase(source) }))} preserved={preservedExcept("source")} />,
     priority: <ColumnFilter label="Priority" action="/admin/complaints" name="priority" selectedValue={q.priority} options={priorities.map((priority) => ({ value: priority, label: titleCase(priority) }))} preserved={preservedExcept("priority")} />,
     submitted: <DateColumnFilter action="/admin/complaints" selectedDate={q.date} selectedSort={sort.value} preserved={preservedExcept("date")} />,
-    assigned: <ColumnFilter label="Assigned" action="/admin/complaints" name="assigned" selectedValue={q.assigned} options={[{ value: "unassigned", label: "Unassigned" }, ...(staff || []).map((member) => ({ value: member.id, label: member.full_name }))]} preserved={preservedExcept("assigned")} />,
+    assigned: <Suspense fallback="Assigned"><AssigneeFilter /></Suspense>,
   };
 
-  return <AppShell profile={profile} title="New Complaints">
-    <div className="section-head">
-      <div><h2>Complaint intake</h2><p className="subtle">Review, prioritise and assign incoming requests.</p></div>
-      {profile.role === "admin" && <Link className="button button-link" href="/admin/complaints/new">Add complaint</Link>}
-    </div>
-    <section className="metrics compact complaint-intake-metrics">
-      {[["New", newCount], ["Under review", reviewCount], ["KIV", kivCount], ["Assigned today", assignedToday], ["Urgent", urgentCount]].map(([label, value]) => (
-        <article className="panel metric" key={String(label)}><span className="subtle">{label}</span><div className="value">{value || 0}</div></article>
-      ))}
-    </section>
-    <Suspense fallback={<p className="subtle" role="status">Loading report summary…</p>}>
-      <ComplaintSummary from={q.summaryFrom} to={q.summaryTo} block={q.block} blocks={blocks || []} filters={q} />
-    </Suspense>
-    <form className="panel filter-bar">
-      {q.summaryFrom && <input type="hidden" name="summaryFrom" value={q.summaryFrom} />}
-      {q.summaryTo && <input type="hidden" name="summaryTo" value={q.summaryTo} />}
-      {!isDeleted && <input type="hidden" name="sort" value={sort.value} />}
-      {q.category && <input type="hidden" name="category" value={q.category} />}
-      {q.assigned && <input type="hidden" name="assigned" value={q.assigned} />}
-      <input aria-label="Search complaints" name="search" defaultValue={q.search} placeholder="Search A421, B511, complaint, name…" />
-      <select aria-label="Status" name="status" defaultValue={q.status || ""}>
-        <option value="">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
-      </select>
-      <select aria-label="Block" name="block" defaultValue={q.block || ""}>
-        <option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}
-      </select>
-      <select aria-label="Priority" name="priority" defaultValue={q.priority || ""}>
-        <option value="">All priorities</option>{priorities.map((priority) => <option key={priority} value={priority}>{titleCase(priority)}</option>)}
-      </select>
-      <select aria-label="Source" name="source" defaultValue={q.source || ""} disabled={isDeleted}>
-        <option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}
-      </select>
-      <input aria-label="Submitted date" type="date" name="date" defaultValue={q.date} />
-      <button className="button">Filter</button>
-    </form>
-    {q.deleted && <p className="success">Complaint deleted.</p>}
+  return <>
     <section className="panel list-panel complaints-list-panel">
-      {resultError ? <p className="error">{resultError.message}</p> : isDeleted
-        ? <DeletedComplaintList rows={(deletedRows || []).slice(0, PAGE_SIZE) as DeletedComplaint[]} blocks={blocks || []} />
-        : <ComplaintList rows={(data || []).slice(0, PAGE_SIZE) as unknown as ComplaintRow[]} canDelete={profile.role === "admin"} statusFilter={statusFilter} columnFilters={columnFilters} />}
+      {error ? <p className="error">{error.message}</p> : isDeleted
+        ? <DeletedComplaintList rows={(data || []).slice(0, PAGE_SIZE) as DeletedComplaint[]} blocks={deletedBlocks || []} />
+        : <ComplaintList rows={(data || []).slice(0, PAGE_SIZE) as unknown as ComplaintRow[]} canDelete={canDelete} statusFilter={statusFilter} columnFilters={columnFilters} />}
     </section>
-    {!resultError && (page > 1 || hasNext) && <nav className="pagination" aria-label="Complaint pages">
+    {!error && (page > 1 || hasNext) && <nav className="pagination" aria-label="Complaint pages">
       {page > 1 && <Link className="button secondary" href={pageHref(page - 1)}>Previous</Link>}
       <span>Page {page}</span>
       {hasNext && <Link className="button secondary" href={pageHref(page + 1)}>Next</Link>}
     </nav>}
-  </AppShell>;
+  </>;
 }

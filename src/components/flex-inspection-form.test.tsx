@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { FlexGroup, FlexInspectionSnapshot } from "@/lib/flex-inspection";
 import { emptyFlexReview } from "@/lib/flex-inspection-review";
+import { FlexReviewPanel } from "./flex-review-panel";
 import { FlexInspectionForm } from "./flex-inspection-form";
 
 const { save, verify } = vi.hoisted(() => ({ save: vi.fn(), verify: vi.fn() }));
@@ -133,7 +134,7 @@ it("lets the trial simulate both verifications in either order, including after 
     cc: ["inspection-fixture-cc1@flex.com", "inspection-fixture-cc2@flex.com"] as [string, string],
   };
   const trial = <FlexInspectionForm inspection={inspection} groups={groups} today={today} preview
-    review={emptyFlexReview} recipients={recipients} />;
+    verification={<FlexReviewPanel period={inspection.period} initial={emptyFlexReview} reviewer={null} preview recipients={recipients} />} />;
   const first = render(trial);
   fireEvent.click(screen.getByRole("button", { name: "Complete inspection" }));
   await screen.findByRole("button", { name: "Emergency Light PDF" });

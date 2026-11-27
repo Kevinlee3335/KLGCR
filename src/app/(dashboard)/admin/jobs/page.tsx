@@ -1,3 +1,4 @@
+import { Suspense, type ReactNode } from "react";
 import { parseRoomSearch, roomSearchFilter } from "@/lib/room-search";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
@@ -53,9 +54,23 @@ function malaysiaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const profile = await requireRole(["admin", "management_viewer"]);
-  const filters = await searchParams;
+type Filters = Record<string, string | undefined>;
+type Option = { value: string; label: string };
+type Options = Promise<Option[]>;
+type RowResult = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+
+export default async function JobsPage({ searchParams }: { searchParams: Promise<Filters> }) {
+  const [profile, filters] = await Promise.all([requireRole(["admin", "management_viewer"]), searchParams]);
+  return <AppShell profile={profile} title="Maintenance Jobs">
+    <div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div>
+    <Suspense key={JSON.stringify(filters)} fallback={<p className="subtle" role="status">Loading maintenance jobs…</p>}>
+      <JobsWorkspace filters={filters}/>
+    </Suspense>
+  </AppShell>;
+}
+
+async function JobsWorkspace({ filters: input }: { filters: Filters }) {
+  const filters = { ...input };
   const supabase = await createClient();
   const roomSearch = parseRoomSearch(filters.search);
   const blocksQuery = Promise.resolve(supabase.from("blocks").select("id,code").order("code"));
@@ -65,7 +80,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     if (blockError) throw new Error(blockError.message);
     const block = searchBlocks?.find(row => row.code.toUpperCase() === roomSearch.blockCode);
     // An unknown block must never broaden the search to other buildings.
-    filters.block = block?.id || "00000000-0000-0000-0000-000000000000";
+    filters.block = block ? String(block.id) : "00000000-0000-0000-0000-000000000000";
   }
   const page = Math.max(1, Number(filters.page) || 1);
   const today = malaysiaToday();
@@ -86,7 +101,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (roomSearch) archiveQuery = archiveQuery.or(roomSearchFilter(roomSearch));
   else if (filters.search) { const term = JSON.stringify(`%${filters.search}%`); archiveQuery=archiveQuery.or(`complaint_no.ilike.${term},room_no.ilike.${term},description.ilike.${term}`); }
   archiveQuery = archiveQuery.order(archiveStatus === "deleted" && sortBy === "created_at" ? "deleted_at" : "submitted_at", { ascending });
-  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,checkout_date,assigned_at,created_at,updated_at,started_at,completed_at,scheduled_for,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)");
+  let query = supabase.from("maintenance_jobs").select("id,job_no,room_no,category,description,priority,status,checkout_date,assigned_at,updated_at,started_at,completed_at,block:blocks!block_id(id,code),assignee:profiles!assigned_to(id,full_name)");
   if (filters.scope === "today-active") query = query.eq("scheduled_for", today).in("status", ["assigned", "in_progress", "pending_material", "under_monitoring", "waiting_checkout"]);
   if (filters.scope === "completed-today") query = query.eq("status", "completed").gte("completed_at", `${today}T00:00:00+08:00`).lt("completed_at", `${today}T23:59:59.999+08:00`);
   if (filters.scope === "completion-photos") query = query.eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00");
@@ -107,18 +122,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   else query = query.order(sortBy, { ascending });
   query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const [archived, jobs, { data: blocks }, { data: staff }] = await Promise.all([
-    archive ? archiveQuery.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : null,
-    archive ? null : query,
-    blocksQuery,
-    staffQuery,
-  ]);
-  const error = archive ? archived?.error : jobs?.error;
-  const archiveRows = (archived?.data ?? []).slice(0, PAGE_SIZE) as unknown as ArchivedComplaintRow[];
-  const jobRows = jobs?.data ?? [];
-  const rows = jobRows.slice(0, PAGE_SIZE) as unknown as JobRow[];
-  const pageHref = (target: number) => { const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value && key !== "page") params.set(key, value); }); params.set("page", String(target)); return `/admin/jobs?${params}`; };
-  const hasNext = (archive ? archived?.data?.length || 0 : jobRows?.length || 0) > PAGE_SIZE;
+  const blockOptions = blocksQuery.then(({ data }) => (data || []).map(block => ({ value: String(block.id), label: `Block ${block.code}` })));
+  const staffOptions = staffQuery.then(({ data }) => (data || []).map(member => ({ value: member.id, label: member.full_name })));
   const sharedFilters: PreservedValue[] = [
     { name: "search", value: filters.search },
     { name: "block", value: filters.block },
@@ -140,22 +145,45 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     preserved={sharedFilters.filter((item) => !item.name.startsWith("status_"))}
   />;
   const columnFilters = {
-    location: <ColumnFilter label="Location" action="/admin/jobs" name="block" selectedValue={filters.block} options={[...(blocks || []).map((block) => ({ value: String(block.id), label: `Block ${block.code}` })), { value: "external", label: "External Area" }]} preserved={preservedExcept("block")} />,
-    staff: <ColumnFilter label="Staff" action="/admin/jobs" name="staff" selectedValue={filters.staff} options={[{ value: "unassigned", label: "Unassigned" }, ...(staff || []).map((member) => ({ value: member.id, label: member.full_name }))]} preserved={preservedExcept("staff")} />,
+    location: <Suspense fallback="Location"><JobColumn label="Location" name="block" options={blockOptions} extra={{ value: "external", label: "External Area" }} selectedValue={filters.block} preserved={preservedExcept("block")}/></Suspense>,
+    staff: <Suspense fallback="Staff"><JobColumn label="Staff" name="staff" options={staffOptions} extra={{ value: "unassigned", label: "Unassigned" }} selectedValue={filters.staff} preserved={preservedExcept("staff")}/></Suspense>,
     assigned: <TimelineDateColumnFilter label="Assigned" action="/admin/jobs" name="assignedDate" selectedDate={filters.assignedDate} preserved={preservedExcept("assignedDate")} />,
     inProgress: <TimelineDateColumnFilter label="In Progress" action="/admin/jobs" name="startedDate" selectedDate={filters.startedDate} preserved={preservedExcept("startedDate")} />,
     completed: <TimelineDateColumnFilter label="Completed" action="/admin/jobs" name="completedDate" selectedDate={filters.completedDate} preserved={preservedExcept("completedDate")} />,
   };
 
-  return <AppShell profile={profile} title="Maintenance Jobs">
-    <div className="section-head"><div><h2>Maintenance jobs</h2><p className="subtle">All approved and assigned operational work.</p></div></div>
+  return <>
+    <Suspense fallback={<p className="subtle" role="status">Loading job filters…</p>}>
+      <JobFilters filters={filters} blockOptions={blockOptions} staffOptions={staffOptions} archiveStatus={archiveStatus} selectedStatuses={selectedStatuses} sort={sort.value}/>
+    </Suspense>
+    <Suspense fallback={<p className="subtle" role="status">Loading maintenance jobs…</p>}>
+      <JobResults result={archive ? archiveQuery.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : query}
+        filters={filters} blockOptions={blockOptions} archiveStatus={archiveStatus} statusFilter={statusFilter} columnFilters={columnFilters} page={page}/>
+    </Suspense>
+  </>;
+}
+
+async function JobColumn({ label, name, options, extra, selectedValue, preserved }: {
+  label: string; name: string; options: Options; extra: Option; selectedValue?: string; preserved: PreservedValue[];
+}) {
+  const choices = await options;
+  return <ColumnFilter label={label} action="/admin/jobs" name={name} selectedValue={selectedValue}
+    options={name === "staff" ? [extra, ...choices] : [...choices, extra]} preserved={preserved}/>;
+}
+
+async function JobFilters({ filters, blockOptions, staffOptions, archiveStatus, selectedStatuses, sort }: {
+  filters: Filters; blockOptions: Options; staffOptions: Options; archiveStatus: string; selectedStatuses: string[]; sort: string;
+}) {
+  const [blocks, staff] = await Promise.all([blockOptions, staffOptions]);
+  const archive = Boolean(archiveStatus);
+  return (
     <form className="panel filter-bar">
       <input name="search" defaultValue={filters.search} placeholder="Search A421, B511, job, description…" />
-      <select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks?.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select>
-      <select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff?.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select>
+      <select name="block" defaultValue={filters.block || ""}><option value="">All blocks</option>{blocks.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      <select disabled={archive} name="staff" defaultValue={filters.staff || ""}><option value="">All staff</option>{staff.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
       {archiveStatus && <input type="hidden" name="status" value={archiveStatus} />}
       {!archive && selectedStatuses.map((status) => <input key={status} type="hidden" name={`status_${status}`} value={status} />)}
-      <input type="hidden" name="sort" value={sort.value} />
+      <input type="hidden" name="sort" value={sort} />
       {filters.assignedDate && <input type="hidden" name="assignedDate" value={filters.assignedDate} />}
       {filters.startedDate && <input type="hidden" name="startedDate" value={filters.startedDate} />}
       {filters.completedDate && <input type="hidden" name="completedDate" value={filters.completedDate} />}
@@ -163,11 +191,29 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       <input type="date" name="date" defaultValue={filters.date} />
       <button className="button">Apply</button>
     </form>
-    <section className="panel list-panel">{error ? <p className="error">{error.message}</p> : archive ? <>
+  );
+}
+
+async function JobResults({ result, filters, blockOptions, archiveStatus, statusFilter, columnFilters, page }: {
+  result: RowResult; filters: Filters; blockOptions: Options; archiveStatus: string;
+  statusFilter: ReactNode; columnFilters: NonNullable<Parameters<typeof JobList>[0]["columnFilters"]>; page: number;
+}) {
+  const [records, blocks] = await Promise.all([result, archiveStatus ? blockOptions : []]);
+  const { data, error } = records;
+  const rows = (data || []).slice(0, PAGE_SIZE);
+  const hasNext = (data?.length || 0) > PAGE_SIZE;
+  const pageHref = (target: number) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value && key !== "page") params.set(key, value); });
+    params.set("page", String(target));
+    return `/admin/jobs?${params}`;
+  };
+  return <>
+    <section className="panel list-panel">{error ? <p className="error">{error.message}</p> : archiveStatus ? <>
       <p className="subtle">{archiveStatus === "deleted" ? "Deleted complaints retained from this update onward." : "Rejected complaints have no assigned maintenance job."}</p>
-      <table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Defect</th><th>Status</th>{archiveStatus === "deleted" && <><th>Deleted by</th><th>Deleted</th></>}</tr></thead><tbody>{archiveRows.map((row) => <tr key={row.id}><td>{archiveStatus === "rejected" ? <Link href={`/admin/complaints/${row.id}`}>{row.complaint_no}</Link> : row.complaint_no}</td><td>Block {blocks?.find((block) => block.id === row.block_id)?.code} · {row.room_no}</td><td>{row.category} — {row.description}</td><td>{titleCase(archiveStatus)}</td>{archiveStatus === "deleted" && <><td>{row.deleted_by_name || "—"}</td><td>{row.deleted_at ? formatDate(row.deleted_at) : "—"}</td></>}</tr>)}</tbody></table>
-      {!archiveRows.length && <p>No matching records.</p>}
-    </> : <JobList rows={rows} statusFilter={statusFilter} columnFilters={columnFilters} compactDesktopColumns />}</section>
+      <table className="table"><thead><tr><th>Complaint</th><th>Location</th><th>Defect</th><th>Status</th>{archiveStatus === "deleted" && <><th>Deleted by</th><th>Deleted</th></>}</tr></thead><tbody>{(rows as ArchivedComplaintRow[]).map((row) => <tr key={row.id}><td>{archiveStatus === "rejected" ? <Link href={`/admin/complaints/${row.id}`}>{row.complaint_no}</Link> : row.complaint_no}</td><td>{blocks.find(block => block.value === String(row.block_id))?.label || "Block"} · {row.room_no}</td><td>{row.category} — {row.description}</td><td>{titleCase(archiveStatus)}</td>{archiveStatus === "deleted" && <><td>{row.deleted_by_name || "—"}</td><td>{row.deleted_at ? formatDate(row.deleted_at) : "—"}</td></>}</tr>)}</tbody></table>
+      {!rows.length && <p>No matching records.</p>}
+    </> : <JobList rows={rows as JobRow[]} statusFilter={statusFilter} columnFilters={columnFilters} compactDesktopColumns />}</section>
     {(page > 1 || hasNext) && <nav className="pagination" aria-label="Job pages">{page > 1 && <Link className="button secondary button-link" href={pageHref(page - 1)}>Previous</Link>}<span>Page {page}</span>{hasNext && <Link className="button secondary button-link" href={pageHref(page + 1)}>Next</Link>}</nav>}
-  </AppShell>;
+  </>;
 }

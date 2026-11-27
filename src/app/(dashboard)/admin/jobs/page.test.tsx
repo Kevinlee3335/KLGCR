@@ -1,4 +1,7 @@
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment node
+
+import { PassThrough } from "node:stream";
+import { renderToPipeableStream } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
 
@@ -10,7 +13,7 @@ vi.mock("@/components/app-shell", () => ({
 }));
 vi.mock("@/components/phase2-ui", () => ({
   JobList: ({ rows }: { rows: Array<{ job_no: string; appointments?: unknown[] }> }) =>
-    <div>{rows.map((row) => <span key={row.job_no}>{row.job_no}: {row.appointments?.length || 0} appointments</span>)}</div>,
+    <div>{rows.map((row) => <span key={row.job_no}>{`${row.job_no}: ${row.appointments?.length || 0} appointments`}</span>)}</div>,
 }));
 
 function query(result: unknown) {
@@ -29,12 +32,14 @@ const job = {
   priority: "normal", status: "assigned", assigned_at: "2026-09-09T00:00:00Z", updated_at: "2026-09-09T00:00:00Z",
   complaint: { id: "complaint-id", complaint_no: "CMP-001" }, block: { id: 1, code: "A" }, assignee: null,
 };
+let staffResult: unknown;
 const jobsQuery = query({ data: [job], error: null });
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     from: vi.fn((table: string) => {
       if (table === "maintenance_jobs") return jobsQuery;
+      if (table === "profiles") return query(staffResult);
       if (table === "blocks") return query({ data: [{ id: "block-a-id", code: "A" }], error: null });
       if (table === "appointments") return query({ data: [], error: null });
       return query({ data: [], error: null });
@@ -44,13 +49,43 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import JobsPage from "./page";
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  staffResult = { data: [], error: null };
+});
+
+async function renderJobs(filters: Record<string, string> = {}, onChunk?: (html: string) => void) {
+  const content = await JobsPage({ searchParams: Promise.resolve(filters) });
+  return new Promise<string>((resolve, reject) => {
+    const output = new PassThrough();
+    let html = "";
+    output.setEncoding("utf8").on("data", chunk => { html += chunk; onChunk?.(html); });
+    output.on("end", () => resolve(html));
+    const stream = renderToPipeableStream(<html><body>{content}</body></html>, {
+      onShellReady: () => stream.pipe(output), onError: reject,
+    });
+  });
+}
 
 describe("Maintenance Jobs", () => {
-  it("loads the compact jobs list without requesting complaints or appointments", async () => {
-    const page = await JobsPage({ searchParams: Promise.resolve({}) });
+  it("streams jobs before the staff filter lookup completes", async () => {
+    let finish!: (value: unknown) => void;
+    staffResult = new Promise(resolve => { finish = resolve; });
+    let received = "";
+    const done = renderJobs({}, html => { received = html; });
+    try {
+      await vi.waitFor(() => expect(received).toContain("JOB-001: 0 appointments"));
+      expect(received).toContain("Maintenance jobs");
+      expect(received).toContain("Loading job filters");
+      expect(received).not.toContain("Staff fixture");
+    } finally {
+      finish({ data: [{ id: "staff-1", full_name: "Staff fixture" }], error: null });
+    }
+    expect(await done).toContain("Staff fixture");
+  });
 
-    expect(renderToStaticMarkup(page)).toContain("JOB-001: 0 appointments");
+  it("loads the compact jobs list without requesting complaints or appointments", async () => {
+    expect(await renderJobs()).toContain("JOB-001: 0 appointments");
     expect(jobsQuery.select).toHaveBeenCalledOnce();
     expect(jobsQuery.select.mock.calls[0][0]).not.toContain("appointments(");
     expect(jobsQuery.select.mock.calls[0][0]).not.toContain("complaint:");
@@ -58,7 +93,7 @@ describe("Maintenance Jobs", () => {
   });
 
   it("filters timeline dates while keeping location and staff header filters", async () => {
-    await JobsPage({ searchParams: Promise.resolve({ block: "external", staff: "unassigned", assignedDate: "2026-10-08", startedDate: "2026-10-07", completedDate: "2026-10-06" }) });
+    await renderJobs({ block: "external", staff: "unassigned", assignedDate: "2026-10-08", startedDate: "2026-10-07", completedDate: "2026-10-06" });
 
     expect(jobsQuery.is).toHaveBeenCalledWith("block_id", null);
     expect(jobsQuery.is).toHaveBeenCalledWith("assigned_to", null);
@@ -67,7 +102,7 @@ describe("Maintenance Jobs", () => {
     expect(jobsQuery.gte).toHaveBeenCalledWith("completed_at", "2026-10-06T00:00:00+08:00");
   });
   it("uses the room prefix to override a different selected block", async () => {
-    await JobsPage({ searchParams: Promise.resolve({ search: "a421", block: "block-b-id" }) });
+    await renderJobs({ search: "a421", block: "block-b-id" });
     expect(jobsQuery.eq).toHaveBeenCalledWith("block_id", "block-a-id");
     expect(jobsQuery.or).toHaveBeenCalledWith(expect.stringContaining('room_no.ilike."421"'));
     const from = vi.mocked((await createClient()).from);

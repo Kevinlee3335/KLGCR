@@ -37,12 +37,13 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
 
 type AdminNavGroup = {
   label: string;
+  recoverStalledNavigation?: boolean;
   Icon: LucideIcon;
   links: readonly (readonly [title: string, href: string, Icon: LucideIcon, label?: string])[];
 };
 
 const adminNavGroups: AdminNavGroup[] = [
-    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
+    { label: "Work Management", Icon: Wrench, recoverStalledNavigation: true, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
     { label: "Daily Tasks", Icon: ClipboardCheck, links: [
       ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck, "All Daily Tasks"],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
@@ -68,11 +69,11 @@ const adminNavGroups: AdminNavGroup[] = [
 
 function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isAdmin = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; isAdmin?: boolean }) {
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
-  const renderGroup = ({ label, Icon, links }: AdminNavGroup) => {
+  const renderGroup = ({ label, Icon, links, recoverStalledNavigation }: AdminNavGroup) => {
     const visibleLinks = links.filter(([item]) => isAdmin || (item !== "TM Unifi Invoices" && item !== FLEX_INSPECTION_TITLE));
     const groupClass = `admin-nav-group${visibleLinks.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
-    const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) => <ShellLink key={item} href={href} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></ShellLink>)}</div>;
+    const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) => <ShellLink key={item} href={href} recoverStalledNavigation={recoverStalledNavigation} aria-current={active(item) ? "page" : undefined}><LinkIcon size={16}/><span>{linkLabel ?? item}</span></ShellLink>)}</div>;
     return mobile
       ? <details key={label} className={groupClass}><summary>{heading}</summary>{submenu}</details>
       : <div key={label} className={groupClass}><button type="button" className="admin-nav-group-trigger" aria-label={`${label} submenu`}>{heading}</button>{submenu}</div>;
