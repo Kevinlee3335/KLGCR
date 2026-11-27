@@ -171,9 +171,9 @@ async function TaskList({ db, filters, category, categoryLabel, date, todayDate,
       </article>
     ))}
     {(page > 1 || hasNext) && <nav className="pagination" aria-label="Daily task pages">
-      {page > 1 && <Link className="button secondary" href={pageHref(page - 1)}>Previous</Link>}
+      {page > 1 && <a className="button secondary" href={pageHref(page - 1)}>Previous</a>}
       <span>Page {page}</span>
-      {hasNext && <Link className="button secondary" href={pageHref(page + 1)}>Next</Link>}
+      {hasNext && <a className="button secondary" href={pageHref(page + 1)}>Next</a>}
     </nav>}
   </div>;
 }
