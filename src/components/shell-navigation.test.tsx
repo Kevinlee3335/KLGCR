@@ -28,7 +28,7 @@ it("closes the mobile drawer from its backdrop and Escape, then returns focus to
   expect(menu).toHaveFocus();
 });
 
-describe("recovery for stalled material request and Work Management navigation", () => {
+describe("recovery for stalled material request links", () => {
   const assign = vi.fn();
   const replace = vi.fn();
   let current: URL;
@@ -64,16 +64,6 @@ describe("recovery for stalled material request and Work Management navigation",
       vi.advanceTimersByTime(2999);
       expect(assign).not.toHaveBeenCalled();
       vi.advanceTimersByTime(3001);
-      expect(assign.mock.calls).toEqual([[new URL(href, current).href]]);
-    }
-  );
-
-  it.each(["/admin/complaints", "/admin/jobs", "/admin/checkouts", "/flex-inspections", "/admin/waste-collection"])(
-    "recovers the Work Management menu link for %s", href => {
-      render(<ShellLink href={href} recoverStalledNavigation>Open page</ShellLink>);
-      vi.advanceTimersByTime(2999);
-      expect(assign).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(1);
       expect(assign.mock.calls).toEqual([[new URL(href, current).href]]);
     }
   );

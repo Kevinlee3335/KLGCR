@@ -13,9 +13,7 @@ function supersedesNavigation(event: MouseEvent, destination: string) {
     !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 }
 
-type RecoveryOptions = { recoverStalledNavigation?: boolean };
-
-function LinkFeedback({ replace, recoverStalledNavigation }: { replace?: boolean } & RecoveryOptions) {
+function LinkFeedback({ replace }: { replace?: boolean }) {
   const { pending } = useLinkStatus();
 
   const indicator = useRef<HTMLSpanElement>(null);
@@ -24,7 +22,7 @@ function LinkFeedback({ replace, recoverStalledNavigation }: { replace?: boolean
     if (!pending || document.visibilityState !== "visible") return;
     const anchor = indicator.current?.closest("a");
     if (!anchor || anchor.origin !== window.location.origin ||
-      (!recoverStalledNavigation && !materialRequestPaths.has(anchor.pathname)) || anchor.pathname === window.location.pathname) return;
+      !materialRequestPaths.has(anchor.pathname) || anchor.pathname === window.location.pathname) return;
 
     const origin = window.location.href;
     const destination = anchor.href;
@@ -53,16 +51,16 @@ function LinkFeedback({ replace, recoverStalledNavigation }: { replace?: boolean
       window.removeEventListener("hashchange", cancel);
       window.removeEventListener("pagehide", cancel);
     };
-  }, [pending, replace, recoverStalledNavigation]);
+  }, [pending, replace]);
 
   return pending ? <span ref={indicator} className={styles.pending} role="status" aria-label="Loading page" /> : null;
 }
 
-export function ShellLink({ children, className, recoverStalledNavigation, ...props }: ComponentProps<typeof Link> & RecoveryOptions) {
+export function ShellLink({ children, className, ...props }: ComponentProps<typeof Link>) {
   return (
     <Link {...props} className={className ? `${styles.link} ${className}` : styles.link}>
       {children}
-      <LinkFeedback replace={props.replace} recoverStalledNavigation={recoverStalledNavigation} />
+      <LinkFeedback replace={props.replace} />
     </Link>
   );
 }
