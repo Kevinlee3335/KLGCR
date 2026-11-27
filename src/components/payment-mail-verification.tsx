@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { Suspense, use, useEffect, useRef, useState, type ReactNode } from 'react';
+import { DirectPageLink } from "@/components/direct-page-link";
 import { AlertCircle, ArrowLeft, ArrowUpRight, CheckCircle2, FileText, Inbox, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { OfficialReceipt } from '@/lib/official-receipt';
 import type { PaymentMailDetail, PaymentMailItem, PaymentMailList } from '@/lib/payment-mail/types';
@@ -53,7 +53,13 @@ function received(value: string) { return dateTime.format(new Date(value)); }
 function pending(item: Pick<PaymentMailItem, 'status'>) { return ['pending_verification', 'needs_review'].includes(item.status); }
 function attachmentSize(bytes: number) { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.ceil(bytes / 1024))} KB`; }
 
-export function PaymentMailVerification({ initialId }: { initialId?: string }) {
+export type PaymentInboxSnapshot = { data: PaymentMailList | null; error: string; checkedAt: string };
+
+function InitialInbox({ source, children }: { source: Promise<PaymentInboxSnapshot>; children: (result: PaymentInboxSnapshot) => ReactNode }) {
+  return children(use(source));
+}
+
+export function PaymentMailVerification({ initialId, initialInbox }: { initialId?: string; initialInbox?: Promise<PaymentInboxSnapshot> }) {
   const [view, setView] = useState<'inbox' | 'receipts'>('inbox');
   const [filter, setFilter] = useState<MailFilter>('pending');
   const [page, setPage] = useState(0);
@@ -61,9 +67,10 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
   const [data, setData] = useState<PaymentMailList | null>(null);
   const [selectedId, setSelectedId] = useState(initialId || '');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialInbox);
   const [lastRefreshed, setLastRefreshed] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const firstPage = refreshVersion === 0 && filter === 'pending' && page === 0 && view === 'inbox' ? initialInbox : undefined;
   const reviewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setSelectedId(initialId || ''); }, [initialId]);
@@ -93,7 +100,16 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
         if (!stopped) setError(cause instanceof Error ? cause.message : 'Unable to load payment emails.');
       } finally { if (deadline) clearTimeout(deadline); running = false; if (!stopped) setLoading(false); }
     }
-    void refresh();
+    if (firstPage) {
+      running = true;
+      void Promise.resolve(firstPage).then(snapshot => {
+        running = false;
+        if (stopped) return;
+        setData(snapshot.data); setError(snapshot.error); setLastRefreshed(snapshot.checkedAt);
+      });
+    } else {
+      void refresh();
+    }
     const interval = window.setInterval(refresh, 30_000);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -105,7 +121,7 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [filter, page, refreshVersion, view]);
+  }, [filter, page, refreshVersion, view, firstPage]);
 
   function select(id: string) {
     setSelectedId(id);
@@ -115,32 +131,14 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
   }
 
   function changeFilter(next: MailFilter) {
-    setFilter(next); setPage(0); setData(null); setLoading(true); setQuery('');
+    setFilter(next); setPage(0); setData(null); setLoading(true); setQuery(''); setRefreshVersion(value => value + 1);
   }
 
-  const search = query.trim().toLowerCase();
-  const shown = data?.items.filter(item => !search || [item.subject, item.sender_email, item.suggested_company_name, item.suggested_reference].some(value => value?.toLowerCase().includes(search))) || [];
+  function records({ data, error, checkedAt: lastRefreshed }: PaymentInboxSnapshot) {
+    const search = query.trim().toLowerCase();
+    const shown = data?.items.filter(item => !search || [item.subject, item.sender_email, item.suggested_company_name, item.suggested_reference].some(value => value?.toLowerCase().includes(search))) || [];
 
-  return <div className={styles.workspace}>
-    <div className={styles.intro}>
-      <div><span className={styles.eyebrow}>RENTAL & UTILITIES</span><h2>Payment emails & bank verification</h2><p>Review each payment proof, confirm the money received in the bank, then allocate it to the correct invoices and issue the official Receipt.</p></div>
-      <Link className={styles.button} href="/admin/billing"><ArrowLeft size={15} aria-hidden="true" />Rental & Utilities</Link>
-    </div>
-    <PaymentMailConnection />
-    <div className={styles.tabs} role="group" aria-label="Payment records">
-      <button type="button" className={styles.tab} aria-pressed={view === 'inbox'} onClick={() => setView('inbox')}>Payment inbox</button>
-      <button type="button" className={styles.tab} aria-pressed={view === 'receipts'} onClick={() => setView('receipts')}>Receipt List</button>
-    </div>
-    {view === 'receipts' && <PaymentReceiptList refreshVersion={refreshVersion} />}
-    <section hidden={view !== 'inbox'} className={styles.card} aria-labelledby="payment-inbox-title">
-      <header className={styles.cardHead}>
-        <div><h2 id="payment-inbox-title">Payment inbox{data && <span className={styles.count}>{data.total}</span>}</h2><p>Pending emails stay here until verified or rejected, including those received on previous days.</p></div>
-        <button type="button" className={styles.button} disabled={loading} onClick={() => { setLoading(true); setRefreshVersion(value => value + 1); }}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Refreshing…' : 'Refresh'}</button>
-      </header>
-      <div className={styles.toolbar}>
-        <div className={styles.tabs} role="group" aria-label="Payment email status">{filters.map(([value, label]) => <button key={value} type="button" className={styles.tab} aria-pressed={filter === value} onClick={() => changeFilter(value)}>{label}</button>)}</div>
-        <input className={styles.search} type="search" aria-label="Search shown emails" placeholder="Search shown emails…" value={query} onChange={event => setQuery(event.target.value)} />
-      </div>
+    return <>
       {error && <div className={styles.cardBody}><p className={`${styles.notice} ${styles.error}`} role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span></p></div>}
       {loading && !data ? <p className={styles.loading}>Loading payment emails…</p> : shown.length > 0 ? <div className={styles.tableWrap} role="region" aria-label="Payment emails" tabIndex={0}>
         <table className={`${styles.table} ${styles.inboxTable}`}>
@@ -156,8 +154,35 @@ export function PaymentMailVerification({ initialId }: { initialId?: string }) {
       </div> : !error && <div className={styles.empty}><Inbox size={28} aria-hidden="true" />{search ? 'No matching emails on this page.' : filter === 'pending' ? 'No payments awaiting verification.' : 'No emails in this view.'}</div>}
       <footer className={styles.footer}>
         <span>{data ? `${data.total === 0 ? 0 : page * 50 + 1}–${Math.min(page * 50 + data.items.length, data.total)} of ${data.total} emails` : 'Payment email history'}{lastRefreshed ? ` · Last checked ${received(lastRefreshed)} MYT` : ''}</span>
-        <div className={styles.actions}><button type="button" className={styles.button} disabled={loading || page === 0} onClick={() => { setPage(value => value - 1); setData(null); setLoading(true); }}>Previous</button><button type="button" className={styles.button} disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => { setPage(value => value + 1); setData(null); setLoading(true); }}>Next</button></div>
+        <div className={styles.actions}><button type="button" className={styles.button} disabled={loading || page === 0} onClick={() => { setPage(value => value - 1); setData(null); setLoading(true); }}>Previous</button><button type="button" className={styles.button} disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => { setPage(value => value + 1); setData(null); setLoading(true); setRefreshVersion(value => value + 1); }}>Next</button></div>
       </footer>
+    </>;
+  }
+  return <div className={styles.workspace}>
+    <div className={styles.intro}>
+      <div><span className={styles.eyebrow}>RENTAL & UTILITIES</span><h2>Payment emails & bank verification</h2><p>Review each payment proof, confirm the money received in the bank, then allocate it to the correct invoices and issue the official Receipt.</p></div>
+      <DirectPageLink className={styles.button} href="/admin/billing"><ArrowLeft size={15} aria-hidden="true" />Rental & Utilities</DirectPageLink>
+    </div>
+    <PaymentMailConnection />
+    <div className={styles.tabs} role="group" aria-label="Payment records">
+      <button type="button" className={styles.tab} aria-pressed={view === 'inbox'} onClick={() => setView('inbox')}>Payment inbox</button>
+      <button type="button" className={styles.tab} aria-pressed={view === 'receipts'} onClick={() => { if (view !== 'receipts') { setView('receipts'); setRefreshVersion(value => value + 1); } }}>Receipt List</button>
+    </div>
+    {view === 'receipts' && <PaymentReceiptList refreshVersion={refreshVersion} />}
+    <section hidden={view !== 'inbox'} className={styles.card} aria-labelledby="payment-inbox-title">
+      <header className={styles.cardHead}>
+        <div><h2 id="payment-inbox-title">Payment inbox{data ? <span className={styles.count}>{data.total}</span> : firstPage && <Suspense fallback={null}><InitialInbox source={firstPage}>{snapshot => snapshot.data && <span className={styles.count}>{snapshot.data.total}</span>}</InitialInbox></Suspense>}</h2><p>Pending emails stay here until verified or rejected, including those received on previous days.</p></div>
+        <button type="button" className={styles.button} disabled={loading} onClick={() => { setLoading(true); setRefreshVersion(value => value + 1); }}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Refreshing…' : 'Refresh'}</button>
+      </header>
+      <div className={styles.toolbar}>
+        <div className={styles.tabs} role="group" aria-label="Payment email status">{filters.map(([value, label]) => <button key={value} type="button" className={styles.tab} aria-pressed={filter === value} onClick={() => changeFilter(value)}>{label}</button>)}</div>
+        <input className={styles.search} type="search" aria-label="Search shown emails" placeholder="Search shown emails…" value={query} onChange={event => setQuery(event.target.value)} />
+      </div>
+      {firstPage && !data && !error ?
+        <Suspense fallback={<p className={styles.loading}>Loading payment emails…</p>}>
+          <InitialInbox source={firstPage}>{snapshot => records(snapshot)}</InitialInbox>
+        </Suspense> : records({ data, error, checkedAt: lastRefreshed })}
+
     </section>
     {selectedId && <div hidden={view !== 'inbox'} className={styles.review} ref={reviewRef} tabIndex={-1} role="region" aria-label="Selected payment email"><PaymentReview key={selectedId} id={selectedId} onChanged={() => setRefreshVersion(value => value + 1)} onOpen={select} /></div>}
   </div>;
@@ -330,7 +355,7 @@ function PaymentReview({ id, onChanged, onOpen }: { id: string; onChanged: () =>
           <div className={styles.cardBody}>
             <div className={styles.suggestions}><span>Suggested amount<strong>{item.suggested_amount == null ? 'Not identified' : money.format(Number(item.suggested_amount))}</strong></span><span>Suggested date<strong>{item.suggested_paid_on || 'Not identified'}</strong></span><span>Suggested reference<strong>{item.suggested_reference || 'Not identified'}</strong></span>{item.suggested_invoice_numbers.length > 0 && <span>Invoice numbers found<strong>{item.suggested_invoice_numbers.join(', ')}</strong></span>}</div>
             <label className={styles.field}><span>Company / registered receipt contact</span><select className={styles.select} value={companyKey} disabled={Boolean(busy)} required onChange={event => void chooseCompany(event.target.value)}><option value="">Select company contact</option>{detail.companies.map(candidate => <option key={candidate.key} value={candidate.key}>{candidate.name} · {candidate.email}</option>)}</select><small>Choose the contact saved for the company. The incoming sender does not change the receipt email.</small></label>
-            {company ? <p className={styles.companyNote}>Receipt will be emailed to <strong>{company.email}</strong>.<br />Registered accounts: {company.accounts.map(account => `${account.account_name} (${account.kind === 'rental' ? 'Rental' : 'Utilities'})`).join(' · ')}</p> : <p className={styles.companyNote}>If the correct company contact is missing, update its saved email in <Link href="/admin/billing">Rental & Utilities</Link> before verifying.</p>}
+            {company ? <p className={styles.companyNote}>Receipt will be emailed to <strong>{company.email}</strong>.<br />Registered accounts: {company.accounts.map(account => `${account.account_name} (${account.kind === 'rental' ? 'Rental' : 'Utilities'})`).join(' · ')}</p> : <p className={styles.companyNote}>If the correct company contact is missing, update its saved email in <DirectPageLink href="/admin/billing">Rental & Utilities</DirectPageLink> before verifying.</p>}
             <div className={styles.formGrid}>
               <label className={styles.field}><span>Actual amount received (RM)</span><input className={styles.input} type="number" inputMode="decimal" min="0.01" max="1000000000" step="0.01" value={amount} disabled={Boolean(busy)} required placeholder="Enter bank amount" onChange={event => { setAmount(event.target.value); resetConfirmations(); }} /></label>
               <label className={styles.field}><span>Payment date</span><input className={styles.input} type="date" max={localToday()} value={paidOn} disabled={Boolean(busy)} required onChange={event => { setPaidOn(event.target.value); resetConfirmations(); }} /></label>

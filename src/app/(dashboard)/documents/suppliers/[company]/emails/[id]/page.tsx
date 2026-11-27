@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import '../../../supplier-mail.css';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
@@ -16,13 +17,11 @@ export default async function SupplierEmail({params}:{params:Promise<{company:st
   const db=await createClient();
   const [supplier,result]=await Promise.all([
     getSupplierCompany(company,db),
-    db.from('supplier_emails').select('*').eq('company',company).eq('id',id).maybeSingle(),
+    db.from('supplier_emails').select('subject,sender,received_at,body_text').eq('company',company).eq('id',id).maybeSingle(),
   ]);
   if(!supplier)notFound();
   if(result.error)return <AppShell profile={profile} title="Supplier email"><p role="alert">Unable to load email.</p></AppShell>;
   const email=result.data;if(!email)notFound();
-  const attachments=await db.from('supplier_mail_attachments').select('file_name,document_id,issue').eq('message_id',id);
-  const links=await supplierComplianceLinks(db,[...new Set((attachments.data??[]).flatMap(file=>file.document_id?[file.document_id]:[]))]);
   return <AppShell profile={profile} title={supplier.name}>
     <SupplierEmailRead id={id}/>
     <div className="supplier-archive supplier-email-detail">
@@ -35,17 +34,25 @@ export default async function SupplierEmail({params}:{params:Promise<{company:st
       </section>
       <section className="supplier-records supplier-message">
         <h2>PDF attachments</h2>
-        {attachments.error?<p role="alert">Unable to load attachments.</p>:<>
+        <Suspense fallback={<p role="status">Loading attachments…</p>}>
+          <Attachments db={db} id={id} isAdmin={profile.role==='admin'}/>
+        </Suspense>
+      </section>
+    </div>
+  </AppShell>;
+}
+
+async function Attachments({ db, id, isAdmin }: { db: Awaited<ReturnType<typeof createClient>>; id: string; isAdmin: boolean }) {
+  const attachments=await db.from('supplier_mail_attachments').select('file_name,document_id,issue').eq('message_id',id);
+  const links=supplierComplianceLinks(db,[...new Set((attachments.data??[]).flatMap(file=>file.document_id?[file.document_id]:[]))]);
+  return attachments.error?<p role="alert">Unable to load attachments.</p>:<>
           {!attachments.data?.length&&<p>No archived PDF attachments yet. Synchronization may still be processing this email.</p>}
           {attachments.data?.map((file,i)=><article className="supplier-file-row" key={i}>
             <strong>{file.file_name}</strong>
             {file.document_id?<div className="supplier-file-actions">
               <SupplierDocumentButton id={file.document_id}/>
-              <SupplierComplianceLinks id={file.document_id} sourceMessageId={id} isAdmin={profile.role==='admin'} linked={links.get(file.document_id)}/>
+              <SupplierComplianceLinks id={file.document_id} sourceMessageId={id} isAdmin={isAdmin} links={links}/>
             </div>:<span>{file.issue || 'Awaiting download'}</span>}
           </article>)}
-        </>}
-      </section>
-    </div>
-  </AppShell>;
+        </>;
 }

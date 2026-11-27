@@ -63,3 +63,13 @@ it.each([
  expect((screen.getAllByLabelText("Reading checked against photo")[0] as HTMLInputElement).checked).toBe(confirmed);
  expect(screen.queryByText("AI reading in progress")).not.toBeInTheDocument();
 });
+
+it("allows searching a server-provided account list without fetching it again on mount", async () => {
+ const fetcher = vi.fn();
+ vi.stubGlobal("fetch", fetcher);
+ render(<UtilityPhotoPanel initial={{period:"2026-11",revision:2,accounts:[{id:"a",name:"Office meter",meters:[]}]}}/>);
+ expect(screen.getByRole("heading",{name:"Office meter"})).toBeInTheDocument();
+ fireEvent.change(screen.getByRole("textbox"),{target:{value:"not present"}});
+ expect(screen.queryByRole("heading",{name:"Office meter"})).toBeNull();
+ expect(fetcher).not.toHaveBeenCalled();
+});

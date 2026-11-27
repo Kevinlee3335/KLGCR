@@ -3,7 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ComplianceExpiryFollowUp } from "@/components/compliance-expiry-follow-up";
 import { ComplianceReviewFollowUp } from "@/components/compliance-review-follow-up";
-import { Dashboard, type AdminDashboardData } from "@/components/dashboard";
+import { AdminDashboardFrame, DashboardMetrics, InventoryAlerts, JobsOverview, RecentComplaints, TenantAlerts, TodayTasks, type AdminDashboardData } from "@/components/dashboard";
 import { DashboardActionFollowUp } from "@/components/dashboard-action-follow-up";
 import { DocumentReviewQueue } from "@/components/document-review-queue";
 import { MonitoringFollowUp } from "@/components/monitoring-follow-up";
@@ -14,7 +14,7 @@ import { UnifiPaymentFollowUp } from "@/components/unifi-payment-follow-up";
 import { UnifiInvoiceFollowUp } from "@/components/unifi-invoice-follow-up";
 import { UnifiReviewFollowUp } from "@/components/unifi-review-follow-up";
 import { loadAdminDashboardWorkload } from "@/lib/admin-dashboard-workload";
-import { unresolvedTenantNoShows, type TenantNoShowNotification } from "@/lib/admin-notifications";
+import { loadTenantNoShows } from "@/lib/tenant-no-shows.server";
 import { requireRole } from "@/lib/auth";
 import { FLEX_INSPECTION_PATH } from "@/lib/flex-inspection";
 import { flexInspectionsAwaitingReview, flexReviewer, isFlexPreview } from "@/lib/flex-inspection-review-store";
@@ -26,67 +26,6 @@ type DashboardClient = Awaited<ReturnType<typeof createClient>>;
 
 function malaysiaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-
-async function loadTenantNoShows(supabase: DashboardClient) {
-  const { data, error } = await supabase.from("appointments")
-    .select("id,job_id,appointment_date,appointment_time,attended_at,no_show_remarks,attendee:profiles!appointments_attended_by_fkey(full_name),job:maintenance_jobs!appointments_job_id_fkey(id,job_no,status,room_no,block:blocks!block_id(code))")
-    .eq("status", "no_show")
-    .order("attended_at", { ascending: false });
-  if (error) console.error("Dashboard tenant no-shows could not be loaded", error.message);
-
-  const noShows = (data ?? []) as unknown as TenantNoShowNotification[];
-  const openJobIds = [...new Set(noShows.filter((row) => row.job && !["completed", "cancelled"].includes(row.job.status)).map((row) => row.job_id))];
-  const { data: activeAppointments } = openJobIds.length
-    ? await supabase.from("appointments").select("job_id").in("job_id", openJobIds).in("status", ["pending_confirmation", "confirmed"])
-    : { data: [] as { job_id: string }[] };
-  return unresolvedTenantNoShows(noShows, (activeAppointments ?? []).map((row) => row.job_id));
-}
-
-async function loadDashboardData(supabase: DashboardClient, today: string): Promise<AdminDashboardData> {
-  const [
-    { data: countRows, error: countError }, { jobs, inventory }, { data: complaints },
-    { data: tasks }, { count: todayAppointments },
-    { count: completionPhotos }, tenantNoShows, { data: complaintIntake, error: intakeError }, {count: waitingCheckout, error: waitingError}, {count: kivComplaints, error: kivError},
-  ] = await Promise.all([
-    supabase.rpc("admin_dashboard_counts"),
-    loadAdminDashboardWorkload(supabase),
-    supabase.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,block:blocks!block_id(code)").order("submitted_at", { ascending: false }).limit(5),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,description,status,scheduled_for,assigned_at,complaint:complaints!inner(availability_date,availability_time,room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)").eq("scheduled_for", today).neq("complaints.room_access_permission", "no").not("status", "in", '("completed","cancelled")').order("assigned_at", { ascending: true }).limit(5),
-    supabase.from("appointments").select("*", { count: "exact", head: true }).eq("appointment_date", today).not("status", "in", '("cancelled","no_show")'),
-    supabase.from("maintenance_jobs").select("*", { count: "exact", head: true }).eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00"),
-    loadTenantNoShows(supabase),
-    supabase.rpc("complaint_intake_summary", { p_date: today, p_group: "ALL" }),
-    supabase.from("maintenance_jobs").select("id", { count: "exact", head: true }).eq("status", "waiting_checkout"),
-    supabase.from("complaints").select("id", { count: "exact", head: true }).eq("status", "kiv"),
-  ]);
-  if (kivError) console.error("KIV complaint count failed", kivError.message);
-  if (waitingError) console.error("Waiting check-out count failed", waitingError.message);
-  if (intakeError) console.error("Complaint intake summary failed", intakeError.message);
-  if (countError) console.error("admin_dashboard_counts failed", countError.message);
-
-  const counts = countRows?.[0];
-
-  return {
-    kpis: {
-      tenantNotAvailable: tenantNoShows.length,
-      kivComplaints: kivError ? undefined : kivComplaints ?? 0,
-      newComplaints: Number(counts?.new_complaints ?? 0),
-      todayJobs: Number(counts?.today_tasks ?? 0),
-      inProgress: jobs.in_progress,
-      pendingMaterial: jobs.pending_material,
-      underMonitoring: jobs.under_monitoring,
-      completedToday: Number(counts?.completed_today ?? 0),
-      completionPhotos: completionPhotos || 0,
-      todayAppointments: todayAppointments || 0,
-    },
-    complaintIntake: intakeError ? null : complaintIntake,
-    tenantNoShows,
-    jobs: {...jobs, waiting_checkout: waitingCheckout ?? 0},
-    complaints: (complaints ?? []) as unknown as AdminDashboardData["complaints"],
-    tasks: (tasks ?? []) as unknown as AdminDashboardData["tasks"],
-    inventory,
-  };
 }
 
 async function PurchaseOrderFollowUp({ supabase }: { supabase: DashboardClient }) {
@@ -185,17 +124,57 @@ async function GymFollowUps({ summary }: { summary: ReturnType<typeof loadGymFol
   </>;
 }
 
-async function DashboardContent({ name, summary, children }: { name: string; summary: Promise<AdminDashboardData>; children: ReactNode }) {
-  const data = await summary;
-  return <Dashboard kind="admin" name={name} data={data} monitoringFollowUp={children}/>;
+async function DashboardResult<T>({ source, render }: { source: PromiseLike<T>; render: (value: T) => ReactNode }) {
+  return render(await source);
 }
 
-function DashboardSummaryLoading() {
-  return <div aria-busy="true" aria-live="polite">
-    <div className="loading-bar"/>
-    <div className="loading-grid">{[1, 2, 3, 4].map((item) => <div className="loading-card" key={item}/>)}</div>
-    <span className="sr-only">Loading dashboard</span>
-  </div>;
+function stream<T>(source: PromiseLike<T>, render: (value: T) => ReactNode, fallback: ReactNode = null) {
+  return <Suspense fallback={fallback}><DashboardResult source={source} render={render}/></Suspense>;
+}
+
+function DashboardContent({ db, name, children }: { db: DashboardClient; name: string; children: ReactNode }) {
+  const today = malaysiaToday();
+  const counts = Promise.resolve(db.rpc("admin_dashboard_counts"));
+  const workload = loadAdminDashboardWorkload(db);
+  const noShows = loadTenantNoShows(db);
+  const intake = db.rpc("complaint_intake_summary", { p_date: today, p_group: "ALL" });
+  const kiv = db.from("complaints").select("id", { count: "exact", head: true }).eq("status", "kiv");
+  const appointments = db.from("appointments").select("id", { count: "exact", head: true })
+    .eq("appointment_date", today).not("status", "in", '("cancelled","no_show")');
+  const photos = db.from("maintenance_jobs").select("id", { count: "exact", head: true })
+    .eq("status", "completed").gte("completed_at", "2026-09-27T00:00:00+08:00");
+  const waiting = db.from("maintenance_jobs").select("id", { count: "exact", head: true }).eq("status", "waiting_checkout");
+  const complaints = db.from("complaints").select("id,complaint_no,room_no,category,description,priority,status,submitted_at,block:blocks!block_id(code)")
+    .order("submitted_at", { ascending: false }).limit(5);
+  const tasks = db.from("maintenance_jobs").select("id,job_no,room_no,description,status,scheduled_for,assigned_at,complaint:complaints!inner(room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)")
+    .eq("scheduled_for", today).neq("complaint.room_access_permission", "no").not("status", "in", '("completed","cancelled")')
+    .order("assigned_at", { ascending: true }).limit(5);
+
+  const count = (source: PromiseLike<{ count: number | null; error: unknown }>) =>
+    stream(source, result => result.error ? "—" : result.count ?? "—", "…");
+  const total = (field: "new_complaints" | "today_tasks" | "completed_today") =>
+    stream(counts, result => result.error ? "—" : result.data?.[0]?.[field] ?? "—", "…");
+  const jobCount = (field: "in_progress" | "pending_material" | "under_monitoring") =>
+    stream(workload, result => result.jobs[field], "…");
+  const metrics = <DashboardMetrics intakeDate={today}
+    intakeTotal={stream(intake, result => result.error ? "—" : result.data?.total ?? "—", "…")}
+    values={{
+      newComplaints: total("new_complaints"), todayJobs: total("today_tasks"), completedToday: total("completed_today"),
+      inProgress: jobCount("in_progress"), pendingMaterial: jobCount("pending_material"), underMonitoring: jobCount("under_monitoring"),
+      tenantNotAvailable: stream(noShows, rows => rows?.length ?? "—", "…"), kivComplaints: count(kiv),
+      completionPhotos: count(photos), todayAppointments: count(appointments),
+    }}/>;
+  return <AdminDashboardFrame name={name} summary={metrics} monitoringFollowUp={children}
+    tenantAlerts={stream(noShows, rows => rows && <TenantAlerts rows={rows}/>)}>
+    {stream(Promise.all([workload, waiting]), ([summary, checkout]) =>
+      checkout.error ? <p className="error" role="alert">Unable to load the jobs overview.</p>
+        : <JobsOverview jobs={{ ...summary.jobs, waiting_checkout: checkout.count ?? 0 }}/>)}
+    {stream(complaints, result => result.error ? <p className="error" role="alert">Unable to load recent complaints.</p>
+      : <RecentComplaints rows={(result.data ?? []) as unknown as AdminDashboardData["complaints"]}/>)}
+    {stream(tasks, result => result.error ? <p className="error" role="alert">Unable to load today&apos;s tasks.</p>
+      : <TodayTasks rows={(result.data ?? []) as unknown as AdminDashboardData["tasks"]}/>)}
+    {stream(workload, result => <InventoryAlerts inventory={result.inventory}/>)}
+  </AdminDashboardFrame>;
 }
 
 export default async function AdminPage() {
@@ -204,7 +183,6 @@ export default async function AdminPage() {
   const isAdmin = profile.role === "admin";
   const isPoApprover = isAdmin && profile.id === "eeab5f04-30c3-42bd-a095-58e56c814358";
   const isCleanerCoordinator = isAdmin && ["mary", "fikri"].includes(profile.username);
-  const summary = loadDashboardData(supabase, malaysiaToday());
   const cleanerQueue = isCleanerCoordinator ? loadCleanerQueue(supabase) : null;
   const gymSummary = isAdmin && membershipEnabled() ? loadGymFollowUps() : null;
 
@@ -217,15 +195,13 @@ export default async function AdminPage() {
     {isAdmin && <Suspense fallback={null}><UnifiInvoiceFollowUp/></Suspense>}
     {isAdmin && <Suspense fallback={null}><UnifiPaymentFollowUp/></Suspense>}
     <Suspense fallback={null}><SupplierMailSummary/></Suspense>
-    <Suspense fallback={<DashboardSummaryLoading/>}>
-      <DashboardContent name={profile.full_name} summary={summary}>
-        {cleanerQueue && <Suspense fallback={null}><CleanerAssignmentFollowUp queue={cleanerQueue}/></Suspense>}
-        {gymSummary && <Suspense fallback={null}><GymFollowUps summary={gymSummary}/></Suspense>}
-        {isAdmin && <PaymentMailFollowUp/>}
-        {isAdmin && <Suspense fallback={null}><ComplianceExpiryFollowUp/></Suspense>}
+    <DashboardContent name={profile.full_name} db={supabase}>
+      {cleanerQueue && <Suspense fallback={null}><CleanerAssignmentFollowUp queue={cleanerQueue}/></Suspense>}
+      {gymSummary && <Suspense fallback={null}><GymFollowUps summary={gymSummary}/></Suspense>}
+      {isAdmin && <PaymentMailFollowUp/>}
+      {isAdmin && <Suspense fallback={null}><ComplianceExpiryFollowUp/></Suspense>}
         <Suspense fallback={null}><CheckoutDefectFollowUp/></Suspense>
         <Suspense fallback={null}><MonitoringFollowUp/></Suspense>
-      </DashboardContent>
-    </Suspense>
+    </DashboardContent>
   </AppShell>;
 }

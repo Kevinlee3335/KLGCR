@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { getSessionProfile } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { signatureSchema } from '@/lib/purchase-orders/signature';
-import { deliverDepositDocument, ensureDepositDocumentPdf, loadDepositDocument } from '@/lib/deposit-documents';
 import {gymDepositStartDate, newGymDepositsAvailable} from '@/lib/gym-deposit-availability';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +10,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const filters = z.object({
-  member: z.string().uuid().optional(), kind: z.enum(['receipts', 'vouchers']).default('receipts'),
+  member: z.string().uuid().optional(), activeOnly: z.literal('1').optional(), kind: z.enum(['receipts', 'vouchers']).default('receipts'),
   q: z.string().max(100).default(''), status: z.enum(['held', 'refunded']).optional(),
   from: z.string().date().optional(), to: z.string().date().optional(), page: z.coerce.number().int().min(1).max(100000).default(1),
 });
@@ -27,8 +26,10 @@ export async function GET(request: NextRequest) {
   if (f.from && f.to && f.from > f.to) return json({ error: 'The start date must be before the end date.' }, 400);
   const q = f.q.replace(/[^\p{L}\p{N}@.\s_-]/gu, '').trim();
   const db = createAdminClient();
-  let receipts = db.from('deposit_receipts').select(receiptColumns, { count: 'exact' }).eq('source_module', 'gym').order('received_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
-  let vouchers = db.from('payment_vouchers').select(voucherColumns, { count: 'exact' }).eq('source_module', 'gym').order('paid_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
+  const countReceipts = f.activeOnly === '1' && f.kind === 'vouchers';
+  const countVouchers = f.activeOnly === '1' && f.kind === 'receipts';
+  let receipts = db.from('deposit_receipts').select(receiptColumns, { count: 'exact', head: countReceipts }).eq('source_module', 'gym').order('received_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
+  let vouchers = db.from('payment_vouchers').select(voucherColumns, { count: 'exact', head: countVouchers }).eq('source_module', 'gym').order('paid_on', { ascending: false }).order('created_at', { ascending: false }).order('id');
   if (f.member) { receipts = receipts.eq('member_id', f.member); vouchers = vouchers.eq('member_id', f.member); }
   if (f.status) receipts = receipts.eq('status', f.status);
   if (f.from) { receipts = receipts.gte('received_on', f.from); vouchers = vouchers.gte('paid_on', f.from); }
@@ -40,7 +41,9 @@ export async function GET(request: NextRequest) {
   const offset = (f.page - 1) * 25;
   try {
     const [receiptRows, voucherRows, summary, signature, held, history, legacy] = await Promise.all([
-      receipts.range(offset, offset + 24), vouchers.range(offset, offset + 24), db.rpc('get_deposit_document_summary'),
+      countReceipts ? receipts.limit(1) : receipts.range(offset, offset + 24),
+      countVouchers ? vouchers.limit(1) : vouchers.range(offset, offset + 24),
+      db.rpc('get_deposit_document_summary'),
       profile.role === 'admin' ? db.from('user_e_signatures').select('signature').eq('user_id', profile.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
       f.member ? db.from('deposit_receipts').select('id', { count: 'exact', head: true }).eq('source_module', 'gym').eq('member_id', f.member).eq('status', 'held') : Promise.resolve({ count: 0, error: null }),
       f.member ? db.from('deposit_receipts').select('id', { count: 'exact', head: true }).eq('source_module', 'gym').eq('member_id', f.member) : Promise.resolve({ count: 0, error: null }),
@@ -75,7 +78,10 @@ const retry = z.object({ action: z.enum(['resend', 'retry_pdf']), document_kind:
 
 function scheduleDelivery(kind: 'receipt' | 'voucher', id: string) {
   after(async () => {
-    try { await deliverDepositDocument(kind, id); }
+    try {
+      const { deliverDepositDocument } = await import('@/lib/deposit-documents');
+      await deliverDepositDocument(kind, id);
+    }
     catch { console.error('Deposit document remains queued for retry', { kind, id }); }
   });
 }
@@ -118,6 +124,7 @@ export async function POST(request: NextRequest) {
         already_refunded: data.id !== v.request_id, refunded_by_name: data.refunded_by_name});
     }
     const v = retryInput.data!;
+    const { loadDepositDocument, ensureDepositDocumentPdf } = await import('@/lib/deposit-documents');
     const document = await loadDepositDocument(v.document_kind, v.id);
     if (document.source_module !== 'gym') return json({ error: 'Document not found.' }, 404);
     if (v.action === 'retry_pdf') await ensureDepositDocumentPdf(v.document_kind, document);

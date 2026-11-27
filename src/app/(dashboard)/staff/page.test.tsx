@@ -1,4 +1,6 @@
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment node
+import { prerender } from "react-dom/static";
+import { streamPage } from "@/test/stream-page";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ requireRole: vi.fn().mockResolvedValue({ id: "staff", role: "maintenance_staff", full_name: "Staff Member", blocks: [{ code: "A" }] }) }));
@@ -6,21 +8,30 @@ vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: 
 vi.mock("@/components/dashboard", () => ({ Dashboard: () => <div>Dashboard loaded</div> }));
 
 function query(result: unknown) {
-  const builder = { select: vi.fn(), order: vi.fn(), limit: vi.fn(), eq: vi.fn(), is: vi.fn(), not: vi.fn(), in: vi.fn(), or: vi.fn(), like: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
-  for (const method of ["select", "order", "limit", "eq", "is", "not", "in", "or", "like"] as const) builder[method].mockReturnValue(builder);
+  const builder = { select: vi.fn(), order: vi.fn(), limit: vi.fn(), eq: vi.fn(), is: vi.fn(), not: vi.fn(), in: vi.fn(), or: vi.fn(), like: vi.fn(), range: vi.fn(), lte: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
+  for (const method of ["select", "order", "limit", "eq", "is", "not", "in", "or", "like", "range", "lte"] as const) builder[method].mockReturnValue(builder);
   return builder;
 }
 
 const jobQueries: ReturnType<typeof query>[] = [];
-let jobQueryIndex = 0;
+
 let checkoutQuery: ReturnType<typeof query>;
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn().mockResolvedValue({ from: vi.fn((table: string) => {
-  if (table === "maintenance_jobs") return jobQueries[jobQueryIndex++];
+  if (table === "maintenance_jobs") return { select: (columns: string) => {
+    if (columns.includes("checkout_note")) return query({ data: [], count: 0, error: null });
+    const index = columns === "status" ? 0 : columns.includes("cycle_changes:") ? 3 : columns.includes("follow_ups:") ? 2 : 1;
+    return jobQueries[index].select(columns);
+  } };
   if (table === "checkout_rooms") return checkoutQuery;
   return query({ data: [], error: null });
 }) }) }));
 
 import StaffPage from "./page";
+
+async function fullPage() {
+  const {prelude} = await prerender(await StaffPage());
+  return (await new Response(prelude).text()).replaceAll("<!-- -->", "");
+}
 
 const returnedJob = {
   id: "reopened", job_no: "JOB-1", room_no: "101", description: "Floor leak", status: "in_progress",
@@ -31,14 +42,26 @@ const returnedJob = {
 
 describe("staff dashboard", () => {
   beforeEach(() => {
-    jobQueryIndex = 0;
+
     checkoutQuery = query({ count: 0, error: null });
     jobQueries.splice(0, jobQueries.length, query({ data: [{ status: "assigned" }], error: null }),
       query({ data: [], error: null }), query({ data: [], error: null }), query({ data: [], error: null }));
   });
 
+  it("offers team appointment and job navigation while dashboard reads are pending", async () => {
+    let release!: (result: unknown) => void;
+    jobQueries[0] = query(new Promise(resolve => { release = resolve; }));
+    const page = streamPage(await StaffPage());
+    try {
+      await vi.waitFor(() => expect(page.html()).toContain("View current tasks"));
+      expect(page.html()).toContain("Open Calendar");
+      release({data: [], error: null});
+      expect(page.errors).toEqual([]);
+    } finally { page.close(); }
+  });
+
   it("loads without selecting complaints.appointment_required and hides the empty follow-up panel", async () => {
-    const html = renderToStaticMarkup(await StaffPage());
+    const html = await fullPage();
     expect(html).toContain("Dashboard loaded");
     expect(html).not.toContain("Monitoring Follow-up");
     expect(html).not.toContain("Open assigned rooms");
@@ -47,7 +70,7 @@ describe("staff dashboard", () => {
 
   it("shows an entry to active checkout repairs for the signed-in maintenance user", async () => {
     checkoutQuery = query({ count: 4, error: null });
-    const html = renderToStaticMarkup(await StaffPage());
+    const html = await fullPage();
     expect(html).toContain('href="/staff/checkouts"');
     expect(html).toContain("4 rooms assigned to you for rectification.");
     expect(checkoutQuery.eq).toHaveBeenCalledWith("assigned_to", "staff");
@@ -58,7 +81,7 @@ describe("staff dashboard", () => {
   it("shows due monitoring work and the current Admin return with its remark and timestamp", async () => {
     jobQueries[2] = query({ data: [{ ...returnedJob, id: "due", job_no: "JOB-2", status: "under_monitoring", follow_ups: [], monitoring_note: "Check seal", monitoring_review_at: "2020-01-01T00:00:00Z" }], error: null });
     jobQueries[3] = query({ data: [returnedJob, { ...returnedJob, id: "old-return", cycle_changes: [{ id: 6 }] }], error: null });
-    const html = renderToStaticMarkup(await StaffPage());
+    const html = await fullPage();
     expect(html).toContain("Monitoring Follow-up");
     expect(html).toContain("Overdue");
     expect(html).toContain("Admin follow-up: Resident reported the seal is still leaking.");

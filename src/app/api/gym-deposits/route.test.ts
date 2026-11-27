@@ -86,6 +86,19 @@ describe('gym deposit access and DTOs', () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
 
+  it.each(['receipts', 'vouchers'])('loads rows only for the visible %s tab and keeps the other filtered count', async kind => {
+    const response = await GET(get({ kind, activeOnly: '1', q: 'gym26', page: '2' }));
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    const other = kind === 'receipts' ? 'vouchers' : 'receipts';
+    expect(payload[other]).toEqual([]);
+    const unused = queries.find(query => query.table === (other === 'vouchers' ? 'payment_vouchers' : 'deposit_receipts'))!;
+    expect(unused.operations.find(op => op[0] === 'select')?.[2]).toEqual({ count: 'exact', head: true });
+    expect(unused.operations.some(op => op[0] === 'or')).toBe(true);
+    const active = queries.find(query => query.table === (kind === 'vouchers' ? 'payment_vouchers' : 'deposit_receipts'))!;
+    expect(active.operations).toContainEqual(['range', 25, 49]);
+  });
+
   it('returns linked PV independently of its current list page and keeps private storage/signature fields server-side', async () => {
     voucherRows = [];
     const response = await GET(get({ member, q: 'some filter', page: '3', status: 'refunded' }));

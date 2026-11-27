@@ -26,7 +26,7 @@ function patchMeter(state: UtilityPhotoData, accountId: string, meterId: string,
 }
 
 async function compress(file:File){if(!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("Choose a JPG, PNG or WebP photo.");const bitmap=await createImageBitmap(file);try{const scale=Math.min(1,1200/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext("2d");if(!ctx)throw Error("Camera image could not be processed");ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);for(const q of [.8,.65,.5,.35]){const data=canvas.toDataURL("image/jpeg",q);if(data.length<=220000)return data}throw Error("Photo is too large. Take a closer photo of the meter digits.")}finally{bitmap.close()}}
-export function UtilityPhotoPanel(){const [opened,setOpened]=useState<string|null>(null);const [state,setState]=useState<UtilityPhotoData|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[search,setSearch]=useState("");
+export function UtilityPhotoPanel({ initial }: { initial?: UtilityPhotoData | null } = {}){const [opened,setOpened]=useState<string|null>(null);const [state,setState]=useState<UtilityPhotoData|null>(initial ?? null),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[search,setSearch]=useState("");
  const [pending, setPending] = useState<PendingReading[]>([]);
  const meterRevisions = useRef(new Map<string, number>());
  const baseRevision = state?.revision ?? 0;
@@ -47,7 +47,7 @@ export function UtilityPhotoPanel(){const [opened,setOpened]=useState<string|nul
   }
  }
 
- useEffect(() => {void reload()}, []);
+ useEffect(() => { if (!initial) void reload(); }, [initial]);
  useEffect(() => {
   if (!opened || busy) return;
   const active = pending.filter(reading => reading.accountId === opened);

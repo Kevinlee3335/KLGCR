@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { PassThrough } from "node:stream";
+import { prerenderToNodeStream } from "react-dom/static";
+import { renderToPipeableStream } from "react-dom/server";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const { authorize, requestDatabase } = vi.hoisted(() => ({ authorize: vi.fn(), requestDatabase: vi.fn() }));
@@ -17,6 +20,32 @@ vi.mock("./actions", () => ({
 }));
 
 import MembersPage from "./page";
+
+async function renderPage(search: { id?: string } = {}) {
+  const page = await MembersPage({ searchParams: Promise.resolve(search) });
+  const { prelude } = await prerenderToNodeStream(page, {progressiveChunkSize: Number.MAX_SAFE_INTEGER});
+  const chunks: Buffer[] = [];
+  for await (const chunk of prelude) chunks.push(Buffer.from(chunk));
+  document.body.innerHTML = Buffer.concat(chunks).toString('utf8');
+  return { container: document.body };
+}
+async function renderWhileWaiting(search: { id?: string }, block: (url: URL) => boolean, verify: (html: () => string) => Promise<void>) {
+  const fetch = requestDatabase.getMockImplementation()!;
+  const gate = Promise.withResolvers<void>();
+  requestDatabase.mockImplementation(async (input, init) => {
+    if (block(new URL(input))) await gate.promise;
+    return fetch(input, init);
+  });
+  const page = await MembersPage({ searchParams: Promise.resolve(search) });
+  let html = '';
+  const output = new PassThrough();
+  output.setEncoding('utf8').on('data', chunk => { html += chunk; });
+  const complete = new Promise<void>((resolve, reject) => {
+    output.on('end', resolve).on('error', reject);
+    const stream = renderToPipeableStream(<html><body>{page}</body></html>, { onShellReady: () => stream.pipe(output), onError: reject });
+  });
+  try { await verify(() => html); } finally { gate.resolve(); await complete; }
+}
 
 const memberId = "55e422b3-06b4-4cfa-9ee9-396d02a55f0a";
 const paymentId = "2778ee9a-22f5-4617-b807-c9e7016df6b7";
@@ -64,7 +93,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 it("loads the overview metadata and creates protected links without signing any files", async () => {
-  const { container } = render(await MembersPage({ searchParams: Promise.resolve({}) }));
+  const { container } = await renderPage();
   expect(authorize).toHaveBeenCalledWith(["admin"]);
   expect(screen.getByRole("heading", { name: "Payment verification (1)" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Member list (1)" })).toBeInTheDocument();
@@ -76,14 +105,14 @@ it("loads the overview metadata and creates protected links without signing any 
   ]);
   expect(screen.getByRole("button", { name: "Approve payment" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Approve request" })).toBeEnabled();
-  expect(requestDatabase.mock.calls.map(([url]) => new URL(url).pathname)).toEqual([
-    "/rest/v1/memberships", "/rest/v1/membership_payments", "/rest/v1/membership_emails", "/rest/v1/membership_requests",
+  expect(requestDatabase.mock.calls.map(([url]) => new URL(url).pathname).sort()).toEqual([
+    "/rest/v1/membership_emails", "/rest/v1/membership_payments", "/rest/v1/membership_requests", "/rest/v1/memberships",
   ]);
   expect(container.innerHTML).not.toContain("protected-");
 });
 
 it("opens only the selected member detail and signs their portrait and card, with receipts still on demand", async () => {
-  render(await MembersPage({ searchParams: Promise.resolve({ id: memberId }) }));
+  await renderPage({ id: memberId });
   expect(screen.getByRole("heading", { name: "Gym Member" })).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /Personal photo of/ })).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /Uploaded Access Card/ })).toBeInTheDocument();
@@ -100,4 +129,21 @@ it("opens only the selected member detail and signs their portrait and card, wit
   ]);
   expect(requests.filter(url => url.pathname.startsWith("/rest/v1/"))).toHaveLength(4);
   expect(requests.some(url => url.pathname.endsWith("/membership_emails"))).toBe(false);
+});
+
+it("shows the directory and usable navigation while verification and reminders are loading", async () => {
+  await renderWhileWaiting({}, url => !url.pathname.endsWith("/memberships"), async html => {
+    await waitFor(() => expect(html()).toContain("Gym Member"));
+    for (const label of ["Search members", "Gym patrol", "Master report", "Deposits &amp; refunds"]) expect(html()).toContain(label);
+    expect(html()).not.toContain("Approve payment");
+  });
+});
+
+it("renders selected member identity and status controls before storage and history respond", async () => {
+  await renderWhileWaiting({ id: memberId }, url => !url.pathname.endsWith("/memberships"), async html => {
+    await waitFor(() => expect(html()).toContain("Personal information"));
+    expect(html()).toContain("Gym Member");
+    expect(html()).toContain("Manage membership status");
+    expect(html()).not.toContain("Management · Reviewer");
+  });
 });

@@ -6,13 +6,20 @@ import { AppShell } from "@/components/app-shell";
 import { BillingPanel } from "@/components/billing-panel";
 import { requireRole } from "@/lib/auth";
 import { BILLING_APPROVER_ID } from "@/lib/billing-approval";
-import { loadBillingOverview } from "@/lib/billing-preview-data";
+import { loadBillingSettings, loadPendingBillingCount } from "@/lib/billing-preview-data";
 import { billingPreviewEnabled } from "@/lib/billing-preview";
 import "./billing.css";
 
 async function BillingContent({ name, approver, canManageMail }: { name: string; approver: boolean; canManageMail: boolean }) {
-  const initialData = await loadBillingOverview(approver).catch(() => undefined);
-  return <BillingPanel initialData={initialData} createdBy={name} approver={approver} canManageMail={canManageMail} />;
+  const settings = loadBillingSettings().catch(() => undefined);
+  const pending = approver ? loadPendingBillingCount().catch(() => null) : null;
+  const data = await settings;
+  const initialData = data ? {...data, pendingPackCount: approver ? null : 0} : undefined;
+  return <BillingPanel initialData={initialData} initialPendingCount={pending && <Suspense fallback="…"><PendingCount count={pending}/></Suspense>} createdBy={name} approver={approver} canManageMail={canManageMail} />;
+}
+
+async function PendingCount({count}: {count: Promise<number | null>}) {
+  return (await count) ?? "—";
 }
 
 export default async function BillingPage() {

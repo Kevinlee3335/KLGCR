@@ -76,9 +76,20 @@ export function companyHolidays(year: number): CompanyHoliday[] {
   return addSubstituteDays(rows);
 }
 
+// Only the fixed company rules and the requested year determine these dates.
+const calendarYears = new Map<number, CompanyHoliday[]>();
+function calendarHolidays(year: number) {
+  if (year < 1900 || year > 2100 || !Number.isInteger(year)) return [];
+  const cached = calendarYears.get(year);
+  if (cached) return cached;
+  const holidays = companyHolidays(year);
+  calendarYears.set(year, holidays);
+  return holidays;
+}
+
 export function companyHolidayItems(month: string): CalendarItem[] {
   const year = Number(month.slice(0, 4));
-  return [year - 1, year].flatMap(companyHolidays).filter(h => h.date.startsWith(`${month}-`)).map(h => ({
+  return [year - 1, year].flatMap(calendarHolidays).filter(h => h.date.startsWith(`${month}-`)).map(h => ({
     id: `company-holiday-${h.date}-${h.label}`, date: h.date, time: "All day", label: h.label,
     detail: `KLG Company Holiday${h.substituteFor ? ` · In lieu of ${h.substituteFor}` : ""}${h.provisional ? " · Subject to confirmation / change" : ""}`,
     href: null, kind: "holiday", tone: "calendar-holiday",

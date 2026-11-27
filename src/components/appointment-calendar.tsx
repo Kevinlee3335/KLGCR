@@ -15,8 +15,11 @@ export type CalendarItem = {
   kind?: "maintenance" | "daily_task" | "meeting" | "leave" | "other" | "holiday";
 };
 
+const calendarMonth = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric", timeZone: "Asia/Kuala_Lumpur" });
+const calendarToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" });
+const calendarDay = new Intl.DateTimeFormat("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kuala_Lumpur" });
 function monthName(year: number, monthIndex: number) {
-  return new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric", timeZone: "Asia/Kuala_Lumpur" }).format(new Date(Date.UTC(year, monthIndex, 1)));
+  return calendarMonth.format(new Date(Date.UTC(year, monthIndex, 1)));
 }
 
 function monthKey(year: number, monthIndex: number) {
@@ -24,7 +27,7 @@ function monthKey(year: number, monthIndex: number) {
 }
 
 function malaysiaToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return calendarToday.format(new Date());
 }
 
 function displayTime(time: string) {
@@ -32,16 +35,32 @@ function displayTime(time: string) {
 }
 
 function fullDate(date: string) {
-  return new Intl.DateTimeFormat("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kuala_Lumpur" }).format(new Date(`${date}T00:00:00+08:00`));
+  return calendarDay.format(new Date(`${date}T00:00:00+08:00`));
 }
 
-export function AppointmentCalendar({ month, items, compact = false }: { month: string; items: CalendarItem[]; compact?: boolean }) {
+export function CalendarHeading({ month }: { month: string }) {
+  const [year, number] = month.split("-").map(Number);
+  const monthIndex = number - 1;
+  const previous = new Date(year, monthIndex - 1, 1);
+  const next = new Date(year, monthIndex + 1, 1);
+  return <header className="calendar-heading">
+      <div><p className="eyebrow">Monthly work view</p><h2>{monthName(year, monthIndex)}</h2><p className="subtle">Tap a date to see every item in full below the calendar.</p></div>
+      <div className="calendar-controls"><form method="get"><label className="sr-only" htmlFor="calendar-month">Select month and year</label><input id="calendar-month" type="month" name="month" defaultValue={month} required/><button type="submit" className="button secondary">Go</button></form><a href={`?month=${monthKey(previous.getFullYear(), previous.getMonth())}`}>‹ Previous</a><a href={`?month=${monthKey(new Date().getFullYear(), new Date().getMonth())}`}>Today</a><a href={`?month=${monthKey(next.getFullYear(), next.getMonth())}`}>Next ›</a></div>
+    </header>;
+}
+
+type CalendarProps = { month: string; items: CalendarItem[]; compact?: boolean };
+export function AppointmentCalendar(props: CalendarProps) {
+  return <section className={`calendar-panel${props.compact ? " calendar-compact" : ""}`}>
+    <CalendarHeading month={props.month}/><CalendarBody {...props}/>
+  </section>;
+}
+
+export function CalendarBody({ month, items, compact = false }: CalendarProps) {
   const [year, monthNumber] = month.split("-").map(Number);
   const monthIndex = monthNumber - 1;
   const firstDay = new Date(year, monthIndex, 1).getDay();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const previous = new Date(year, monthIndex - 1, 1);
-  const next = new Date(year, monthIndex + 1, 1);
   const today = malaysiaToday();
   const firstUsefulDate = today.startsWith(`${month}-`) ? today : items[0]?.date || `${month}-01`;
   const [selectedDate, setSelectedDate] = useState(firstUsefulDate);
@@ -74,11 +93,7 @@ export function AppointmentCalendar({ month, items, compact = false }: { month: 
     return day >= 1 && day <= daysInMonth ? day : null;
   });
 
-  return <section className={`calendar-panel${compact ? " calendar-compact" : ""}`}>
-    <header className="calendar-heading">
-      <div><p className="eyebrow">Monthly work view</p><h2>{monthName(year, monthIndex)}</h2><p className="subtle">Tap a date to see every item in full below the calendar.</p></div>
-      <div className="calendar-controls"><form method="get"><label className="sr-only" htmlFor="calendar-month">Select month and year</label><input id="calendar-month" type="month" name="month" defaultValue={month} required/><button type="submit" className="button secondary">Go</button></form><Link href={`?month=${monthKey(previous.getFullYear(), previous.getMonth())}`}>‹ Previous</Link><Link href={`?month=${monthKey(new Date().getFullYear(), new Date().getMonth())}`}>Today</Link><Link href={`?month=${monthKey(next.getFullYear(), next.getMonth())}`}>Next ›</Link></div>
-    </header>
+  return <>
     {compact && <div className="calendar-type-filters" aria-label="Calendar categories">{filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} className={`button secondary${filter === value ? " calendar-filter-active" : ""}`} onClick={() => setFilter(value)}>{label}</button>)}</div>}
     <div className="calendar-grid-wrap">
       <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => <span key={day}>{day}</span>)}</div>
@@ -104,5 +119,5 @@ export function AppointmentCalendar({ month, items, compact = false }: { month: 
       })}</div> : <p className="calendar-day-empty">No calendar items for this day.</p>}
     </section>
     {!items.length && <p className="calendar-empty">No appointments are scheduled for this month.</p>}
-  </section>;
+  </>;
 }

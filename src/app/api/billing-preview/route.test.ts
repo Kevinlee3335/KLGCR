@@ -2,9 +2,11 @@ vi.mock("@/lib/document-review-notifications",()=>({dispatchDocumentReviewPushes
 vi.mock("@/lib/utility-months",()=>({ensureUtilityMonth:vi.fn().mockResolvedValue(undefined)}));
 import { beforeEach,describe,it,expect,vi } from "vitest";
 import { NextRequest } from "next/server";
-const mocks=vi.hoisted(()=>({profile:null as null|{id:string;role:string;full_name:string},db:vi.fn()}));
+const mocks=vi.hoisted(()=>({profile:null as null|{id:string;role:string;full_name:string},db:vi.fn(),admin:vi.fn()}));
 vi.mock('@/lib/auth',()=>({getSessionProfile:async()=>mocks.profile}));
 vi.mock('@/lib/supabase/server',()=>({createClient:mocks.db}));
+vi.mock('@/lib/supabase/admin',()=>({createAdminClient:mocks.admin}));
+beforeEach(() => mocks.admin.mockReset());
 import { documentReviewers } from "@/lib/document-review-status";
 import { GET,POST } from './route';
 describe('billing preview authorization',()=>{
@@ -102,14 +104,20 @@ describe("on-demand billing views", () => {
   return { config, first, second };
  }
 
- it("loads only settings on overview and omits meter evidence", async () => {
+ it("loads all billing settings without requesting any meter evidence or historical packs", async () => {
   const { config } = await setup();
+  const {stripBillingMeterPhotos} = await import("@/lib/billing-meter-photo");
+  const stripped = stripBillingMeterPhotos(config);
+  const {utilityAccounts, ...fields} = stripped;
+  const select = vi.fn();
+  const rpc = vi.fn().mockResolvedValue({data:{revision:17, period:config.utilityPeriod, utilityAccounts}});
+  mocks.admin.mockReturnValue({rpc});
   const from = vi.fn((table: string) => {
    expect(table).toBe("billing_preview_settings");
    return {
-    select() { return this; },
+    select(columns: string) { select(columns); return this; },
     eq() { return this; },
-    single: async () => ({ data: { config, revision: 17 }, error: null }),
+    single: async () => ({ data: { ...fields, revision: 17 }, error: null }),
    };
   });
   mocks.db.mockResolvedValue({ from });
@@ -118,10 +126,49 @@ describe("on-demand billing views", () => {
   expect(response.status).toBe(200);
   const overview = await response.json();
   expect(from.mock.calls).toEqual([["billing_preview_settings"]]);
+  expect(select).toHaveBeenCalledExactlyOnceWith(["revision", ...Object.keys(fields).map(k => `${k}:config->${k}`)].join(","));
+  expect(rpc).toHaveBeenCalledExactlyOnceWith("get_utility_meter_photos",{p_account_id:null,p_meter_id:null});
   expect(overview).toMatchObject({ revision: 17, photosLoaded: false, pendingPackCount: 0 });
+  expect(overview.config).toEqual(stripped);
   expect(overview.config.utilityAccounts[0].meters[0].photo).toBeUndefined();
   expect(overview.config.utilityAccounts[0].meters[0].previousPhoto).toBeUndefined();
   expect(overview).not.toHaveProperty("runs");
+ });
+
+ it.each(["revision changed", "period changed", "RPC not installed", "old record missing projected metadata"])("uses one coherent authorized row if %s", async reason => {
+  const {config} = await setup();
+  const {stripBillingMeterPhotos} = await import("@/lib/billing-meter-photo");
+  const {utilityAccounts, ...fields} = stripBillingMeterPhotos(config);
+  const rpc = vi.fn().mockResolvedValue(reason === "RPC not installed" ? {error:{code:"PGRST202"}} : {
+   data:{utilityAccounts, period:reason === "period changed" ? "2026-10" : config.utilityPeriod, revision:reason === "revision changed" ? 7 : 8},
+  });
+  mocks.admin.mockReturnValue({rpc});
+  const columns: string[] = [];
+  mocks.db.mockResolvedValue({from:() => ({
+   select(projection:string){
+    columns.push(projection);
+    const data = projection === "config,revision" ? {config,revision:9} : {
+     ...fields, time:reason === "old record missing projected metadata" ? null : "06:00", revision:8,
+    };
+    return {eq:() => ({single:async () => ({data})})};
+   },
+  })});
+  const response = await GET(request("view=overview"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({config:stripBillingMeterPhotos(config),revision:9});
+  expect(columns).toHaveLength(2);
+  expect(columns[1]).toBe("config,revision");
+ });
+
+ it("preserves the caller's billing access checks when the scoped RPC can read a record", async () => {
+  const {config} = await setup();
+  mocks.admin.mockReturnValue({rpc:vi.fn().mockResolvedValue({data:{period:config.utilityPeriod,revision:8,utilityAccounts:config.utilityAccounts}})});
+  mocks.db.mockResolvedValue({from:() => ({
+   select(){return this},eq(){return this},single:async () => ({data:null,error:{code:"42501"}}),
+  })});
+  const response = await GET(request("view=overview"));
+  expect(response.status).toBe(503);
+  expect(await response.json()).not.toHaveProperty("config");
  });
 
  it("adds a metadata-only pending count for the billing approver", async () => {
@@ -231,12 +278,20 @@ describe("on-demand billing views", () => {
 
  it("returns only the selected account photos with the settings revision", async () => {
   const { config, first, second } = await setup();
+  const {stripBillingMeterPhotos}=await import("@/lib/billing-meter-photo");
+  const {utilityAccounts, ...fields}=stripBillingMeterPhotos(config);
+  const rpc=vi.fn(async (_name: string, {p_account_id}:{p_account_id:string}) => ({
+   data:{period:config.utilityPeriod,revision:19,utilityAccounts:utilityAccounts.map((account,index)=>account.id===p_account_id ? config.utilityAccounts[index] : account)},
+  }));
+  mocks.admin.mockReturnValue({rpc});
+  const fullReads:string[]=[];
   const from = vi.fn((table: string) => {
    expect(table).toBe("billing_preview_settings");
    return {
-    select() { return this; },
-    eq() { return this; },
-    single: async () => ({ data: { config, revision: 19 }, error: null }),
+    select(cols:string) {
+     if (cols === "config,revision") fullReads.push(cols);
+     return {eq:() => ({single:async () => ({data: cols === "config,revision" ? {config,revision:19} : {...fields,revision:19}})})};
+    },
    };
   });
   mocks.db.mockResolvedValue({ from });
@@ -248,10 +303,13 @@ describe("on-demand billing views", () => {
   expect(selected.accounts).toHaveLength(1);
   expect(selected.accounts[0].meters[0]).toEqual({ id: first.meters[0].id, photo, previousPhoto });
   expect(selected).not.toHaveProperty("config");
+  expect(rpc).toHaveBeenCalledExactlyOnceWith("get_utility_meter_photos",{p_account_id:first.id,p_meter_id:null});
+  expect(fullReads).toEqual([]);
 
   const all = await (await GET(request("view=photos"))).json();
   expect(all.accounts.find((account: {id: string}) => account.id === second.id).meters[0].photo).toBe(otherPhoto);
   expect((await GET(request("view=photos&account=missing"))).status).toBe(404);
+  expect(fullReads).toEqual(["config,revision"]);
   expect(from.mock.calls.every(([table]) => table === "billing_preview_settings")).toBe(true);
  });
 });

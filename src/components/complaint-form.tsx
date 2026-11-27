@@ -6,8 +6,10 @@ import { assignComplaint, createComplaint, reviewComplaint } from "@/app/(dashbo
 import { appointmentTimeSlots, preferredAppointmentSelection } from "@/lib/appointments";
 import { priorities, sources, titleCase, type ComplaintRow } from "@/lib/phase2";
 
+import { ComplaintBlockSelect, type BlockChoices } from "./complaint-block-select";
+
 type ComplaintFormProps = {
-  blocks: { id: number; code: string }[];
+  blocks: BlockChoices;
   complaint?: ComplaintRow;
   mode: "create" | "review";
 };
@@ -31,7 +33,7 @@ export function ComplaintForm({ blocks, complaint, mode }: ComplaintFormProps) {
     <form action={action} className="panel form-grid operational-form">
       {complaint && ["google_form", "flex"].includes(complaint.source) ? <input type="hidden" name="source" value={complaint.source}/> : <label className="field"><span>Source</span><select name="source" defaultValue={complaint?.source || "manual"}>{sources.filter(source => !["google_form", "flex"].includes(source)).map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select></label>}
       <label className="field"><span>Location type</span><select value={locationType} onChange={event => setLocationType(event.target.value)}><option value="block">Block</option><option value="external">External Area</option></select></label>
-      {locationType === "block" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue={complaint?.block?.id}><option value="">Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
+      {locationType === "block" && <label className="field"><span>Block *</span><ComplaintBlockSelect source={blocks} defaultId={complaint?.block?.id}/></label>}
       {locationType === "external" && <label className="field"><span>External Area *</span><select required value={area} onChange={event => setArea(event.target.value)}><option value="">Choose location</option>{externalAreas.map(value => <option key={value}>{value}</option>)}</select></label>}
       <label className="field"><span>Room / Location {locationType === "block" ? "*" : "(optional)"}</span><input list="complaint-block-locations" required={locationType === "block"} value={room} onChange={event => setRoom(event.target.value)}/></label>
       <datalist id="complaint-block-locations">{commonAreaLocations.filter(value => !externalAreas.includes(value)).map(value => <option key={value} value={value}/>)}</datalist>

@@ -4,6 +4,7 @@ import { assistantEnabled } from "@/lib/ai-assistant";
 import { ConversationNotFound, listConversations, readConversation } from "@/lib/ai-assistant-history";
 import { z } from "zod";
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
 export async function GET(req: NextRequest) {
   if (!assistantEnabled()) return reply({ error: "Unavailable." },404);

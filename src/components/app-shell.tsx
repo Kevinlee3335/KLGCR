@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- Main menu links start a browser navigation without waiting for the client router. */
 import {canCaptureUtilityPhotos} from "@/lib/utility-photo-access";
 import { assistantEnabled } from "@/lib/ai-assistant";
 import { complianceListPaths } from "@/lib/compliance-workflow";
@@ -5,7 +6,7 @@ import { FLEX_INSPECTION_PATH, FLEX_INSPECTION_TITLE } from "@/lib/flex-inspecti
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
 import { NotificationBell } from "./notification-bell";
-import { MobileNavigationDrawer, ShellLink } from "./shell-navigation";
+import { MobileNavigationDrawer } from "./shell-navigation";
 import type { Profile } from "@/lib/types";
 import { roleLabel } from "@/lib/types";
 import { Bell, Boxes, CalendarDays, ChevronRight, ClipboardCheck, DoorOpen, FileBarChart, FileText, FolderOpen, Gauge, PackageOpen, Settings, ShieldAlert, Users, Wrench, type LucideIcon } from "lucide-react";
@@ -38,30 +39,29 @@ function NavIcon({ kind }: { kind: "dashboard" | "tasks" | "calendar" | "more" }
 
 type AdminNavGroup = {
   label: string;
-  nativeLinks?: boolean;
   Icon: LucideIcon;
   links: readonly (readonly [title: string, href: string, Icon: LucideIcon, label?: string])[];
 };
 
 const adminNavGroups: AdminNavGroup[] = [
-    { label: "Work Management", Icon: Wrench, nativeLinks: true, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
-    { label: "Daily Tasks", Icon: ClipboardCheck, nativeLinks: true, links: [
+    { label: "Work Management", Icon: Wrench, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
+    { label: "Daily Tasks", Icon: ClipboardCheck, links: [
       ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck, "All Daily Tasks"],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
     ] as const },
-    { label: "Inventory", Icon: Boxes, nativeLinks: true, links: [
+    { label: "Inventory", Icon: Boxes, links: [
       ["Building Material", "/admin/inventory?store=building", Boxes],
       ["Office Inventory", "/admin/inventory?store=office", Boxes],
       ["Cleaner Supplies", "/admin/inventory?store=cleaner", Boxes],
       ["Material Requests", "/admin/material-requests", PackageOpen],
     ] as const },
-    { label: "Quotation & PO", Icon: FileBarChart, nativeLinks: true, links: [
+    { label: "Quotation & PO", Icon: FileBarChart, links: [
       ["Quotations", "/admin/quotations", FileBarChart],
       ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],
     ] as const },
-    { label: "Documents & Reports", Icon: FolderOpen, nativeLinks: true, links: [
+    { label: "Documents & Reports", Icon: FolderOpen, links: [
       ...adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)),
       ["TM Unifi Invoices", "/admin/unifi-invoices", FileText],
     ] },
@@ -70,27 +70,26 @@ const adminNavGroups: AdminNavGroup[] = [
 
 function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isAdmin = false }: { mobile?: boolean; currentTitle: string; superAdmin?: boolean; isAdmin?: boolean }) {
   const active = (label: string) => currentTitle === label || (label === "New Complaints" && currentTitle === "Complaint Detail");
-  const renderGroup = ({ label, Icon, links, nativeLinks }: AdminNavGroup) => {
+  const renderGroup = ({ label, Icon, links }: AdminNavGroup) => {
     const visibleLinks = links.filter(([item]) => isAdmin || (item !== "TM Unifi Invoices" && item !== FLEX_INSPECTION_TITLE));
     const groupClass = `admin-nav-group${visibleLinks.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
-    const MenuLink = nativeLinks ? "a" : ShellLink;
     const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) =>
-      <MenuLink key={item} href={href} className={nativeLinks ? "native-menu-link" : undefined} aria-current={active(item) ? "page" : undefined}>
+      <a key={item} href={href} className="native-menu-link" aria-current={active(item) ? "page" : undefined}>
         <LinkIcon size={16}/><span>{linkLabel ?? item}</span>
-      </MenuLink>
+      </a>
     )}</div>;
     return mobile
       ? <details key={label} className={groupClass}><summary>{heading}</summary>{submenu}</details>
       : <div key={label} className={groupClass}><button type="button" className="admin-nav-group-trigger" aria-label={`${label} submenu`}>{heading}</button>{submenu}</div>;
   };
   return <nav className={`nav admin-nav${mobile ? " mobile-drawer-nav" : ""}`} aria-label="Main navigation">
-    <ShellLink href="/admin" aria-current={active("Dashboard") ? "page" : undefined}><Gauge size={18}/><span>Dashboard</span></ShellLink>
+    <a href="/admin" aria-current={active("Dashboard") ? "page" : undefined}><Gauge size={18}/><span>Dashboard</span></a>
     {adminNavGroups.slice(0, 2).map(renderGroup)}
-    <ShellLink href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></ShellLink>
+    <a href="/admin/calendar" aria-current={active("Calendar") ? "page" : undefined}><CalendarDays size={18}/><span>Calendar</span></a>
     {adminNavGroups.slice(2).map(renderGroup)}
-    {superAdmin&&<ShellLink href="/admin/super-admin" aria-current={active("Super Admin Control Center") ? "page" : undefined}><Settings size={18}/><span>Super Admin Control Center</span></ShellLink>}
-    <ShellLink href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></ShellLink>
+    {superAdmin&&<a href="/admin/super-admin" aria-current={active("Super Admin Control Center") ? "page" : undefined}><Settings size={18}/><span>Super Admin Control Center</span></a>}
+    <a href="/admin/members" aria-current={active("Membership") ? "page" : undefined}><Users size={18}/><span>Membership</span></a>
     {isAdmin ? renderGroup({
       label: "Rental & Utilities",
       Icon: FileBarChart,
@@ -98,8 +97,8 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isA
         ["Rental & Utilities", "/admin/billing", FileBarChart, "Billing Overview"],
         ["Payment Verification", "/admin/payment-verification", ClipboardCheck],
       ],
-    }) : <ShellLink href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></ShellLink>}
-    {assistantEnabled() && <ShellLink href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></ShellLink>}
+    }) : <a href="/admin/billing" aria-current={active("Rental & Utilities") ? "page" : undefined}><FileBarChart size={18}/><span>Rental & Utilities</span></a>}
+    {assistantEnabled() && <a href="/admin/ai-assistant" aria-current={active("AI Assistant") ? "page" : undefined}><Gauge size={18}/><span>AI Assistant</span></a>}
   </nav>;
 }
 
@@ -112,8 +111,8 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
   return <div className={`shell ${isStaff ? "staff-shell" : "admin-shell"}`}>
     <aside className="sidebar">
       <Brand/>
-      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
-      <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><ShellLink className="change-password-link" href="/account">Change Password</ShellLink><LogoutForm/></div>
+      {isStaff ? <nav className="nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <a key={item} href={href} aria-current={current(item)}>{item}</a>)}</nav> : <AdminNavigation currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
+      <div className="sidebar-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><a className="change-password-link" href="/account">Change Password</a><LogoutForm/></div>
     </aside>
 
     <main className="main">
@@ -127,22 +126,22 @@ export function AppShell({ profile, children, title }: { profile: Profile; child
     <MobileNavigationDrawer>
       <aside className="mobile-drawer" aria-label="Full navigation menu">
         <div className="mobile-drawer-heading"><Brand/><span>Menu</span></div>
-        {isStaff ? <nav className="nav mobile-drawer-nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <ShellLink key={item} href={href} aria-current={current(item)}>{item}</ShellLink>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
+        {isStaff ? <nav className="nav mobile-drawer-nav" aria-label="Main navigation">{operationalNav.map(([item, href]) => <a key={item} href={href} aria-current={current(item)}>{item}</a>)}</nav> : <AdminNavigation mobile currentTitle={title} superAdmin={Boolean(profile.is_super_admin)} isAdmin={profile.role === "admin"}/>}
         <div className="mobile-drawer-footer"><div className="user-avatar">{profile.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("")}</div><div className="user-details"><strong>{profile.full_name.toUpperCase()}</strong><small>{profile.is_super_admin?"Super Administrator":roleLabel[profile.role]}</small></div><LogoutForm/></div>
       </aside>
     </MobileNavigationDrawer>
 
     <nav className="mobile-nav" aria-label="Mobile quick navigation">
       {profile.role === "cleaner" ? <>
-        <ShellLink href="/staff"><NavIcon kind="dashboard"/><span>Dashboard</span></ShellLink>
-        <ShellLink href="/staff/daily-tasks"><NavIcon kind="tasks"/><span>Tasks</span></ShellLink>
-        <ShellLink href="/staff/complaints"><NavIcon kind="more"/><span>Reports</span></ShellLink>
-        <ShellLink href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></ShellLink>
+        <a href="/staff"><NavIcon kind="dashboard"/><span>Dashboard</span></a>
+        <a href="/staff/daily-tasks"><NavIcon kind="tasks"/><span>Tasks</span></a>
+        <a href="/staff/complaints"><NavIcon kind="more"/><span>Reports</span></a>
+        <a href="/staff/calendar"><NavIcon kind="calendar"/><span>Calendar</span></a>
       </> : <>
-        <ShellLink href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></ShellLink>
-        <ShellLink href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></ShellLink>
-        <ShellLink href={isStaff ? "/staff/calendar" : "/admin/calendar"}><NavIcon kind="calendar"/><span>Calendar</span></ShellLink>
-        <ShellLink href={isStaff ? "/staff/material-request" : "/admin/reports"}><NavIcon kind="more"/><span>{isStaff ? "Materials" : "Reports"}</span></ShellLink>
+        <a href={isStaff ? "/staff" : "/admin"}><NavIcon kind="dashboard"/><span>Dashboard</span></a>
+        <a href={isStaff ? "/staff/tasks" : "/admin/complaints"}><NavIcon kind="tasks"/><span>Tasks</span></a>
+        <a href={isStaff ? "/staff/calendar" : "/admin/calendar"}><NavIcon kind="calendar"/><span>Calendar</span></a>
+        <a href={isStaff ? "/staff/material-request" : "/admin/reports"}><NavIcon kind="more"/><span>{isStaff ? "Materials" : "Reports"}</span></a>
       </>}
     </nav>
   </div>;

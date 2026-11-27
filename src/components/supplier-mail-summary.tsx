@@ -1,3 +1,4 @@
+import { DirectPageLink } from "@/components/direct-page-link";
 import Link from "next/link";
 import { ArrowUpRight, Mail } from "lucide-react";
 import { recentSupplierEmails } from "@/lib/supplier-mail/queries";
@@ -28,7 +29,7 @@ export async function SupplierMailSummary() {
           <td><p className={styles.defect}>{row.subject || "(No subject)"}</p></td>
           <td>{!reads.error && !seen.has(row.id) && <span className={`${styles.status} ${styles.today}`}><i/>New</span>}</td>
           <td><span className={styles.staff}>{new Date(row.received_at).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}</span></td>
-          <td><Link className={styles.action} href={`/documents/suppliers/${row.company}/emails/${row.id}`} aria-label={`Open ${row.subject || "(No subject)"}`}>View email <ArrowUpRight size={15}/></Link></td>
+          <td><DirectPageLink className={styles.action} href={`/documents/suppliers/${row.company}/emails/${row.id}`} aria-label={`Open ${row.subject || "(No subject)"}`}>View email <ArrowUpRight size={15}/></DirectPageLink></td>
         </tr>)}</tbody>
       </table>
     </div>

@@ -4,6 +4,7 @@ import { DailyTaskFilters } from "@/components/daily-task-filters";
 import { DailyTaskDetails } from "@/components/daily-task-details";
 import { taskSearchFilter, taskFilterDate, taskFilterStatuses } from "@/lib/daily-task-filters";
 import { AppShell } from "@/components/app-shell";
+import { DirectPageLink } from "@/components/direct-page-link";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -83,7 +84,7 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
       <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up tasks. Previous records remain available." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
-      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><Link className="button secondary" href={`/admin/daily-tasks?${category ? `category=${category}&` : ""}status=completed`}>Completed</Link></div>
+      <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><DirectPageLink className="button secondary" href={`/admin/daily-tasks?${category ? `category=${category}&` : ""}status=completed`}>Completed</DirectPageLink></div>
     </div>
     <DailyTaskFilters filters={filters} category={category} staff={employees} sort={sort.value} />
     {filters.error && <p className="error">{filters.error}</p>}

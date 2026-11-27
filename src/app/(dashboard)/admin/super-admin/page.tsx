@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense, type ReactNode } from "react";
 import {
   ArrowRight, ArrowUpRight, ArchiveRestore, ClipboardList, Clock3,
   FileText, History, Search, ShieldCheck, Sparkles, Wrench
@@ -50,6 +51,22 @@ function formatMalaysia(value:string){
  });
 }
 
+type RowsQuery = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+
+async function ReadRows<Row>({ query, children }: { query: RowsQuery; children: (rows: Row[]) => ReactNode }) {
+ const { data, error } = await query;
+ if (error) return <p className={styles.error} role="alert">{error.message}</p>;
+ return children((data ?? []) as Row[]);
+}
+
+function Records<Row>({ id, label, query, children }: {
+ id: string; label: string; query: RowsQuery; children: (rows: Row[]) => ReactNode;
+}) {
+ return <Suspense fallback={<section id={id} className={styles.module} role="status">Loading {label}…</section>}>
+   <ReadRows<Row> query={query}>{children}</ReadRows>
+ </Suspense>;
+}
+
 export default async function SuperAdminPage({searchParams}:{searchParams:Promise<Params>}) {
  const profile=await requireSuperAdmin();
  const params=await searchParams;
@@ -71,30 +88,11 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
   complaintsQuery=complaintsQuery.or(`complaint_no.ilike.%${search}%,room_no.ilike.%${search}%`);
  }
 
- const [
-  {data:jobs,error:jobError},
-  {data:rooms,error:roomError},
-  {data:complaints,error:complaintError},
-  {data:archived,error:archiveError},
-  {data:audit,error:auditError}
- ]=await Promise.all([
-  jobsQuery,
-  roomsQuery,
-  complaintsQuery,
-  db.from("checkout_rooms")
+ const archiveQuery=db.from("checkout_rooms")
    .select("id,reference_no,room_no,status,deleted_at,deletion_reason,block:blocks!block_id(code)")
-   .not("deleted_at","is",null).order("deleted_at",{ascending:false}).limit(15),
-  db.from("super_admin_audit")
-   .select("id,operation,entity_type,reason,created_at")
-   .order("created_at",{ascending:false}).limit(20)
- ]);
- const activeJobs=(jobs||[]) as Job[];
- const activeRooms=(rooms||[]) as unknown as Room[];
- const activeComplaints=(complaints||[]) as Complaint[];
- const archivedRooms=(archived||[]) as unknown as Room[];
- const audits=(audit||[]) as Audit[];
- const fault=params.error||jobError?.message||roomError?.message||
-  complaintError?.message||archiveError?.message||auditError?.message;
+   .not("deleted_at","is",null).order("deleted_at",{ascending:false}).limit(15);
+ const auditQuery=db.from("super_admin_audit").select("id,operation,entity_type,reason,created_at")
+   .order("created_at",{ascending:false}).limit(20);
 
  return <AppShell profile={profile} title="Super Admin Control Center">
   <div className={styles.page}>
@@ -120,7 +118,7 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
     <a href="#activity"><History size={14}/> Audit History</a>
    </nav>
 
-   {fault&&<p className={styles.error} role="alert">{fault}</p>}
+   {params.error&&<p className={styles.error} role="alert">{params.error}</p>}
    {params.result&&<p className={styles.success} role="status">
      {params.result==="archive_duplicate"?"Duplicate record safely archived."
       :params.result==="restore_archived"?"Archived record successfully restored."
@@ -144,7 +142,7 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
 
    <div className={styles.layout}>
     <div className={styles.primary}>
-     <RecordGroup id="maintenance" eyebrow="OPERATIONS / 01" title="Maintenance Jobs"
+     <Records<Job> key={`maintenance-${search}`} id="maintenance" label="maintenance jobs" query={jobsQuery}>{activeJobs => <RecordGroup id="maintenance" eyebrow="OPERATIONS / 01" title="Maintenance Jobs"
       subtitle="Update progress on behalf of the maintenance team"
       count={activeJobs.length} icon={<Wrench size={19}/>}>
       {activeJobs.map(job=><Link className={styles.record} key={job.id} href={`/admin/jobs/${job.id}`}>
@@ -154,9 +152,9 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
        <ArrowUpRight className={styles.recordArrow} size={17}/>
       </Link>)}
       {!activeJobs.length&&<Empty text="No matching maintenance jobs"/>}
-     </RecordGroup>
+     </RecordGroup>}</Records>
 
-     <RecordGroup id="housekeeping" eyebrow="ROOM TURNOVER / 02" title="Check-out Rooms"
+     <Records<Room> key={`housekeeping-${search}`} id="housekeeping" label="check-out rooms" query={roomsQuery}>{activeRooms => <RecordGroup id="housekeeping" eyebrow="ROOM TURNOVER / 02" title="Check-out Rooms"
       subtitle="Cleaner completion, reassignment and duplicate archive"
       count={activeRooms.length} icon={<ClipboardList size={19}/>}>
       {activeRooms.map(room=><Link className={styles.record} key={room.id}
@@ -167,9 +165,9 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
        <ArrowUpRight className={styles.recordArrow} size={17}/>
       </Link>)}
       {!activeRooms.length&&<Empty text="No matching check-out rooms"/>}
-     </RecordGroup>
+     </RecordGroup>}</Records>
 
-     <RecordGroup id="complaints" eyebrow="CASE RECORDS / 03" title="Complaints"
+     <Records<Complaint> key={`complaints-${search}`} id="complaints" label="complaints" query={complaintsQuery}>{activeComplaints => <RecordGroup id="complaints" eyebrow="CASE RECORDS / 03" title="Complaints"
       subtitle="Review complaints, set KIV and resume pending reports"
       count={activeComplaints.length} icon={<FileText size={19}/>}>
       {activeComplaints.map(complaint=><Link className={styles.record} key={complaint.id}
@@ -180,12 +178,12 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
        <ArrowUpRight className={styles.recordArrow} size={17}/>
       </Link>)}
       {!activeComplaints.length&&<Empty text="No matching complaints"/>}
-     </RecordGroup>
+     </RecordGroup>}</Records>
      <p className={styles.listNote}>Showing the latest 25 records in each section. Use search to find older records.</p>
     </div>
 
     <aside className={styles.secondary}>
-     <section className={styles.sidePanel} id="archive">
+     <Records<Room> id="archive" label="archived rooms" query={archiveQuery}>{archivedRooms => <section className={styles.sidePanel} id="archive">
       <div className={styles.sideHeading}>
        <span className={styles.sideIcon}><ArchiveRestore size={19}/></span>
        <div><span className={styles.overline}>RECOVERY</span><h3>Archived Records</h3></div>
@@ -212,9 +210,9 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
       </details>)}
       {!archivedRooms.length&&<div className={styles.sideEmpty}>No archived Check-out records</div>}
       </div>
-     </section>
+     </section>}</Records>
 
-     <section className={styles.sidePanel} id="activity">
+     <Records<Audit> id="activity" label="audit history" query={auditQuery}>{audits => <section className={styles.sidePanel} id="activity">
       <div className={styles.sideHeading}>
        <span className={styles.sideIcon}><History size={19}/></span>
        <div><span className={styles.overline}>ACCOUNTABILITY</span><h3>Audit History</h3></div>
@@ -229,7 +227,7 @@ export default async function SuperAdminPage({searchParams}:{searchParams:Promis
       </div>)}
       {!audits.length&&<div className={styles.sideEmpty}>No Super Admin overrides recorded</div>}
       </div>
-     </section>
+     </section>}</Records>
 
      <div className={styles.note}>
       <Sparkles size={15}/><p>All privileged edits require a reason.

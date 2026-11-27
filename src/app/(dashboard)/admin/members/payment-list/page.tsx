@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { DirectPageLink } from "@/components/direct-page-link";
 import Link from "next/link";
 import {MembershipPaymentDelete} from "@/components/membership-payment-delete";
 import "../membership-compact.css";
@@ -26,7 +28,18 @@ export default async function PaymentListPage({searchParams}:{searchParams:Promi
  }
  if(!monthTabs.includes(month))monthTabs.push(month);
  monthTabs.sort();
- const {start,end}=paymentListRange(month),db=createAdminClient();
+ const db=createAdminClient();
+ return <AppShell profile={profile} title="Monthly Payment List"><div className="payment-list-compact"><MembershipPaymentListRefresh/><div className="section-head"><div><p className="eyebrow">GYM MEMBERSHIP · DAILY PAYMENT</p><h2>Monthly Payment List</h2><p className="subtle">New approved registrations and renewals appear automatically in the month of approval. Historical months remain available.</p></div><DirectPageLink className="button secondary" href="/admin/members"><ArrowLeft size={13}/>Membership</DirectPageLink></div>
+ <section className="panel"><div className="payment-list-controls"><form method="get" className="payment-list-month-form"><label>Month<input type="month" name="month" defaultValue={month} required/></label><button className="button">View</button></form><Link className="button secondary" href={`/admin/members/payment-list/${month}/print`} target="_blank"><Printer size={13}/>Print / PDF</Link></div>
+ <nav className="payment-month-tabs" aria-label="Monthly payment lists" style={{maxWidth:"100%",overflowX:"auto"}}>{monthTabs.map(m=><Link aria-current={m===month?"page":undefined} key={m} href={`?month=${m}`}>{new Date(m+"-01T00:00:00+08:00").toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"})}</Link>)}</nav>
+   <Suspense key={month} fallback={<p role="status">Loading payments…</p>}><MonthPayments db={db} month={month} /></Suspense>
+ </section>
+ <Suspense fallback={null}><ImportHistory db={db} /></Suspense>
+ </div></AppShell>;
+}
+
+async function MonthPayments({db, month}: {db: ReturnType<typeof createAdminClient>; month: string}) {
+ const {start,end}=paymentListRange(month);
  const all=[];
  let failed=false;
  for(let offset=0;;offset+=500){
@@ -40,14 +53,16 @@ export default async function PaymentListPage({searchParams}:{searchParams:Promi
   if(result.error){failed=true;break;}
   for(const row of result.data||[])issuedDepositIds.add(row.id);
  }
- const {data:imports}=await db.from('membership_payment_imports').select('source_file,issues,row_count,months').order('imported_at',{ascending:false}).limit(10);
- return <AppShell profile={profile} title="Monthly Payment List"><div className="payment-list-compact"><MembershipPaymentListRefresh/><div className="section-head"><div><p className="eyebrow">GYM MEMBERSHIP · DAILY PAYMENT</p><h2>Monthly Payment List</h2><p className="subtle">New approved registrations and renewals appear automatically in the month of approval. Historical months remain available.</p></div><Link className="button secondary" href="/admin/members"><ArrowLeft size={13}/>Membership</Link></div>
- <section className="panel"><div className="payment-list-controls"><form method="get" className="payment-list-month-form"><label>Month<input type="month" name="month" defaultValue={month} required/></label><button className="button">View</button></form><Link className="button secondary" href={`/admin/members/payment-list/${month}/print`} target="_blank"><Printer size={13}/>Print / PDF</Link></div>
- <nav className="payment-month-tabs" aria-label="Monthly payment lists" style={{maxWidth:"100%",overflowX:"auto"}}>{monthTabs.map(m=><Link aria-current={m===month?"page":undefined} key={m} href={`?month=${m}`}>{new Date(m+"-01T00:00:00+08:00").toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"Asia/Kuala_Lumpur"})}</Link>)}</nav>
+ return <>
  <div className="payment-list-heading"><div><h3>{paymentListMonthLabel(month)}</h3><p className="subtle">{all.length} entries · Edit receipt no and click the save icon · Updates automatically</p></div><span className="badge">Live list</span></div>
  {failed?<p className="error">Unable to load this month. Please refresh.</p>:!all.length?<p>No approved payments recorded for this month.</p>:<div className="table-wrap"><table className="table payment-list-table"><colgroup><col style={{width:'4%' }}/><col style={{width:'11%' }}/><col style={{width:'19%' }}/><col style={{width:'30%' }}/><col style={{width:'16%' }}/><col style={{width:'10%' }}/><col style={{width:'10%' }}/></colgroup><thead><tr><th>NO</th><th>DATE</th><th>RECEIPT NO</th><th>NAME</th><th>ROOM NO</th><th>AMOUNT (RM)</th><th>Action</th></tr></thead><tbody>{all.map((r,i)=><tr key={r.id}><td>{i+1}</td><td>{paymentListDate(r.collected_on)}</td><td>{issuedDepositIds.has(r.id) ? <a href={`/api/gym-deposits/receipt/${r.id}/pdf`} target="_blank" rel="noreferrer">{r.receipt_no}</a> : <MembershipReceiptNumber id={r.id} receipt={r.receipt_no||""} name={r.full_name}/>}</td><td style={{whiteSpace:'normal',overflowWrap:'anywhere'}}>{r.full_name}{r.kind==='access_card_deposit'&&<span className="payment-entry-type">Access Card Deposit</span>}</td><td>{r.member_reference||'—'}</td><td>{r.amount==null?'—':Number(r.amount).toFixed(2)}</td><td>{issuedDepositIds.has(r.id) ? <Link href="/admin/members/deposits">View deposit</Link> : <MembershipPaymentDelete id={r.id} name={r.full_name}/>}</td></tr>)}</tbody></table></div>}
  <p><Link className="button secondary" href="/admin/members/deposits">Deposit receipts & refunds</Link></p>
- <p className="subtle" style={{fontSize:12,marginTop:14}}>Residence: Room No · Non Residence: Member number. Imported rows retain the Excel payment date; new rows use the Admin approval date in Malaysia time.</p></section>
+ <p className="subtle" style={{fontSize:12,marginTop:14}}>Residence: Room No · Non Residence: Member number. Imported rows retain the Excel payment date; new rows use the Admin approval date in Malaysia time.</p></>;
+}
+
+async function ImportHistory({db}: {db: ReturnType<typeof createAdminClient>}) {
+ const {data:imports}=await db.from('membership_payment_imports').select('source_file,issues,row_count,months').order('imported_at',{ascending:false}).limit(10);
+ return <>
  {!!imports?.length&&<section className="panel"><details><summary>Historical import record</summary>{imports.map((batch,i)=><div key={i}><p>{batch.source_file} · {batch.row_count} imported entries</p>{Array.isArray(batch.issues)&&batch.issues.length>0&&<p className="subtle">{batch.issues.length} incomplete source row(s) retained for checking; excluded from the monthly lists.</p>}{Array.isArray(batch.issues)&&batch.issues.map((issue:Record<string,unknown>,j:number)=><p className="subtle" key={j}>Excel row {String(issue.source_row)} · {String(issue.receipt_no||"")} · {String(issue.reason||"")}</p>)}</div>)}</details></section>}
- </div></AppShell>;
+ </>;
 }

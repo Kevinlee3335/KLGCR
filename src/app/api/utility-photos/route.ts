@@ -1,3 +1,4 @@
+import { listUtilityPhotos } from "@/lib/utility-photo-list";
 import {after, NextRequest, NextResponse} from "next/server";
 import {z} from "zod";
 import {getSessionProfile} from "@/lib/auth";
@@ -5,7 +6,7 @@ import {billingPreviewEnabled, malaysiaClock, monthSchema, type UtilityAccount} 
 import {readMeterPhoto} from "@/lib/meter-ocr-server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {ensureUtilityMonth} from "@/lib/utility-months";
-import {canCaptureUtilityPhotos, utilityMeterPhotoData, utilityPhotoData, type UtilityPhotoProgress} from "@/lib/utility-photo-access";
+import {canCaptureUtilityPhotos, utilityMeterPhotoData, type UtilityPhotoProgress} from "@/lib/utility-photo-access";
 
 export const maxDuration = 60;
 export const preferredRegion = "sin1";
@@ -22,13 +23,6 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 type PhotoInput = z.infer<typeof inputSchema>;
 type SavedMeter = {status: "saved"; period: string; revision: number; runId: string; meter: UtilityAccount["meters"][number]};
 type CaptureFailure = {status: "month_changed" | "meter_missing" | "stale_revision" | "meter_changed"};
-
-async function listPhotos(db: AdminClient, accountId: string | null, meterId: string | null) {
- const {data, error} = await db.rpc("get_utility_meter_photos", {p_account_id: accountId, p_meter_id: meterId});
- if (error || !data) throw Error("Meter photos unavailable");
- const {period, revision, utilityAccounts} = data as {period: string; revision: number; utilityAccounts: UtilityAccount[]};
- return utilityPhotoData({utilityPeriod: period, utilityAccounts}, revision);
-}
 
 function readingMessage(status: UtilityPhotoProgress["status"], reading?: number | null, updatedMeter = false) {
  switch (status) {
@@ -76,7 +70,7 @@ export async function GET(req: NextRequest) {
    return reply({...result, meter, message: readingMessage(result.status, result.reading, !!meter)});
   }
   await ensureUtilityMonth();
-  return reply(await listPhotos(db, query.get("account"), query.get("meter")));
+  return reply(await listUtilityPhotos(db, query.get("account"), query.get("meter")));
  } catch {
   return reply({error: "Unable to load meter photos. Please reload."}, 503);
  }
@@ -119,7 +113,7 @@ export async function POST(req: NextRequest) {
    const pending = result.status === "pending";
    const flags = pending ? {readingPending: true, readingId: saved.runId} : {};
    if (req.headers.get("x-utility-photo-response") !== "meter") {
-    const list = await listPhotos(db, input.accountId, null);
+    const list = await listUtilityPhotos(db, input.accountId, null);
     return reply({...list, message, ...flags}, pending ? 202 : 200);
    }
    const meter = utilityMeterPhotoData(saved.meter);

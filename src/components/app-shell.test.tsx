@@ -6,9 +6,8 @@ import type { Profile } from "@/lib/types";
 
 vi.mock("./notification-bell", () => ({ NotificationBell: () => null }));
 vi.mock("./logout-form", () => ({ LogoutForm: () => null }));
-vi.mock("./shell-navigation", async importOriginal => ({
-  ...await importOriginal<typeof import("./shell-navigation")>(),
-  ShellLink: (props: ComponentProps<"a">) => <a {...props} data-client-navigation />,
+vi.mock("next/link", () => ({
+  default: (props: ComponentProps<"a">) => <a {...props} data-client-navigation />,
 }));
 
 const profile: Profile = { id: "admin", username: "admin", full_name: "Admin", role: "admin", is_active: true };
@@ -43,7 +42,9 @@ const documentLinks = [
   ["Cert & Servicing", "/admin/cert-servicing/certificates"],
   ["TM Unifi Invoices", "/admin/unifi-invoices"],
 ];
-const directLinks = [...workLinks, ...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks];
+const systemLinks = [["Notifications", "/admin/notifications"], ["Users", "/admin/users"], ["Settings", "/admin/settings"]];
+const submenuLinks = [...workLinks, ...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks, ...systemLinks];
+const rentalLinks = [["Billing Overview", "/admin/billing"], ["Payment Verification", "/admin/payment-verification"]];
 
 it("uses direct same-tab links for the configured desktop and mobile submenu destinations", () => {
   render(<AppShell profile={profile} title="New Complaints">Page</AppShell>);
@@ -51,14 +52,14 @@ it("uses direct same-tab links for the configured desktop and mobile submenu des
   expect(menus).toHaveLength(2);
   for (const menu of menus) {
     const links = within(menu).getAllByRole("link", { hidden: true });
-    const nativeLinks = links.filter(link => !link.hasAttribute("data-client-navigation"));
-    expect(nativeLinks.map(link => [link.textContent, link.getAttribute("href")])).toEqual(directLinks);
-    for (const link of nativeLinks) {
+    const submenu = menu.querySelectorAll("a.native-menu-link");
+    expect(Array.from(submenu, link => [link.textContent, link.getAttribute("href")])).toEqual([...submenuLinks, ...rentalLinks]);
+    for (const link of links) {
+      expect(link).not.toHaveAttribute("data-client-navigation");
       expect(link).not.toHaveAttribute("target");
       expect(link).not.toHaveAttribute("download");
     }
-    expect(nativeLinks[0]).toHaveAttribute("aria-current", "page");
-    expect(links.find(link => link.textContent === "Notifications")).toHaveAttribute("data-client-navigation");
+    expect(submenu[0]).toHaveAttribute("aria-current", "page");
   }
 });
 
@@ -71,12 +72,12 @@ it("keeps Flex inspections and TM Unifi invoices hidden in both menus for manage
     expect(menu.querySelector('a[href="/admin/unifi-invoices"]')).toBeNull();
     const links = menu.querySelectorAll("a.native-menu-link");
     expect(Array.from(links, link => [link.textContent, link.getAttribute("href")])).toEqual(
-      directLinks.filter(([label]) => label !== "Flex Fire Safety Inspection" && label !== "TM Unifi Invoices")
+      submenuLinks.filter(([label]) => label !== "Flex Fire Safety Inspection" && label !== "TM Unifi Invoices")
     );
   }
 });
 
-it.each([...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks])("marks only %s as current in both menus", (label, href) => {
+it.each([...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks, ...systemLinks])("marks only %s as current in both menus", (label, href) => {
   const title = label === "All Daily Tasks" ? "Daily Tasks" : label;
   render(<AppShell profile={profile} title={title}>Page</AppShell>);
 
@@ -89,20 +90,21 @@ it.each([...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks])
   }
 });
 
-it.each(["maintenance_staff", "cleaner"] as const)("keeps Documents on the existing %s navigation", role => {
+it.each(["maintenance_staff", "cleaner"] as const)("opens Documents directly for %s", role => {
   render(<AppShell profile={{ ...profile, role }} title="Documents">Page</AppShell>);
   for (const menu of screen.getAllByRole("navigation", { name: "Main navigation", hidden: true })) {
     const documents = menu.querySelector('a[href="/documents"]');
-    expect(documents).toHaveAttribute("data-client-navigation");
+    expect(documents).not.toHaveAttribute("data-client-navigation");
     expect(documents).toHaveAttribute("aria-current", "page");
     expect(menu.querySelector('a[href^="/admin/"]')).toBeNull();
   }
 });
 
-it("keeps the maintenance staff Material Request links on their existing navigation", () => {
+it("opens the account and all maintenance staff Material Request links directly", () => {
   const { container } = render(<AppShell profile={{ ...profile, role: "maintenance_staff" }} title="Material Request">Page</AppShell>);
   const materialLinks = container.querySelectorAll('a[href="/staff/material-request"]');
   expect(materialLinks).toHaveLength(3);
-  for (const link of materialLinks) expect(link).toHaveAttribute("data-client-navigation");
+  for (const link of materialLinks) expect(link).not.toHaveAttribute("data-client-navigation");
+  expect(screen.getByRole("link", { name: "Change Password" })).toHaveAttribute("href", "/account");
   expect(container.querySelector('a[href="/admin/material-requests"]')).toBeNull();
 });

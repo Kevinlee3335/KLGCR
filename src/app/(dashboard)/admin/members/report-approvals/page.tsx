@@ -1,5 +1,6 @@
 import {documentVerification} from '@/lib/document-review';
 import {documentReviewStatus} from '@/lib/document-review-status';
+import { DirectPageLink } from "@/components/direct-page-link";
 import Link from 'next/link';
 import {AppShell} from '@/components/app-shell';
 import {requireRole} from '@/lib/auth';
@@ -16,7 +17,7 @@ export default async function Page(){
  const stages=new Map(stageRows);
  const pending=result.data.filter(r=>!r.approved_at).length;
  return <AppShell profile={profile} title="Gym Report Approvals"><style>{`.report-entries-grid th,.report-entries-grid td{border:1px solid #b8ae96}.report-entries-grid{border-collapse:collapse}`}</style>
- <div className="section-head"><div><p className="eyebrow">GYM MEMBERSHIP · MONTHLY REPORTS</p><h2>Report approvals</h2><p className="subtle">Review each completed month. Fikri and Kevin verify in either order. James approves before delivery to Accounts.</p></div><Link className="button secondary" href="/admin/members">Back to membership</Link></div>
+ <div className="section-head"><div><p className="eyebrow">GYM MEMBERSHIP · MONTHLY REPORTS</p><h2>Report approvals</h2><p className="subtle">Review each completed month. Fikri and Kevin verify in either order. James approves before delivery to Accounts.</p></div><DirectPageLink className="button secondary" href="/admin/members">Back to membership</DirectPageLink></div>
  <section className="panel"><div className="section-head"><div><h3>{pending} reports awaiting approval</h3><p className="subtle">Accounts · account1@keanlenggroup.com</p></div><div className="actions"><Link className="button secondary" href="/admin/members/payment-list">Payment lists</Link><Link className="button secondary" href="/admin/members/committee-reports">Committee reports</Link></div></div>
  {profile.id!==BILLING_APPROVER_ID&&<p className="subtle">Open a report to review its verification and approval progress.</p>}</section>
  {!result.data.length&&<section className="panel"><h3>No reports awaiting review</h3><p className="subtle">Completed monthly reports will appear here.</p></section>}

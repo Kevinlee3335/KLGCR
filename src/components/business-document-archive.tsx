@@ -1,3 +1,4 @@
+import { DirectPageLink } from "@/components/direct-page-link";
 import Link from 'next/link';
 import {AppShell} from '@/components/app-shell';
 import {requireRole} from '@/lib/auth';
@@ -21,7 +22,7 @@ export async function BusinessDocumentArchive({kind,searchParams}:{kind:Business
  const url=(next:number)=>'?'+new URLSearchParams({q,page:String(next)});
  return <AppShell profile={profile} title={title}><div className="business-documents">
   <Link className="business-document-back" href="/documents">← Documents</Link>
-  <header><div><h2>{title}</h2><p>Saved system records appear here automatically. Updates use the latest saved version.</p></div><Link className="button secondary" href={kind==='purchase-orders'?'/admin/inventory/purchase-orders':'/admin/quotations'}>Manage {title}</Link></header>
+  <header><div><h2>{title}</h2><p>Saved system records appear here automatically. Updates use the latest saved version.</p></div><DirectPageLink className="button secondary" href={kind==='purchase-orders'?'/admin/inventory/purchase-orders':'/admin/quotations'}>Manage {title}</DirectPageLink></header>
   <nav><Link className={kind==='purchase-orders'?'is-active':''} href="/documents/purchase-orders">Purchase Orders</Link><Link className={kind==='quotations'?'is-active':''} href="/documents/quotations">Quotations</Link></nav>
   <form className="business-document-search"><label><span>Search item name, specification or document number</span><input name="q" defaultValue={q} placeholder="e.g. window handle" type="search" maxLength={200}/></label><button className="button" type="submit">Search</button></form>
   {error?<p role="alert">Unable to load saved records. Please retry.</p>:<>

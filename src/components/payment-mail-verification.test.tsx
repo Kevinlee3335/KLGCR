@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { PaymentMailDetail, PaymentMailItem } from '@/lib/payment-mail/types';
 import type { OfficialReceipt } from '@/lib/official-receipt';
-import { PaymentMailVerification } from './payment-mail-verification';
+import { PaymentMailVerification, type PaymentInboxSnapshot } from './payment-mail-verification';
 
 vi.mock('./payment-mail-connection', () => ({ PaymentMailConnection: () => null }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -123,4 +123,30 @@ it('opens the receipt list on demand and preserves payment review input when ret
 
   fireEvent.click(screen.getByRole('button', { name: /^Payment inbox$/ }));
   expect(screen.getByRole('spinbutton', { name: 'Actual amount received (RM)' })).toHaveValue(150);
+});
+
+it('uses the initial authorized list once and refreshes it on demand', async () => {
+  const { fetcher } = mockApi();
+  const snapshot = Promise.resolve({ data: { items: [{ ...item, subject: 'Server pending row' }], total: 1 }, error: '', checkedAt: '2026-11-10T10:00:00Z' });
+  await act(async () => { render(<PaymentMailVerification initialInbox={snapshot} />); });
+  expect(screen.getByText('Server pending row')).toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([url]) => url.includes('status=pending'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitFor(() => expect(screen.queryByText('Server pending row')).toBeNull());
+  expect(fetcher.mock.calls.filter(([url]) => url.includes('status=pending'))).toHaveLength(1);
+});
+
+it('lets the user change filter before the first list arrives and ignores the old pending result', async () => {
+  const { fetcher } = mockApi();
+  const server = Promise.withResolvers<PaymentInboxSnapshot>();
+  await act(async () => { render(<PaymentMailVerification initialInbox={server.promise} />); });
+  expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+  fireEvent(window, new Event('focus'));
+  expect(fetcher.mock.calls.some(([url]) => url.includes('status=pending'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Verified' }));
+  await screen.findByText(item.subject);
+  await act(async () => { server.resolve({ data: { items: [{ ...item, subject: 'Stale result' }], total: 1 }, error: '', checkedAt: '' }); });
+  expect(screen.queryByText('Stale result')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Verified' })).toHaveAttribute('aria-pressed', 'true');
+  expect(fetcher.mock.calls.filter(([url]) => url.includes('status=verified'))).toHaveLength(1);
 });

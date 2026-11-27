@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useId, useRef, useState, type FormEvent} from 'react';
-import Link from 'next/link';
+import { DirectPageLink } from "@/components/direct-page-link";
 import {AlertCircle, Banknote, Download, FileText, Mail, RefreshCw} from 'lucide-react';
 import {SignaturePad} from './signature-pad';
 import './gym-deposit-panel.css';
@@ -108,7 +108,7 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({kind, page: String(page)});
+    const params = new URLSearchParams({kind, page: String(page), activeOnly: '1'});
     if (member?.id) params.set('member', member.id);
     for (const [key, value] of Object.entries(filters)) if (value && (key !== 'status' || kind === 'receipts')) params.set(key, value);
     setLoading(true);
@@ -272,7 +272,7 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
       </form>}
     </div>}
 
-    {!member && canManage && <p className="gym-deposit-choose-member">To receive a new deposit or refund an old handwritten deposit, <Link href="/admin/members">choose a member in Membership</Link>.</p>}
+    {!member && canManage && <p className="gym-deposit-choose-member">To receive a new deposit or refund an old handwritten deposit, <DirectPageLink href="/admin/members">choose a member in Membership</DirectPageLink>.</p>}
 
     <div className="gym-deposit-tabs" role="tablist" aria-label="Deposit document lists">
       <button type="button" role="tab" id={`${panelId}-receipts-tab`} aria-controls={`${panelId}-records`} aria-selected={kind === 'receipts'} disabled={pending !== null} onClick={() => changeKind('receipts')}>Deposit Receipts{data && <span>{data.receiptCount}</span>}</button>
@@ -296,7 +296,7 @@ export function GymDepositPanel({member, initialKind = 'receipts', readOnly = fa
           const voucherNumber = receipt.voucher_no || voucher?.voucher_no;
           return <tr key={receipt.id}>
             <td data-label="Receipt / Date"><strong>{receipt.receipt_no}</strong><small>{dateLabel(receipt.received_on)}</small>{receipt.origin === 'existing' && <span className="gym-deposit-opening">Existing deposit</span>}{receipt.note && <small>{receipt.note}</small>}</td>
-            <td data-label="Member"><strong>{!member && canManage ? <Link href={`/admin/members?id=${encodeURIComponent(receipt.member_id)}`}>{receipt.payer}</Link> : receipt.payer}</strong><small>{receipt.member_reference || 'No member reference'}</small><small>{receipt.email || 'Email not recorded'}</small></td>
+            <td data-label="Member"><strong>{!member && canManage ? <DirectPageLink href={`/admin/members?id=${encodeURIComponent(receipt.member_id)}`}>{receipt.payer}</DirectPageLink> : receipt.payer}</strong><small>{receipt.member_reference || 'No member reference'}</small><small>{receipt.email || 'Email not recorded'}</small></td>
             <td data-label="Received by">{receipt.received_by_name}</td>
             <td data-label="Amount / Status"><strong>{cash(receipt.amount)}</strong><span className={`gym-deposit-status gym-deposit-status-${receipt.status}`}>{receipt.status === 'held' ? 'Deposit held' : 'Refunded'}</span></td>
             <td data-label="Documents / Actions">{documents(receipt, 'receipt', receipt.receipt_no)}{canManage && receipt.status === 'held' && <button type="button" className="button gym-deposit-refund-button" disabled={busy || !data.signatureReady} onClick={() => void refund(receipt)} aria-label={`Record RM10 refund for ${receipt.payer}`}>{pending === `refund:${receipt.id}` ? 'Recording…' : 'Record RM10 refund'}</button>}{voucherId && voucherNumber && <a className="gym-deposit-related" href={pdfHref('voucher', voucherId)} target="_blank" rel="noopener noreferrer">PV: {voucherNumber}</a>}</td>
