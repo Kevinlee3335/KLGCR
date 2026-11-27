@@ -29,7 +29,14 @@ export type CheckoutPdfDefect = {
 };
 export type CheckoutPdfRoom = { blockCode: "A" | "B"; roomNo: string; level?: string; defects: CheckoutPdfDefect[] };
 export type CheckoutPdfSkippedRoom = { blockCode: string; roomNo: string; defectCount: number; reason: string };
-export type CheckoutPdfParseResult = { rooms: CheckoutPdfRoom[]; warnings: string[]; skippedRooms: CheckoutPdfSkippedRoom[] };
+export type CheckoutPdfParseResult = {
+  rooms: CheckoutPdfRoom[];
+  warnings: string[];
+  skippedRooms: CheckoutPdfSkippedRoom[];
+  /** Diagnostic rooms may be displayed, but any structural error blocks the
+   * whole file from import. A partial parse must never become partial work. */
+  blockingErrors: string[];
+};
 export type CheckoutPdfDetailHeading = { sourceId: string; blockCode: string; roomNo: string; level: string; originalItem: string };
 export type CheckoutPdfTranslation = Pick<CheckoutPdfDefect, "description" | "title" | "needsReview" | "reviewReason" | "expectedQuantity" | "presentQuantity" | "missingQuantity">;
 
@@ -156,6 +163,189 @@ type Active = CheckoutPdfDetailHeading & SourceMetadata & {
 function runningLine(text: string) {
   return /^(?:https?:\/\/|\d+\s*\/\s*\d+$)/i.test(text)
     || /Sistem Pemeriksaan Bilik\s*$/i.test(text) || /^SEKSYEN FASILITI$/i.test(text);
+}
+
+type ReportRoomSection = {
+  blockCode: string;
+  roomNo: string;
+  level: string;
+  pageNumber: number;
+  expectedCount?: number;
+  tableIds: Set<string>;
+  detailIds: Set<string>;
+  inDetails: boolean;
+};
+
+const canonicalRoom = (roomNo: string) => clean(roomNo).replace(/[ -]/g, "").toUpperCase();
+const roomIdentity = (blockCode: string, roomNo: string) => `${blockCode.toUpperCase()}/${canonicalRoom(roomNo)}`;
+const abBlock = (blockCode: string) => ["A", "B"].includes(blockCode.toUpperCase());
+const abRoom = (roomNo: string) => /^[AB]\d{3}$/.test(canonicalRoom(roomNo));
+const detailStart = /^DF(?:[-\u2010-\u2014]|\s)/i;
+
+/** Independent reconciliation of the source room table and the detailed
+ * sections. The document-wide summary is intentionally not an import manifest:
+ * an authorised PDF extract may contain five complete rooms from a 75-room run.
+ */
+function reconcileCheckoutPdfReport(pages: CheckoutPdfPage[], parsedRooms: CheckoutPdfRoom[]): string[] {
+  const errors = new Set<string>();
+  const sections: ReportRoomSection[] = [];
+  let section: ReportRoomSection | undefined;
+  let pendingRecordPage: number | undefined;
+  const detailedRooms = new Map<string, { pageNumber: number; blockCode: string; roomNo: string }>();
+
+  for (const page of pages) {
+    for (let index = 0; index < page.lines.length; index++) {
+      const text = clean(page.lines[index].text);
+      if (!text || runningLine(text)) continue;
+      if (/^REKOD KEROSAKAN BILIK\b/i.test(text)) {
+        if (pendingRecordPage !== undefined) errors.add(`Incomplete room record header on page ${pendingRecordPage}; upload complete room sections.`);
+        section = undefined;
+        pendingRecordPage = page.pageNumber;
+        continue;
+      }
+
+      const location = text.match(/^Bilik\s+(.+?)\s+Blok\s*\/\s*Aras\s+(?:Blok\s+)?([A-Z0-9]+)\s*\/\s*Aras\s+(.+)$/i);
+      if (location) {
+        section = {
+          roomNo: clean(location[1]).toUpperCase(), blockCode: location[2].toUpperCase(), level: clean(location[3]),
+          pageNumber: page.pageNumber, tableIds: new Set(), detailIds: new Set(), inDetails: false,
+        };
+        sections.push(section);
+        pendingRecordPage = undefined;
+        if ((abBlock(section.blockCode) || abRoom(section.roomNo))
+          && (!abBlock(section.blockCode) || !abRoom(section.roomNo) || canonicalRoom(section.roomNo)[0] !== section.blockCode)) {
+          errors.add(`Block / room mismatch in the room header on page ${page.pageNumber}: ${section.blockCode} / ${section.roomNo}.`);
+        }
+        continue;
+      }
+      if (/^Bilik\s+/i.test(text) && (pendingRecordPage !== undefined || /Blok\s*\/\s*Aras/i.test(text))) {
+        errors.add(`Unrecognised room location header on page ${page.pageNumber}; its defects cannot be assigned safely.`);
+        continue;
+      }
+      const count = text.match(/^Kerosakan\s+(\d+)\b/i);
+      if (count && section && !section.inDetails) {
+        const expectedCount = Number(count[1]);
+        if (section.expectedCount !== undefined && section.expectedCount !== expectedCount) {
+          errors.add(`${section.roomNo}: conflicting Kerosakan counts on page ${page.pageNumber}.`);
+        }
+        section.expectedCount = expectedCount;
+        continue;
+      }
+      if (/^BUTIRAN\s*&?\s*BUKTI\s+PEMBAIKAN\b/i.test(text)) {
+        if (section) section.inDetails = true;
+        continue;
+      }
+
+      let heading = parseCheckoutPdfDetailHeading(text);
+      if (!heading && detailStart.test(text)) {
+        const next = clean(page.lines[index + 1]?.text || "");
+        if (next && !/^(?:Penemuan|Tindakan|Status|Log kemaskini)\s*:/i.test(next)) {
+          heading = parseCheckoutPdfDetailHeading(`${text} ${next}`);
+          if (heading) index++;
+        }
+      }
+      if (heading) {
+        const identity = roomIdentity(heading.blockCode, heading.roomNo);
+        if (abBlock(heading.blockCode) || abRoom(heading.roomNo)) {
+          detailedRooms.set(identity, { pageNumber: page.pageNumber, blockCode: heading.blockCode, roomNo: heading.roomNo });
+          if (!abBlock(heading.blockCode) || !abRoom(heading.roomNo) || canonicalRoom(heading.roomNo)[0] !== heading.blockCode) {
+            errors.add(`Block / room mismatch for ${heading.sourceId} on page ${page.pageNumber}: ${heading.blockCode} / ${heading.roomNo}.`);
+          }
+        }
+        if (section) {
+          if (identity !== roomIdentity(section.blockCode, section.roomNo)) {
+            // Even an otherwise excluded T06 detail cannot replace an AB room's
+            // expected entry, or introduce an AB detail under a T06 header.
+            if (abBlock(section.blockCode) || abBlock(heading.blockCode) || abRoom(heading.roomNo)) {
+              errors.add(`${heading.sourceId} on page ${page.pageNumber} belongs to ${heading.roomNo}, outside its room section ${section.roomNo}.`);
+            }
+          } else {
+            section.detailIds.add(heading.sourceId);
+            if (abBlock(section.blockCode) && section.level !== heading.level) {
+              errors.add(`${section.roomNo}: level mismatch for ${heading.sourceId} on page ${page.pageNumber}.`);
+            }
+          }
+          if (!section.inDetails && abBlock(section.blockCode)) {
+            errors.add(`${section.roomNo}: the detailed evidence section boundary is missing on page ${page.pageNumber}.`);
+          }
+          section.inDetails = true;
+        }
+        continue;
+      }
+
+      // A table can begin with the DF token when PDF column grouping omits its
+      // row number. Only classify it as a table row before the detail boundary
+      // and when the actual reported-date column remains visible.
+      const tableRow = section && !section.inDetails && sourceIdPattern.test(text)
+        && /\b\d{2}\/\d{2}\/\d{4}\b/.test(text) && !/\/\s*Aras\b/i.test(text);
+      if (tableRow && section) {
+        const id = text.match(sourceIdPattern);
+        if (id) {
+          const sourceId = canonicalId(id[0]);
+          if (section.tableIds.has(sourceId) && abBlock(section.blockCode)) {
+            errors.add(`${section.roomNo}: repeated ${sourceId} in the room table; verify the original room report.`);
+          }
+          section.tableIds.add(sourceId);
+        }
+        continue;
+      }
+      if (detailStart.test(text)) {
+        const knownExcludedSection = section && !abBlock(section.blockCode) && !abRoom(section.roomNo)
+          && !/\bBlok\s+[AB]\b|\/\s*[AB][ -]?\d{3}\b/i.test(text);
+        if (!knownExcludedSection) errors.add(`Unrecognised defect detail heading on page ${page.pageNumber}; the file may be incomplete or its room may be unclear.`);
+      }
+    }
+  }
+  if (pendingRecordPage !== undefined) errors.add(`Incomplete room record header on page ${pendingRecordPage}; upload complete room sections.`);
+
+  const registeredRooms = new Set<string>();
+  const sourceManifests = new Map<string, ReportRoomSection>();
+  for (const record of sections) {
+    if (!abBlock(record.blockCode)) continue;
+    const identity = roomIdentity(record.blockCode, record.roomNo);
+    registeredRooms.add(identity);
+    if (record.expectedCount === undefined) errors.add(`${record.roomNo}: the Kerosakan count is missing from the room header.`);
+    else {
+      if (record.expectedCount !== record.tableIds.size) {
+        errors.add(`${record.roomNo}: header declares ${record.expectedCount} defects but the room table contains ${record.tableIds.size} unique DF references.`);
+      }
+      if (record.expectedCount !== record.detailIds.size) {
+        errors.add(`${record.roomNo}: header declares ${record.expectedCount} defects but only ${record.detailIds.size} detailed defect sections were read.`);
+      }
+    }
+    const missing = [...record.tableIds].filter(id => !record.detailIds.has(id));
+    const extra = [...record.detailIds].filter(id => !record.tableIds.has(id));
+    if (missing.length) errors.add(`${record.roomNo}: missing detailed sections for ${missing.join(", ")}; upload the complete room report.`);
+    if (extra.length) errors.add(`${record.roomNo}: detailed references absent from its room table: ${extra.join(", ")}.`);
+    if (!record.inDetails && (record.expectedCount || record.tableIds.size)) errors.add(`${record.roomNo}: the detailed evidence section is missing.`);
+
+    const previous = sourceManifests.get(identity);
+    if (previous && (previous.expectedCount !== record.expectedCount
+      || [...previous.tableIds].some(id => !record.tableIds.has(id)) || [...record.tableIds].some(id => !previous.tableIds.has(id)))) {
+      errors.add(`${record.roomNo}: the file contains conflicting room-table manifests; verify which report is current.`);
+    }
+    sourceManifests.set(identity, record);
+  }
+  for (const [identity, detail] of detailedRooms) {
+    if (abBlock(detail.blockCode) && !registeredRooms.has(identity)) {
+      errors.add(`${detail.roomNo}: no room header and DF table were included to verify its detailed section on page ${detail.pageNumber}.`);
+    }
+  }
+  for (const room of parsedRooms) {
+    const manifest = sourceManifests.get(roomIdentity(room.blockCode, room.roomNo));
+    const parsedIds = new Set(room.defects.map(defect => defect.sourceId));
+    if (manifest) {
+      for (const sourceId of manifest.detailIds) {
+        if (!parsedIds.has(sourceId)) errors.add(`${room.roomNo}: ${sourceId} was located but could not be parsed completely.`);
+      }
+    }
+    for (const defect of room.defects) {
+      if (!defect.originalFinding || !defect.sourceStatus || /^(?:Belum|Dalam)$/i.test(defect.sourceStatus)) {
+        errors.add(`${room.roomNo} / ${defect.sourceId}: the finding or source status is missing or truncated on page ${defect.pageNumber}.`);
+      }
+    }
+  }
+  return [...errors];
 }
 
 export function parseCheckoutPdfPages(pages: CheckoutPdfPage[]): CheckoutPdfParseResult {
@@ -328,5 +518,6 @@ export function parseCheckoutPdfPages(pages: CheckoutPdfPage[]): CheckoutPdfPars
   if (!rooms.size) warnings.push("No detailed Block A / B defects were found. Upload the detailed UTMSPACE report, not only its summary or an image-only PDF.");
   const reviewCount = [...rooms.values()].flatMap(room => room.defects).filter(defect => defect.needsReview).length;
   if (reviewCount) warnings.push(`${reviewCount} source defect${reviewCount === 1 ? " requires" : "s require"} English translation or source review before import.`);
-  return { rooms: [...rooms.values()], warnings: [...new Set(warnings)], skippedRooms: [...skipped.values()] };
+  const parsedRooms = [...rooms.values()];
+  return { rooms: parsedRooms, warnings: [...new Set(warnings)], skippedRooms: [...skipped.values()], blockingErrors: reconcileCheckoutPdfReport(orderedPages, parsedRooms) };
 }
