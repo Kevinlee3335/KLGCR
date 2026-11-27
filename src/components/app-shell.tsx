@@ -50,7 +50,7 @@ const adminNavGroups: AdminNavGroup[] = [
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
       ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping", ClipboardCheck],
     ] as const },
-    { label: "Inventory", Icon: Boxes, links: [
+    { label: "Inventory", Icon: Boxes, nativeLinks: true, links: [
       ["Building Material", "/admin/inventory?store=building", Boxes],
       ["Office Inventory", "/admin/inventory?store=office", Boxes],
       ["Cleaner Supplies", "/admin/inventory?store=cleaner", Boxes],

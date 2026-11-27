@@ -66,3 +66,29 @@ it('adds multiple items to a PO list without leaving or collapsing the table',()
  expect(draft).toEqual([{itemId:'id-0',quantity:8},{itemId:'id-6',quantity:2}]);
  expect(screen.getByText('Material 6')).toBeTruthy();
 });
+
+it("restores each store's PO draft when returning to identically named materials", () => {
+  function openStore(store: string) {
+    const material = { ...rows[0], description: "Cleaning brush", id: `row-${store}`, itemIds: [`brush-${store}`] };
+    return render(<ItemsToOrder rows={[material]} store={store} canManage />);
+  }
+  function cartLines() {
+    const link = document.querySelector<HTMLAnchorElement>(".procurement-cart a")!;
+    return JSON.parse(new URL(link.href).searchParams.get("draft")!);
+  }
+
+  const quantities = { building: 3, office: 7, cleaner: 2 };
+  for (const [store, quantity] of Object.entries(quantities)) {
+    const view = openStore(store);
+    expect(document.querySelector(".procurement-cart")).toBeNull();
+    fireEvent.change(screen.getByLabelText("PO quantity for Cleaning brush"), { target: { value: String(quantity) } });
+    fireEvent.click(screen.getByRole("button", { name: "Add to PO" }));
+    expect(cartLines()).toEqual([{ itemId: `brush-${store}`, quantity }]);
+    view.unmount();
+  }
+  for (const [store, quantity] of Object.entries(quantities)) {
+    const view = openStore(store);
+    expect(cartLines()).toEqual([{ itemId: `brush-${store}`, quantity }]);
+    view.unmount();
+  }
+});
