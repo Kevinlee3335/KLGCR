@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "src/app/(dashboard)/**/page.tsx": {
+      "regions": ["sin1"]
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/po-notifications",
