@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { Children, isValidElement, Suspense, type ReactNode } from "react";
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import Page from "./page";
+import { MaterialRequestResults } from "./material-request-results";
 
 const mocks = vi.hoisted(() => ({ requireRole: vi.fn(), from: vi.fn(), select: vi.fn(), eq: vi.fn(), range: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireRole: mocks.requireRole }));
@@ -27,9 +28,9 @@ beforeEach(() => {
   mockRequests(requests);
 });
 
-function mockRequests(data: typeof requests) {
+function mockRequests(data: typeof requests, { waitForTotals = Promise.resolve(), listError = "" } = {}) {
   mocks.from.mockImplementation(() => ({ select: mocks.select }));
-  mocks.select.mockImplementation(() => {
+  mocks.select.mockImplementation((_columns, options) => {
     let selected = data;
     const builder = {
       eq: (field: string, value: string) => {
@@ -40,20 +41,21 @@ function mockRequests(data: typeof requests) {
       order: () => builder,
       range: async (from: number, to: number) => {
         mocks.range(from, to);
-        return { data: selected.slice(from, to + 1), error: null };
+        if (listError) return { data: null, count: null, error: { message: listError } };
+        return { data: selected.slice(from, to + 1), count: options?.count === "exact" ? selected.length : null, error: null };
       },
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ count: selected.length, error: null }).then(resolve),
+      then: (resolve: (value: unknown) => unknown) => waitForTotals.then(() => resolve({ count: selected.length, error: null })),
     };
     return builder;
   });
 }
 
 it("renders matching only for open unmatched lines without an initial inventory catalog", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "admin" });
-  render(await Page({ searchParams: Promise.resolve({}) }));
+  const isAdmin = true;
+  render(await MaterialRequestResults({ isAdmin, query: {} }));
 
-  expect(mocks.from.mock.calls).toEqual(Array(4).fill(["material_requests"]));
-  expect(mocks.select.mock.calls[3][0]).toContain("inventory_item_id");
+  expect(mocks.from.mock.calls).toEqual(Array(3).fill(["material_requests"]));
+  expect(mocks.select).toHaveBeenCalledWith(expect.stringContaining("inventory_item_id"), { count: "exact" });
   expect(screen.getByRole("button", { name: "Match Item · Window Handle" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Match Item · Previously approved bracket" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Match Item · Linked material" })).toBeNull();
@@ -62,17 +64,17 @@ it("renders matching only for open unmatched lines without an initial inventory 
 });
 
 it("lets management viewers read requests without displaying matching or loading inventory options", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "management_viewer" });
-  render(await Page({ searchParams: Promise.resolve({}) }));
+  const isAdmin = false;
+  render(await MaterialRequestResults({ isAdmin, query: {} }));
 
   expect(screen.getByText("MR-001")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Match Item/ })).toBeNull();
-  expect(mocks.from.mock.calls).toEqual(Array(4).fill(["material_requests"]));
+  expect(mocks.from.mock.calls).toEqual(Array(3).fill(["material_requests"]));
 });
 
 it("makes every summary card a filter with an active state and global counts", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "admin" });
-  render(await Page({ searchParams: Promise.resolve({ status: "pending" }) }));
+  const isAdmin = true;
+  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
   const filters = screen.getByRole("navigation", { name: "Filter material requests" });
   expect(within(filters).getByRole("link", { name: /Pending Review 1/ })).toHaveAttribute("href", "/admin/material-requests?status=pending");
   expect(within(filters).getByRole("link", { name: /Pending Review/ })).toHaveAttribute("aria-current", "page");
@@ -81,16 +83,16 @@ it("makes every summary card a filter with an active state and global counts", a
   expect(screen.getByText("MR-001")).toBeInTheDocument();
   expect(screen.queryByText("MR-002")).toBeNull();
   expect(screen.queryByText("MR-003")).toBeNull();
-  expect(mocks.select.mock.calls.slice(0, 3)).toEqual(Array(3).fill(["id", { count: "exact", head: true }]));
+  expect(mocks.select.mock.calls.filter(([columns]) => columns === "id")).toEqual(Array(2).fill(["id", { count: "exact", head: true }]));
 });
 
 it("retrieves pending requests older than the latest 100 records and paginates within the filter", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "management_viewer" });
+  const isAdmin = false;
   mockRequests([
     ...Array.from({ length: 120 }, (_, index) => ({ ...requests[2], id: `issued-${index}`, request_no: `ISSUED-${index}`, status: "issued" })),
     ...Array.from({ length: 26 }, (_, index) => ({ ...requests[0], id: `pending-${index}`, request_no: `PENDING-${index}` })),
   ]);
-  render(await Page({ searchParams: Promise.resolve({ status: "pending", page: "2" }) }));
+  render(await MaterialRequestResults({ isAdmin, query: { status: "pending", page: "2" } }));
   expect(screen.getByText("PENDING-25")).toBeInTheDocument();
   expect(screen.queryByText("ISSUED-0")).toBeNull();
   expect(screen.queryByText("PENDING-0")).toBeNull();
@@ -101,8 +103,8 @@ it("retrieves pending requests older than the latest 100 records and paginates w
 });
 
 it("shows only approved requests and keeps the total card available", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "management_viewer" });
-  render(await Page({ searchParams: Promise.resolve({ status: "approved", page: "9999" }) }));
+  const isAdmin = false;
+  render(await MaterialRequestResults({ isAdmin, query: { status: "approved", page: "9999" } }));
   expect(screen.getByText("MR-002")).toBeInTheDocument();
   expect(screen.queryByText("MR-001")).toBeNull();
   expect(screen.getByRole("link", { name: "Clear filter" })).toHaveAttribute("href", "/admin/material-requests?status=all");
@@ -110,18 +112,55 @@ it("shows only approved requests and keeps the total card available", async () =
 });
 
 it("shows a clear empty state for pending review", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "admin" });
+  const isAdmin = true;
   mockRequests([requests[1]]);
-  render(await Page({ searchParams: Promise.resolve({ status: "pending" }) }));
+  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
   expect(screen.getByText("No requests waiting for approval.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Pending Review 0/ })).toBeInTheDocument();
 });
 
 it("handles invalid filters and page numbers as the first page of all requests", async () => {
-  mocks.requireRole.mockResolvedValue({ role: "management_viewer" });
-  render(await Page({ searchParams: Promise.resolve({ status: "invalid", page: "-5" }) }));
+  const isAdmin = false;
+  render(await MaterialRequestResults({ isAdmin, query: { status: "invalid", page: "-5" } }));
   expect(screen.getByText("MR-001")).toBeInTheDocument();
   expect(screen.getByText("MR-003")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Total Records/ })).toHaveAttribute("aria-current", "page");
   expect(mocks.range).toHaveBeenCalledWith(0, 24);
+});
+
+it("starts the first page while the other filter counts are still pending", async () => {
+  const isAdmin = true;
+  let releaseTotals!: () => void;
+  mockRequests(requests, { waitForTotals: new Promise<void>(resolve => { releaseTotals = resolve; }) });
+  const loading = MaterialRequestResults({ isAdmin, query: {} });
+  try {
+    await vi.waitFor(() => expect(mocks.range).toHaveBeenCalledWith(0, 24));
+  } finally {
+    releaseTotals();
+    await loading;
+  }
+});
+
+it("still shows the global totals when the detail query fails", async () => {
+  const isAdmin = true;
+  mockRequests(requests, { listError: "Unable to load material details" });
+  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
+  expect(screen.getByText("Unable to load material details")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Pending Review 1/ })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Total Records 3/ })).toBeInTheDocument();
+  expect(screen.queryByText("No requests waiting for approval.")).toBeNull();
+});
+
+it("renders the authorized page heading, notices and loading state before starting its queries", async () => {
+  mocks.requireRole.mockResolvedValue({ role: "management_viewer" });
+  const page = await Page({ searchParams: Promise.resolve({ success: "1" }) });
+  const children = Children.map(page.props.children, child =>
+    isValidElement<{ fallback: ReactNode }>(child) && child.type === Suspense ? child.props.fallback : child
+  );
+  render(<>{children}</>);
+  expect(mocks.requireRole).toHaveBeenCalledWith(["admin", "management_viewer"]);
+  expect(screen.getByRole("heading", { name: "Material Requests" })).toBeInTheDocument();
+  expect(screen.getByText("Request updated successfully.")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Loading material requests");
+  expect(mocks.from).not.toHaveBeenCalled();
 });
