@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe,it,expect,vi } from "vitest";
 import { updateDocumentCategories } from "@/app/(dashboard)/documents/actions";
 import { DocumentsPanel } from "./documents-panel";
@@ -43,4 +43,21 @@ describe("Documents",()=>{
  });
  it("matches combined filename keywords and keeps original names",()=>{render(<DocumentsPanel documents={documents} canManage={false}/>);fireEvent.change(screen.getByLabelText("Search Documents"),{target:{value:"floor A"}});expect(screen.getByText(documents[0].file_name)).toBeInTheDocument();expect(screen.queryByText(documents[1].file_name)).toBeNull();expect(screen.queryByText("Upload")).toBeNull();expect(screen.queryByText("Delete")).toBeNull();});
  it("offers management upload and delete, previews supported files only",()=>{render(<DocumentsPanel documents={documents} canManage/>);expect(screen.getByText("Upload")).toBeInTheDocument();expect(screen.getAllByText("Delete")).toHaveLength(2);expect(screen.getAllByText("Preview")).toHaveLength(1);expect(screen.getAllByText("Download")).toHaveLength(2);});
+});
+
+it("keeps the first search and filter usable while document metadata is pending", async () => {
+  const source = Promise.withResolvers<{ documents: typeof documents; error: null }>();
+  await act(async () => { render(<DocumentsPanel documents={source.promise} canManage/>); });
+  const search = screen.getByLabelText("Search Documents");
+  await act(async () => {
+    fireEvent.change(search, { target: { value: "floor" } });
+    fireEvent.change(screen.getByLabelText("Block"), { target: { value: "A" } });
+  });
+  expect(search).toHaveValue("floor");
+  expect(screen.queryByText("No documents uploaded yet.")).toBeNull();
+  await act(async () => source.resolve({ documents, error: null }));
+  expect(screen.getByText(documents[0].file_name)).toBeInTheDocument();
+  expect(screen.queryByText(documents[1].file_name)).toBeNull();
+  expect(screen.getByLabelText("Search Documents")).toBe(search);
+  expect(screen.getByLabelText("Block")).toHaveValue("A");
 });

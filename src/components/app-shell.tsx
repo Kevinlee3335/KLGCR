@@ -1,5 +1,6 @@
 import {canCaptureUtilityPhotos} from "@/lib/utility-photo-access";
 import { assistantEnabled } from "@/lib/ai-assistant";
+import { complianceListPaths } from "@/lib/compliance-workflow";
 import { FLEX_INSPECTION_PATH, FLEX_INSPECTION_TITLE } from "@/lib/flex-inspection";
 import { Brand } from "./brand";
 import { LogoutForm } from "./logout-form";
@@ -15,7 +16,7 @@ const adminNav = [
   ["Check-out Rooms", "/admin/checkouts", DoorOpen], [FLEX_INSPECTION_TITLE, FLEX_INSPECTION_PATH, ClipboardCheck],
   ["Waste Collection", "/admin/waste-collection", ClipboardCheck],
   ["Material Requests", "/admin/material-requests", PackageOpen], ["Inventory", "/admin/inventory", Boxes],
-  ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", "/admin/cert-servicing", ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
+  ["Documents", "/documents", FolderOpen], ["Reports", "/admin/reports", FileBarChart], ["Cert & Servicing", complianceListPaths.certificate_license, ClipboardCheck], ["Notifications", "/admin/notifications", Bell],
   ["Users", "/admin/users", Users], ["Settings", "/admin/settings", Settings],
 ] as const;
 const cleanerNav = [["Dashboard", "/staff"], ["Daily Tasks", "/staff/daily-tasks"], ["Check-out Rooms", "/staff/checkouts"], ["New Complaint", "/staff/complaints/new"], ["My Reports", "/staff/complaints"], ["Calendar", "/staff/calendar"], ["Office Inventory", "/office-inventory"]] as const;
@@ -56,11 +57,11 @@ const adminNavGroups: AdminNavGroup[] = [
       ["Cleaner Supplies", "/admin/inventory?store=cleaner", Boxes],
       ["Material Requests", "/admin/material-requests", PackageOpen],
     ] as const },
-    { label: "Quotation & PO", Icon: FileBarChart, links: [
+    { label: "Quotation & PO", Icon: FileBarChart, nativeLinks: true, links: [
       ["Quotations", "/admin/quotations", FileBarChart],
       ["Purchase Orders", "/admin/inventory/purchase-orders", ClipboardCheck],
     ] as const },
-    { label: "Documents & Reports", Icon: FolderOpen, links: [
+    { label: "Documents & Reports", Icon: FolderOpen, nativeLinks: true, links: [
       ...adminNav.filter(([label]) => ["Documents", "Reports", "Cert & Servicing"].includes(label)),
       ["TM Unifi Invoices", "/admin/unifi-invoices", FileText],
     ] },

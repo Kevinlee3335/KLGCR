@@ -1,24 +1,13 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {getSessionProfile} from '@/lib/auth';
 import {createClient} from '@/lib/supabase/server';
-import {appendQuotation,customerDirectory,customerInput,saveCustomer,initialRegistry,quotationInput,type Registry} from '@/lib/quotations/model';
+import {appendQuotation,customerDirectory,customerInput,saveCustomer,quotationInput} from '@/lib/quotations/model';
+import {loadQuotationRegistry} from '@/lib/quotations/registry';
 import {z} from 'zod';
 export const dynamic='force-dynamic';
 const reply=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'no-store'}});
 async function authorized(){const p=await getSessionProfile();return p&&['admin','management_viewer'].includes(p.role)?p:null}
-async function load(){
- const db=await createClient();
- let result=await db.from('quotation_registry').select('value').eq('id',1).maybeSingle();
- if(result.error)throw Error('Quotation storage is unavailable');
- if(!result.data){
-  const seed=await db.from('quotation_registry').insert({id:1,value:initialRegistry()});
-  if(seed.error&&seed.error.code!=='23505')throw Error('Unable to initialize quotations');
-  result=await db.from('quotation_registry').select('value').eq('id',1).single();
- }
- if(result.error||!result.data)throw Error('Unable to load quotations');
- return result.data.value as Registry;
-}
-export async function GET(){if(!await authorized())return reply({error:'Access denied'},403);try{const registry=await load();return reply({...registry,customers:customerDirectory(registry)})}catch{return reply({error:'Unable to load quotations. Please try again.'},503)}}
+export async function GET(){if(!await authorized())return reply({error:'Access denied'},403);try{const registry=await loadQuotationRegistry();return reply({...registry,customers:customerDirectory(registry)})}catch{return reply({error:'Unable to load quotations. Please try again.'},503)}}
 export async function POST(req:NextRequest){
  const p=await authorized();if(!p)return reply({error:'Access denied'},403);
  if(req.headers.get('origin')!==req.nextUrl.origin)return reply({error:'Invalid origin'},403);
@@ -31,7 +20,7 @@ export async function POST(req:NextRequest){
    const signature=await db.from('user_e_signatures').select('signature').eq('user_id',p.id).single();
    if(signature.error||!signature.data)return reply({error:'Save your e-signature first'},409);
    for(let attempt=0;attempt<5;attempt++){
-    const registry=await load(),quote=registry.quotes.find(q=>q.id===id);
+    const registry=await loadQuotationRegistry(),quote=registry.quotes.find(q=>q.id===id);
     if(!quote)return reply({error:'Quotation not found'},404);
     if(quote.approvedAt)return reply({quote});
     const signed={...quote,approvedBy:p.full_name,approvedAt:new Date().toISOString(),approvedSignature:signature.data.signature};
@@ -45,7 +34,7 @@ export async function POST(req:NextRequest){
    const {customer,id}=z.object({customer:customerInput,id:z.string().min(1).max(150)}).parse(body);
    const db=await createClient();
    for(let attempt=0;attempt<5;attempt++){
-    const registry=await load(),next=saveCustomer(registry,customer,id);
+    const registry=await loadQuotationRegistry(),next=saveCustomer(registry,customer,id);
     const result=await db.from('quotation_registry').update({value:next,updated_at:new Date().toISOString()}).eq('id',1).eq('value->>revision',String(registry.revision)).select('id').maybeSingle();
     if(result.error)throw Error('Unable to save customer');
     if(result.data)return reply({customers:customerDirectory(next)});
@@ -55,7 +44,7 @@ export async function POST(req:NextRequest){
   const {input,id}=z.object({input:quotationInput,id:z.string().uuid()}).parse(body);
   const db=await createClient();
   for(let attempt=0;attempt<5;attempt++){
-   const registry=await load(),existing=registry.quotes.find(q=>q.id===id);
+   const registry=await loadQuotationRegistry(),existing=registry.quotes.find(q=>q.id===id);
    if(existing)return reply({quote:existing});
    const signature=await db.from('user_e_signatures').select('signature').eq('user_id',p.id).single();
    if(signature.error||!signature.data)return reply({error:'Save your e-signature before preparing a quotation'},409);

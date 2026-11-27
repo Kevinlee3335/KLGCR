@@ -169,10 +169,10 @@ export function completionStage(document: ComplianceDocument) {
   return document.review_stage === "filed";
 }
 
-export function dueStatus(dueDate: string | null, status: string) {
+export function dueStatus(dueDate: string | null, status: string, currentDate?: string) {
   if (status === "completed") return { label: "Completed", tone: "complete" } as const;
   if (!dueDate) return { label: "Date needed", tone: "pending" } as const;
-  const today = malaysiaDate();
+  const today = currentDate ?? malaysiaDate();
   if (dueDate < today || status === "expired") return { label: "Overdue", tone: "overdue" } as const;
   if (dueDate === today) return { label: "Due today", tone: "pending" } as const;
   if (status === "renewal_in_progress") return { label: "In progress", tone: "pending" } as const;

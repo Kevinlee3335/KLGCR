@@ -1,57 +1,80 @@
 import "./documents.css";
+import { Suspense, type ReactNode } from "react";
+import Link from "next/link";
+import { FolderOpen } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { DocumentsPanel } from "@/components/documents-panel";
+import { DocumentsPanel, type DocumentLibrary } from "@/components/documents-panel";
 import { requireRole } from "@/lib/auth";
 import { listSupplierCompanies } from "@/lib/supplier-mail/queries";
 import { createClient } from "@/lib/supabase/server";
 
-async function loadDocuments(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const documents: { id: string; file_name: string; size_bytes: number; created_at: string; category: string | null }[] = [];
+type Database = Awaited<ReturnType<typeof createClient>>;
+
+async function loadDocuments(db: Database): Promise<DocumentLibrary> {
+  const documents: DocumentLibrary["documents"] = [];
   for (let offset = 0; ; offset += 1000) {
-    const result = await supabase.from("system_documents").select("id,file_name,size_bytes,created_at,category").order("created_at",{ ascending: false }).order("id").range(offset,offset + 999);
-    if (result.error) return { documents, error: result.error };
-    documents.push(...(result.data || []));
-    if (!result.data || result.data.length < 1000) break;
+    const { data, error } = await db.from("system_documents").select("id,file_name,size_bytes,created_at,category")
+      .order("created_at", { ascending: false }).order("id").range(offset, offset + 999);
+    if (error) return { documents: [], error: error.message };
+    documents.push(...(data ?? []));
+    if (!data || data.length < 1000) return { documents, error: null };
   }
-  return { documents, error: null };
 }
 
-async function loadSupplierFolders(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const companies = await listSupplierCompanies(supabase);
-  return Promise.all(companies.map(async company => {
-    const result = await supabase.from("supplier_mail_documents").select("id", { count: "exact", head: true }).eq("company", company.id);
-    return { name: company.name, href: `/documents/suppliers/${company.id}`, count: result.error ? null : result.count || 0 };
-  }));
+const businessFolders = [
+  ["Check-out Batch Reports", "/documents/check-out-batches"],
+  ["Utility Reading History", "/documents/utility-readings"],
+  ["Receipts", "/documents/receipts"],
+  ["Deposit Receipts", "/documents/deposit-receipts"],
+  ["Payment Vouchers", "/documents/payment-vouchers"],
+  ["TM Unifi Payment Receipts", "/documents/unifi-receipts"],
+] as const;
+
+function Folder({ name, href, count }: { name: string; href: string; count?: ReactNode }) {
+  return <Link className="documents-company-folder" href={href}><FolderOpen size={20}/><span>{name}</span>
+    <strong><Suspense fallback="…">{count ?? "—"}</Suspense></strong></Link>;
+}
+
+async function Count({ result }: { result: PromiseLike<{ count: number | null; error: unknown }> }) {
+  const { count, error } = await result;
+  return error ? "—" : count ?? 0;
+}
+
+async function QuotationCount({ db }: { db: Database }) {
+  const { data, error } = await db.from("quotation_registry").select("quotes:value->quotes").eq("id", 1).maybeSingle();
+  return error ? "—" : Array.isArray(data?.quotes) ? data.quotes.length : 0;
+}
+
+async function SupplierFolders({ db }: { db: Database }) {
+  const { data, error } = await db.from("supplier_mail_suppliers")
+    .select("id,name,documents:supplier_mail_documents!supplier_mail_documents_company_fkey(count)").order("name").order("id");
+  if (!error) return data?.map(company => <Folder key={company.id} name={company.name}
+    href={`/documents/suppliers/${company.id}`} count={company.documents[0]?.count ?? 0} />);
+  // The legacy supplier registry has no relationship for an embedded count.
+  const companies = await listSupplierCompanies(db);
+  return companies.map(company => <Folder key={company.id} name={company.name} href={`/documents/suppliers/${company.id}`}
+    count={<Count result={db.from("supplier_mail_documents").select("id", { count: "exact", head: true }).eq("company", company.id)} />} />);
+}
+
+function ManagementFolders({ db }: { db: Database }) {
+  return <>
+    {businessFolders.map(([name, href]) => <Folder key={href} name={name} href={href}/>)}
+    {(["rental", "utility"] as const).map(kind => <Folder key={kind} name={kind === "rental" ? "Rental" : "Utilities"}
+      href={`/documents/billing/${kind}`}
+      count={<Count result={db.from("billing_document_index").select("run_id", { count: "exact", head: true }).eq("kind", kind)} />} />)}
+    <Folder name="Purchase Orders" href="/documents/purchase-orders"
+      count={<Count result={db.from("inventory_purchase_orders").select("id", { count: "exact", head: true })} />} />
+    <Folder name="Quotations" href="/documents/quotations" count={<QuotationCount db={db} />} />
+    <Suspense fallback={null}><SupplierFolders db={db}/></Suspense>
+  </>;
 }
 
 export default async function DocumentsPage() {
-  const profile = await requireRole(["admin","management_viewer","maintenance_staff","cleaner"]);
-  const supabase = await createClient();
-  const canManage = ["admin","management_viewer"].includes(profile.role);
-  const [{ documents, error }, businessFolders, companyFolders] = await Promise.all([
-    loadDocuments(supabase),
-    canManage ? Promise.all([
-      { name: "Check-out Batch Reports", href: "/documents/check-out-batches", count: null },
-      { name: "Utility Reading History", href: "/documents/utility-readings", count: null },
-      { name: "Receipts", href: "/documents/receipts", count: null },
-      { name: "Deposit Receipts", href: "/documents/deposit-receipts", count: null },
-      { name: "Payment Vouchers", href: "/documents/payment-vouchers", count: null },
-      { name: "TM Unifi Payment Receipts", href: "/documents/unifi-receipts", count: null },
-      ...(["rental", "utility"] as const).map(async kind => {
-        const result = await supabase.from("billing_document_index").select("run_id", { count: "exact", head: true }).eq("kind", kind);
-        return { name: kind === "rental" ? "Rental" : "Utilities", href: `/documents/billing/${kind}`, count: result.error ? null : result.count || 0 };
-      }),
-      (async () => {
-        const result = await supabase.from("inventory_purchase_orders").select("id", { count: "exact", head: true });
-        return { name: "Purchase Orders", href: "/documents/purchase-orders", count: result.error ? null : result.count || 0 };
-      })(),
-      (async () => {
-        const result = await supabase.from("quotation_registry").select("quotes:value->quotes").eq("id", 1).maybeSingle();
-        const quotes = result.data?.quotes;
-        return { name: "Quotations", href: "/documents/quotations", count: result.error ? null : Array.isArray(quotes) ? quotes.length : 0 };
-      })(),
-    ]) : [],
-    canManage ? loadSupplierFolders(supabase) : [],
-  ]);
-  return <AppShell profile={profile} title="Documents">{error ? <div className="card" role="alert">Unable to load documents: {error.message}</div> : <DocumentsPanel documents={documents} canManage={canManage} companyFolders={[...businessFolders,...companyFolders]}/>}</AppShell>;
+  const profile = await requireRole(["admin", "management_viewer", "maintenance_staff", "cleaner"]);
+  const db = await createClient();
+  const canManage = ["admin", "management_viewer"].includes(profile.role);
+  return <AppShell profile={profile} title="Documents">
+    <DocumentsPanel documents={loadDocuments(db)} canManage={canManage}
+      companyFolders={canManage ? <ManagementFolders db={db}/> : null} />
+  </AppShell>;
 }

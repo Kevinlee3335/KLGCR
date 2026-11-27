@@ -3,19 +3,17 @@ import {SignaturePad} from './signature-pad';
 import {documentMatches,quotationDocument} from '@/lib/business-documents';
 import {useEffect,useRef,useState} from 'react';
 import {blankQuotation,lineAmount,quotationInput,totalAmount,type Customer,type Quotation,type QuotationInput} from '@/lib/quotations/model';
-import {quotationPrintHtml} from '@/lib/quotations/print';
 
-export function QuotationPanel(){
- const [quotes,setQuotes]=useState<Quotation[]>([]),[input,setInput]=useState(blankQuotation),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[selected,setSelected]=useState<Quotation|null>(null);
+export function QuotationPanel({initialData}: { initialData: {quotes: Quotation[]; customers: Customer[]} | null }){
+ const [quotes,setQuotes]=useState(initialData?.quotes ?? []),[input,setInput]=useState(blankQuotation),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(initialData !== null),[message,setMessage]=useState(initialData ? '' : 'Unable to load quotations. Please try again.'),[query,setQuery]=useState(''),[selected,setSelected]=useState<Quotation|null>(null);
  async function approve(q:Quotation){
   if(busy||!window.confirm(`Approve QT ${q.number} using your saved signature?`))return;
   setBusy(true);try{const r=await fetch('/api/quotations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve',id:q.id})}),j=await r.json();if(!r.ok)throw Error(j.error);setQuotes(v=>v.map(old=>old.id===q.id?j.quote:old));if(selected?.id===q.id)setSelected(j.quote);setMessage('Quotation approved successfully.');}catch(e){setMessage(e instanceof Error?e.message:'Unable to approve');}finally{setBusy(false)}
  }
  const requestId=useRef('');
  const customerId=useRef(''),customerQueue=useRef<Promise<void>>(Promise.resolve());
- const [customers,setCustomers]=useState<Customer[]>([]),[customerSearch,setCustomerSearch]=useState(''),[customerStatus,setCustomerStatus]=useState(''),[retryCustomer,setRetryCustomer]=useState(0);
- async function reload(){try{const r=await fetch('/api/quotations',{cache:'no-store'}),j=await r.json();if(!r.ok)throw Error(j.error);setQuotes(j.quotes);setCustomers(j.customers??[]);setLoaded(true)}catch(e){setMessage(e instanceof Error?e.message:'Unable to load quotations')}}
- useEffect(()=>{void reload()},[]);
+ const [customers,setCustomers]=useState(initialData?.customers ?? []),[customerSearch,setCustomerSearch]=useState(''),[customerStatus,setCustomerStatus]=useState(''),[retryCustomer,setRetryCustomer]=useState(0);
+ async function reload(){try{const r=await fetch('/api/quotations',{cache:'no-store'}),j=await r.json();if(!r.ok)throw Error(j.error);setQuotes(j.quotes);setCustomers(j.customers??[]);setMessage('');setLoaded(true)}catch(e){setMessage(e instanceof Error?e.message:'Unable to load quotations')}}
  const customerData=JSON.stringify({customer:input.customer,address:input.address,attention:input.attention,phone:input.phone,email:input.email});
  useEffect(()=>{
   if(!loaded||selected||!input.customer.trim())return;
@@ -31,7 +29,23 @@ export function QuotationPanel(){
   return ()=>{active=false;clearTimeout(timer)};
  },[customerData,loaded,selected,input.customer,retryCustomer]);
  function change<K extends keyof QuotationInput>(key:K,value:QuotationInput[K]){setInput(v=>({...v,[key]:value}));setMessage('')}
- function print(q:Quotation){const w=window.open('','_blank');if(!w){setMessage('Please allow the print preview window.');return}w.opener=null;w.document.open();w.document.write(quotationPrintHtml(q,window.location.origin));w.document.close()}
+ async function print(q:Quotation){
+  const preview=window.open('','_blank');
+  if(!preview){setMessage('Please allow the print preview window.');return}
+  preview.opener=null;
+  preview.document.title='Preparing quotation…';
+  try{
+   const {quotationPrintHtml}=await import('@/lib/quotations/print');
+   if(preview.closed)return;
+   const html=quotationPrintHtml(q,window.location.origin);
+   preview.document.open();
+   preview.document.write(html);
+   preview.document.close();
+  }catch{
+   preview.close();
+   setMessage('Unable to open the quotation print preview. Please try again.');
+  }
+ }
  async function save(){
   const parsed=quotationInput.safeParse(input);if(!parsed.success){setMessage('Please fill in customer name, a valid date, and item description, quantity and unit price.');return}
   setBusy(true);setMessage('');if(!requestId.current)requestId.current=crypto.randomUUID();
