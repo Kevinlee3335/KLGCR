@@ -6,7 +6,7 @@ import { type FormEvent, useRef, useState } from "react";
 import { cancelCleanerComplaint, finalizeCleanerComplaint, prepareCleanerComplaint } from "@/app/(dashboard)/staff/complaints/new/actions";
 import { createClient } from "@/lib/supabase/client";
 
-type Block = { id: number; code: string };
+import { ComplaintBlockSelect, type BlockChoices } from "./complaint-block-select";
 const commonAreaLocations = ["Balcony", "Corridor", "Common Bathroom", "Visitor Room", "Drying Area", "Lobby", "Lift", "Staircase", "Utility Room", "Pantry", "Kitchen Block C", "Kitchen Block D", "Other"];
 const externalAreas = ["Bungalow XA3/X3", "Futsal", "Car Park", "Gazebo", "KLG Security Main Post", "Commercial Centre", "Gymnasium", "Outdoor Exercise Station", "Substation PE45/46"];
 const defectItems = {
@@ -41,7 +41,7 @@ async function compressPhoto(file: File) {
   }
 }
 
-export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]; reporterName: string }) {
+export function CleanerComplaintForm({ blocks, reporterName }: { blocks: BlockChoices; reporterName: string }) {
   const router = useRouter();
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -116,7 +116,7 @@ export function CleanerComplaintForm({ blocks, reporterName }: { blocks: Block[]
     {error && <p className="error cleaner-report-error" role="alert">{error}</p>}
     <div className="cleaner-report-grid">
       <label className="field"><span>Location Type *</span><select name="locationType" value={locationType} onChange={(event) => { const next = event.target.value as "room" | "bathroom" | "common" | "external"; setLocationType(next); setArea(next === "common" ? "Corridor" : next === "external" ? externalAreas[0] : next === "room" ? "Room" : "Bathroom"); setDefectType(defectItems[next][0]); }}><option value="room">Room</option><option value="bathroom">Bathroom</option><option value="common">Common Area</option><option value="external">External Area</option></select></label>
-      {locationType !== "external" && <label className="field"><span>Block *</span><select name="blockId" required defaultValue=""><option value="" disabled>Choose block</option>{blocks.map((block) => <option key={block.id} value={block.id}>Block {block.code}</option>)}</select></label>}
+      {locationType !== "external" && <label className="field"><span>Block *</span><ComplaintBlockSelect source={blocks} disablePlaceholder/></label>}
       {locationType === "common" && <label className="field"><span>Common Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{commonAreaLocations.map((option) => <option key={option}>{option}</option>)}</select></label>}
       {locationType === "external" && <label className="field"><span>External Area *</span><select name="area" required value={area} onChange={(event) => setArea(event.target.value)}>{externalAreas.map((option) => <option key={option}>{option}</option>)}</select></label>}
       {["room", "bathroom"].includes(locationType) && <input type="hidden" name="area" value={area}/>}

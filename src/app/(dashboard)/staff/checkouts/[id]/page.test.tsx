@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase/server',()=>({createClient:async()=>({from:(table:string
  const q={select:()=>q,is:()=>q,eq:()=>q,order:()=>q,single:async()=>({data}),then:(resolve:(r:unknown)=>unknown)=>Promise.resolve({data}).then(resolve)};return q;
 }})}));
 import Page from './page';
+vi.mock('./room-sections', () => ({ RoomEvidence: () => null, RoomHistory: () => null }));
 beforeEach(() => {
  state.actor = { id: 'tech', role: 'maintenance_staff' };
  state.room = { status: 'rectification', cleaner_id: 'cleaner' };
@@ -29,7 +30,7 @@ it('offers a separate photo and update submission for each open defect',async()=
 it('lets the assigned cleaner report a new defect or complete cleaning', async () => {
  state.actor = { id: 'cleaner', role: 'cleaner' };
  state.room.status = 'cleaning';
- const { container } = render(await Page({ params: Promise.resolve({ id: 'room' }), searchParams: Promise.resolve({}) }));
+ const { container } = render(await Page({params:Promise.resolve({id:'room'}),searchParams:Promise.resolve({})}));
  expect(screen.getByRole('button', { name: 'Complete Cleaning' })).toBeInTheDocument();
  fireEvent.click(screen.getByText('Report New Defect'));
  fireEvent.change(screen.getByRole('combobox', { name: 'Defect item' }), { target: { value: 'Lighting' } });
@@ -43,7 +44,7 @@ it('lets the assigned cleaner report a new defect or complete cleaning', async (
 it('hides cleaning actions from a cleaner who is not assigned to the room', async () => {
  state.actor = { id: 'other', role: 'cleaner' };
  state.room.status = 'cleaning';
- render(await Page({ params: Promise.resolve({ id: 'room' }), searchParams: Promise.resolve({}) }));
+ render(await Page({params:Promise.resolve({id:'room'}),searchParams:Promise.resolve({})}));
  expect(screen.queryByRole('button', { name: 'Complete Cleaning' })).toBeNull();
  expect(screen.queryByText('Report New Defect')).toBeNull();
 });

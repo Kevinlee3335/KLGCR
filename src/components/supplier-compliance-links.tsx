@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { dateLabel, linkArchivePath, recordPath } from "@/app/(dashboard)/admin/cert-servicing/record-model";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -23,23 +24,30 @@ export async function supplierComplianceLinks(db: Awaited<ReturnType<typeof crea
   return grouped;
 }
 
+type LinkLookup = ReturnType<typeof supplierComplianceLinks>;
+
+async function LinkedRecords({ id, links }: { id: string; links: LinkLookup }) {
+  const linked = (await links).get(id);
+  return linked?.map(item => <Link
+    key={item.id}
+    className="supplier-small-action"
+    href={`${recordPath(item.cycle.record.id)}?focusCycle=${item.cycle.id}#document-${item.id}`}
+  >{item.cycle.record.title}{item.cycle.due_date ? ` · ${dateLabel(item.cycle.due_date)}` : ""}</Link>);
+}
+
 export function SupplierComplianceLinks({
   id,
   sourceMessageId,
   isAdmin,
-  linked,
+  links,
 }: {
   id: string;
   sourceMessageId?: string;
   isAdmin: boolean;
-  linked?: ComplianceLinkRow[];
+  links: LinkLookup;
 }) {
   return <>
-    {linked?.map(item => <Link
-      key={item.id}
-      className="supplier-small-action"
-      href={`${recordPath(item.cycle.record.id)}?focusCycle=${item.cycle.id}#document-${item.id}`}
-    >{item.cycle.record.title}{item.cycle.due_date ? ` · ${dateLabel(item.cycle.due_date)}` : ""}</Link>)}
+    <Suspense fallback={null}><LinkedRecords id={id} links={links}/></Suspense>
     {isAdmin && <Link className="supplier-small-action" href={linkArchivePath(id, sourceMessageId)}>Link to Cert &amp; Servicing</Link>}
   </>;
 }

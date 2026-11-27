@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DirectPageLink } from "@/components/direct-page-link";
 import {AppShell} from '@/components/app-shell';
 import {requireRole} from '@/lib/auth';
 import {loadBusinessDocuments} from '@/lib/business-document-queries';
@@ -20,13 +20,13 @@ export async function BusinessDocumentArchive({kind,searchParams}:{kind:Business
  const table=(rows:BusinessDocument[])=><div className="business-document-table-wrap" role="region" aria-label={title} tabIndex={0}><table className="table"><thead><tr><th scope="col">{kind==='purchase-orders'?'PO':'Quotation'} No.</th><th scope="col">Date</th><th scope="col">{kind==='purchase-orders'?'Requested by':'Customer'}</th><th scope="col">Items / quantities{kind==='quotations'?' / unit prices':''}</th><th scope="col">Review</th></tr></thead><tbody>{rows.map(d=><RecordRow key={d.id} doc={d} query={q} kind={kind}/>)}</tbody></table></div>;
  const url=(next:number)=>'?'+new URLSearchParams({q,page:String(next)});
  return <AppShell profile={profile} title={title}><div className="business-documents">
-  <Link className="business-document-back" href="/documents">← Documents</Link>
-  <header><div><h2>{title}</h2><p>Saved system records appear here automatically. Updates use the latest saved version.</p></div><Link className="button secondary" href={kind==='purchase-orders'?'/admin/inventory/purchase-orders':'/admin/quotations'}>Manage {title}</Link></header>
-  <nav><Link className={kind==='purchase-orders'?'is-active':''} href="/documents/purchase-orders">Purchase Orders</Link><Link className={kind==='quotations'?'is-active':''} href="/documents/quotations">Quotations</Link></nav>
+  <DirectPageLink className="business-document-back" href="/documents">← Documents</DirectPageLink>
+  <header><div><h2>{title}</h2><p>Saved system records appear here automatically. Updates use the latest saved version.</p></div><DirectPageLink className="button secondary" href={kind==='purchase-orders'?'/admin/inventory/purchase-orders':'/admin/quotations'}>Manage {title}</DirectPageLink></header>
+  <nav><DirectPageLink className={kind==='purchase-orders'?'is-active':''} href="/documents/purchase-orders">Purchase Orders</DirectPageLink><DirectPageLink className={kind==='quotations'?'is-active':''} href="/documents/quotations">Quotations</DirectPageLink></nav>
   <form className="business-document-search"><label><span>Search item name, specification or document number</span><input name="q" defaultValue={q} placeholder="e.g. window handle" type="search" maxLength={200}/></label><button className="button" type="submit">Search</button></form>
   {error?<p role="alert">Unable to load saved records. Please retry.</p>:<>
    {q&&<section><h3>Latest 3 matching {kind==='purchase-orders'?'orders':'quotations'}</h3>{matches.length?table(matches.slice(0,3)):<p>No matching saved records found.</p>}</section>}
-   {q?<details><summary>All matching records ({matches.length})</summary>{table(matches.slice((page-1)*size,page*size))}<footer><span>Page {page}</span><div>{page>1&&<Link href={url(page-1)}>← Previous</Link>}{page*size<matches.length&&<Link href={url(page+1)}>Next →</Link>}</div></footer></details>:<section><h3>Saved records <small>({matches.length})</small></h3>{matches.length?table(matches.slice((page-1)*size,page*size)):<p>No saved records found.</p>}<footer><span>Page {page}</span><div>{page>1&&<Link href={url(page-1)}>← Previous</Link>}{page*size<matches.length&&<Link href={url(page+1)}>Next →</Link>}</div></footer></section>}
+   {q?<details><summary>All matching records ({matches.length})</summary>{table(matches.slice((page-1)*size,page*size))}<footer><span>Page {page}</span><div>{page>1&&<DirectPageLink href={url(page-1)}>← Previous</DirectPageLink>}{page*size<matches.length&&<DirectPageLink href={url(page+1)}>Next →</DirectPageLink>}</div></footer></details>:<section><h3>Saved records <small>({matches.length})</small></h3>{matches.length?table(matches.slice((page-1)*size,page*size)):<p>No saved records found.</p>}<footer><span>Page {page}</span><div>{page>1&&<DirectPageLink href={url(page-1)}>← Previous</DirectPageLink>}{page*size<matches.length&&<DirectPageLink href={url(page+1)}>Next →</DirectPageLink>}</div></footer></section>}
    {kind==='purchase-orders'&&<p className="business-document-note">PO supplier and unit price are not stored in the current PO form. Approval status is shown; pending approval is not a confirmed purchase.</p>}
   </>}
  </div></AppShell>;

@@ -11,6 +11,7 @@ vi.mock('@/lib/supabase/server',()=>({createClient:async()=>({from:()=>{
  let rows=[...state.rows];
  const q={
   select:()=>q,
+  in:(field:string,values:string[])=>{expect(field).toBe("inspection_checklist->>b");rows=rows.filter(row=>values.includes((row.inspection_checklist as {b:string}|null)?.b ?? ""));return q;},
   is:(field:string,value:unknown)=>{rows=rows.filter(row=>row[field]===value);return q;},
   not:(field:string,_operator:string,value:unknown)=>{rows=rows.filter(row=>row[field]!==value);return q;},
   order:()=>q,
@@ -27,10 +28,10 @@ it.each(['AB','CD'])('loads only current %s inspections while keeping archived r
  const b=blocks[0];
  const archived={id:'old',deleted_at:null,batch_archived_at:'2026-11-26T04:00:00Z',created_at:'2026-11-20T03:00:00Z',status:'ready_for_occupancy',inspection_checklist:{id:'old',b,ph:{}},checkout_defects:[]};
  const current={...archived,id:'new',batch_archived_at:null,inspection_checklist:{id:'new',b,ph:{}}};
- state.rows=[archived,current,{...current,id:'deleted',deleted_at:'2026-11-26T05:00:00Z'}];
+ state.rows=[archived,current,{...current,id:'other-block',inspection_checklist:{b:blocks==='CD'?'A':'D'}},{...current,id:'deleted',deleted_at:'2026-11-26T05:00:00Z'}];
  render(await Page({searchParams:Promise.resolve({blocks})}));
  expect(state.inspector.mock.calls.at(-1)![0].initialInspections.map((r:{checkoutId:string})=>r.checkoutId)).toEqual(['new']);
- expect(state.rows).toHaveLength(3);
+ expect(state.rows).toHaveLength(4);
 });
 
 it('passes an empty snapshot immediately after the last batch has closed',async()=>{

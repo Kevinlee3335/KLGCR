@@ -1,23 +1,31 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { prerender } from "react-dom/static";
+import { requireRole } from "@/lib/auth";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-const mocks=vi.hoisted(()=>({calendar:vi.fn(),dailyTasks:[] as unknown[],events:Array.from({length:10},(_,i)=>({id:`event-${i}`,assigned_to:`staff-${i}`,created_by:"admin",subject_staff_id:null,title:"Operation Meeting",notes:"Office",starts_at:"2026-10-16T08:30:00Z",ends_at:"2026-10-16T15:59:59Z",event_type:"meeting",audience:"individual",staff:{full_name:`Employee ${i+1}`},subject:null}))}));
+const mocks=vi.hoisted(()=>({calendar:vi.fn(),reads:vi.fn(),dailyTasks:[] as unknown[],events:Array.from({length:10},(_,i)=>({id:`event-${i}`,assigned_to:`staff-${i}`,created_by:"admin",subject_staff_id:null,title:"Operation Meeting",notes:"Office",starts_at:"2026-10-16T08:30:00Z",ends_at:"2026-10-16T15:59:59Z",event_type:"meeting",audience:"individual",staff:{full_name:`Employee ${i+1}`},subject:null}))}));
 vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
 vi.mock("next/navigation",()=>({redirect:vi.fn()}));
 vi.mock("@/lib/auth",()=>({requireRole:vi.fn().mockResolvedValue({id:"admin",role:"admin"})}));
 vi.mock("@/components/app-shell",()=>({AppShell:({children}:{children:ReactNode})=><div>{children}</div>}));
 vi.mock("@/components/calendar-event-form",()=>({CalendarEventForm:()=>null}));
-vi.mock("@/components/appointment-calendar",()=>({AppointmentCalendar:mocks.calendar}));
+vi.mock("@/components/appointment-calendar",()=>({CalendarHeading:()=>null,CalendarBody:mocks.calendar}));
 vi.mock("@/lib/app-notifications",()=>({createAppNotifications:vi.fn()}));
 vi.mock("@/lib/supabase/server",()=>({createClient:async()=>({from:(table:string)=>{
+  mocks.reads(table);
   const query={select:()=>query,gte:()=>query,lte:()=>query,lt:()=>query,not:()=>query,order:()=>query,eq:()=>query,is:()=>query,then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==="calendar_events"?mocks.events:table==="admin_daily_tasks"?mocks.dailyTasks:[],error:null}).then(resolve)};
   return query;
 }})}));
 import AdminCalendar from "./page";
-beforeEach(()=>{mocks.calendar.mockClear();mocks.dailyTasks=[];});
+beforeEach(()=>{mocks.calendar.mockClear();mocks.reads.mockClear();mocks.dailyTasks=[];document.body.replaceChildren();});
+async function showCalendar() {
+  const { prelude } = await prerender(await AdminCalendar({ searchParams: Promise.resolve({ month: "2026-10" }) }));
+  document.body.innerHTML = await new Response(prelude).text();
+  return document.body;
+}
 it("groups calendar and saved settings, retaining ten independent employee event IDs",async()=>{
   mocks.calendar.mockReturnValue(<div>Calendar</div>);
-  const {container}=render(await AdminCalendar({searchParams:Promise.resolve({month:"2026-10"})}));
+  const container = await showCalendar();
   expect(screen.getAllByText("Operation Meeting")).toHaveLength(1);
   expect(screen.getByText("View employees (10)")).toBeInTheDocument();
   const ids=Array.from(container.querySelectorAll<HTMLInputElement>('input[name="event_id"]')).map(input=>input.value);
@@ -37,8 +45,17 @@ it("links Calendar Work to Daily Tasks without displaying the synchronized copy 
  mocks.events=[{...original[0],event_type:"work",title:"SPKA"}];
  mocks.dailyTasks=[{id:1,title:"SPKA",task_date:"2026-10-16",recurrence_id:null,calendar_event_id:original[0].id,status:"pending"}];
  try {
-  render(await AdminCalendar({searchParams:Promise.resolve({month:"2026-10"})}));
+  await showCalendar();
   expect(mocks.calendar.mock.calls[0][0].items).toHaveLength(1);
   expect(mocks.calendar.mock.calls[0][0].items[0]).toMatchObject({label:"SPKA",href:"/admin/daily-tasks?date=2026-10-16"});
  } finally {mocks.events=original;}
+});
+
+it("loads the viewer calendar without querying the admin roster or all-time settings", async () => {
+  vi.mocked(requireRole).mockResolvedValueOnce({ role: "management_viewer" } as Awaited<ReturnType<typeof requireRole>>);
+  mocks.calendar.mockReturnValue(<div>Selected month</div>);
+  await showCalendar();
+  expect(screen.getByText("Selected month")).toBeInTheDocument();
+  expect(mocks.reads).not.toHaveBeenCalledWith("profiles");
+  expect(mocks.reads.mock.calls.filter(([table]) => table === "calendar_events")).toHaveLength(1);
 });

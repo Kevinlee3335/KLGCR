@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
 import { useState } from "react";
 import { emptyNotifications, useDashboardNotifications, useNotificationSession, type NotificationSession } from "./notification-session";
@@ -60,7 +59,7 @@ function NotificationBellView({ session, userId }: { session: NotificationSessio
     {open && <div className="app-notification-panel">
       <div className="app-notification-head"><strong>Notifications</strong><button type="button" onClick={() => void markAllRead()} disabled={!unread || markingRead}><CheckCheck size={16}/> Mark all read</button></div>
       {readError && <p className="app-notification-error" role="alert">{readError}</p>}
-      {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <Link key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{notificationTime.format(new Date(item.created_at))}</small></Link>)}</div>}
+      {items.length === 0 ? <p className="app-notification-empty">No notifications yet.</p> : <div className="app-notification-list">{items.map((item) => <a key={item.id} href={item.href} className={!item.read_at ? "unread" : ""} onClick={() => setOpen(false)}><strong>{item.title}</strong><span>{item.body}</span><small>{notificationTime.format(new Date(item.created_at))}</small></a>)}</div>}
       {isBrowser && notificationPermission !== "unsupported" && phoneAlerts === "active" && <p className="app-notification-empty" role="status">Phone alerts active on this device.</p>}
       {isBrowser && notificationPermission !== "unsupported" && phoneAlerts !== "active" && <button type="button" className="app-notification-enable" disabled={phoneAlerts === "checking"} onClick={() => void enablePhoneAlerts()}>{phoneAlerts === "checking" ? "Checking phone alerts…" : notificationPermission === "granted" ? "Set up phone alerts" : "Enable phone alerts"}</button>}
       {isBrowser && notificationPermission === "unsupported" && <p className="app-notification-error">Phone alerts require the KLGCR app to be added to your Home Screen.</p>}

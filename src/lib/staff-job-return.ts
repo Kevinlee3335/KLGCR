@@ -4,8 +4,11 @@ import { jobStatuses } from "@/lib/phase2";
 export function staffJobReturnTo(value: unknown, fallbackStatus?: string): string {
   if (typeof value === "string") {
     if (["/staff", "/staff/tasks", "/staff/monitoring", "/staff/appointments"].includes(value)) return value;
+    if (/^\/staff\/appointments\?page=[1-9]\d{0,12}$/.test(value)) return value;
     const match = /^\/staff\/tasks\?status=([a-z_]+)$/.exec(value);
     if (match && jobStatuses.some(status => status === match[1])) return value;
+    const page = /^\/staff\/tasks\?(?:status=([a-z_]+)&)?page=([1-9]\d{0,6})$/.exec(value);
+    if (page && (!page[1] || jobStatuses.some(status => status === page[1]))) return value;
   }
   if (fallbackStatus && jobStatuses.some(status => status === fallbackStatus)) return `/staff/tasks?status=${fallbackStatus}`;
   return "/staff/tasks";

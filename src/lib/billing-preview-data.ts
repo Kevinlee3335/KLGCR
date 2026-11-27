@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { validBillingApproval, withBillingApproval, type BillingApproval } from "./billing-approval";
 import type { BillingMailState } from "./billing-mail-settings";
 import { stripBillingMeterPhotos } from "./billing-meter-photo";
@@ -21,6 +22,29 @@ async function readSettings(db: BillingClient) {
   const parsed = configSchema.safeParse(data.config);
   if (!parsed.success) throw new Error("Billing meter data needs repair. No records were changed.");
   return { config: parsed.data, revision: Number(data.revision) };
+}
+
+// Request every setting understood by this version except the photo-bearing meter array.
+// The existing scoped RPC retains every account and meter, including registry/termination fields.
+const settingKeys = configSchema.keyof().options.filter(key => key !== "utilityAccounts");
+const settingsProjection = ["revision", ...settingKeys.map(key => `${key}:config->${key}`)].join(",");
+
+async function readScopedSettings(db: BillingClient, accountId: string | null) {
+  const metadata = db.from("billing_preview_settings").select(settingsProjection).eq("id", 1).single();
+  const meterRead = async () => {
+    const {data, error} = await createAdminClient().rpc("get_utility_meter_photos", {p_account_id: accountId, p_meter_id: null});
+    return error ? null : data as {revision: number; period: string; utilityAccounts: unknown[]} | null;
+  };
+  const [settings, meters] = await Promise.all([metadata, meterRead().catch(() => null)]);
+  if (!settings.error && settings.data && meters) {
+    const {revision, ...fields} = settings.data as unknown as Record<string, unknown>;
+    if (Number.isSafeInteger(revision) && revision === meters.revision && fields.utilityPeriod === meters.period) {
+      const parsed = configSchema.safeParse({...fields, utilityAccounts: meters.utilityAccounts});
+      if (parsed.success) return {config: parsed.data, revision: meters.revision};
+    }
+  }
+  // Missing RPC, older installations or a concurrent save: read one coherent revision, under the caller's RLS.
+  return readSettings(db);
 }
 
 async function readRunDetails(db: BillingClient, ids: string[], includeVerificationSignatures = false) {
@@ -59,25 +83,29 @@ function summarizeRun(row: RunFields, details: Awaited<ReturnType<typeof readRun
   };
 }
 
-export async function loadBillingOverview(canApprove: boolean): Promise<BillingOverview> {
+export async function loadBillingSettings(): Promise<Omit<BillingOverview, "pendingPackCount">> {
   await ensureUtilityMonth();
-  const db = await createClient();
-  const [settings, pending] = await Promise.all([
-    readSettings(db),
-    canApprove
-      ? db.from("billing_preview_runs")
-        .select("id,billing_run_approvals!left(run_id)", { head: true, count: "exact" })
-        .is("billing_run_approvals", null)
-      : { count: 0, error: null },
-  ]);
-  if (pending.error) throw new Error("Billing preview storage is unavailable");
+  const settings = await readScopedSettings(await createClient(), null);
   return {
     config: stripBillingMeterPhotos(settings.config),
     photosLoaded: false,
     revision: settings.revision,
     clock: malaysiaClock(),
-    pendingPackCount: pending.count ?? 0,
   };
+}
+
+export async function loadPendingBillingCount() {
+  const db = await createClient();
+  const {count, error} = await db.from("billing_preview_runs")
+    .select("id,billing_run_approvals!left(run_id)", {head: true, count: "exact"})
+    .is("billing_run_approvals", null);
+  if (error) throw new Error("Billing preview storage is unavailable");
+  return count ?? 0;
+}
+
+export async function loadBillingOverview(canApprove: boolean): Promise<BillingOverview> {
+  const [settings, pendingPackCount] = await Promise.all([loadBillingSettings(), canApprove ? loadPendingBillingCount() : 0]);
+  return {...settings, pendingPackCount};
 }
 
 export async function loadBillingHistory(): Promise<BillingRunSummary[]> {
@@ -109,7 +137,8 @@ export async function loadBillingPack(selector: { id: string } | { kind: Billing
 
 export async function loadBillingMeterPhotos(accountId?: string): Promise<BillingMeterPhotosData | null> {
   await ensureUtilityMonth();
-  const { config, revision } = await readSettings(await createClient());
+  const db = await createClient();
+  const { config, revision } = accountId === undefined ? await readSettings(db) : await readScopedSettings(db, accountId);
   const accounts = accountId === undefined ? config.utilityAccounts : config.utilityAccounts.filter(account => account.id === accountId);
   if (accountId !== undefined && accounts.length === 0) return null;
   return {

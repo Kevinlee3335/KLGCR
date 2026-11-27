@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CleanerComplaintForm } from "./cleaner-complaint-form";
 
@@ -68,4 +68,19 @@ describe("CleanerComplaintForm", () => {
       vi.unstubAllGlobals();
     }
   });
+});
+
+
+it("lets a cleaner type and select a photo before the required block options arrive", async () => {
+  const blocks = Promise.withResolvers<{id: number; code: string}[]>();
+  await act(async () => { render(<CleanerComplaintForm reporterName="Cleaner" blocks={blocks.promise}/>); });
+  const notes = screen.getByPlaceholderText("Explain what is broken and where it is.");
+  await act(async () => { fireEvent.change(notes, { target: { value: "Door handle loose" } }); });
+  const photo = new File(["test"], "door.png", { type: "image/png" });
+  await act(async () => { fireEvent.change(screen.getByLabelText("Upload Photo"), {target: {files: [photo]}}); });
+  expect(screen.getByLabelText("Block *")).toBeInvalid();
+  await act(async () => blocks.resolve([{id: 1, code: "A"}]));
+  expect(await screen.findByRole("option", {name:"Block A"})).toBeInTheDocument();
+  expect(notes).toHaveValue("Door handle loose");
+  expect(screen.getByText(/Photo selected.*door.png/)).toBeInTheDocument();
 });

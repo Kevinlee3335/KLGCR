@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DirectPageLink } from "@/components/direct-page-link";
 import { ArrowUpRight, Clock3 } from 'lucide-react';
 import styles from './monitoring-follow-up.module.css';
 
@@ -60,9 +60,9 @@ export function DashboardActionFollowUp({
                 <td data-label="Status"><span className={`${styles.status} ${styles.today}`}><i />Pending</span></td>
                 <td data-label={metaColumn} className={item.meta ? undefined : styles.emptyCell}>{item.meta && <span className={styles.staff}>{item.meta}</span>}</td>
                 <td>
-                  <Link href={item.href || href} className={styles.action}>
+                  <DirectPageLink href={item.href || href} className={styles.action}>
                     {action} <ArrowUpRight size={15} aria-hidden="true" />
-                  </Link>
+                  </DirectPageLink>
                 </td>
               </tr>
             ))}
@@ -71,7 +71,7 @@ export function DashboardActionFollowUp({
       </div>
       <footer className={styles.footer}>
         <span>Items remain here until handled.{count > items.length ? ` Showing the first ${items.length}.` : ''}</span>
-        <Link href={href}>View all <ArrowUpRight size={14} aria-hidden="true" /></Link>
+        <DirectPageLink href={href}>View all <ArrowUpRight size={14} aria-hidden="true" /></DirectPageLink>
       </footer>
     </section>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { DirectPageLink } from "@/components/direct-page-link";
 import { useEffect, useState } from "react";
 import type { DocumentDelivery } from "@/app/api/document-review/[type]/[id]/delivery/route";
 
@@ -84,7 +84,7 @@ export function DocumentDeliveryStatus({ type, id }: { type: "billing" | "gym"; 
         </button>
       )}
       {billingNeedsAttention && (
-        <Link href={`/admin/billing#invoice-${id}`} className="text-link">Open invoice history</Link>
+        <DirectPageLink href={`/admin/billing#invoice-${id}`} className="text-link">Open invoice history</DirectPageLink>
       )}
     </div>
   );

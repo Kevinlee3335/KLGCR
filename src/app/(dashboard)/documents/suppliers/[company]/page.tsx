@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import { DirectPageLink } from "@/components/direct-page-link";
+import { Suspense } from 'react';
 import '../supplier-mail.css';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
@@ -9,7 +10,7 @@ import { SupplierPriceHistory } from '@/components/supplier-price-history';
 import { requireRole } from '@/lib/auth';
 import { getSupplierCompany } from '@/lib/supplier-mail/queries';
 import { createClient } from '@/lib/supabase/server';
-import { folders } from '@/lib/supplier-mail/rules';
+import { folders, type Folder } from '@/lib/supplier-mail/rules';
 export default async function CompanyArchive({params,searchParams}:{params:Promise<{company:string}>;searchParams:Promise<{folder?:string;q?:string;page?:string}>}) {
   const profile=await requireRole(['admin','management_viewer']);
   const {company}=await params;
@@ -19,7 +20,20 @@ export default async function CompanyArchive({params,searchParams}:{params:Promi
   const search=await searchParams;
   const folder=folders.find(f=>f===search.folder);
   const q=(search.q || '').slice(0,200).replace(/[%_,()]/g,' ');
-  const page=Math.max(1,Math.min(10000,Number.parseInt(search.page || '1') || 1)),offset=(page-1)*50;
+  const page=Math.max(1,Math.min(10000,Number.parseInt(search.page || '1') || 1));
+  return <AppShell profile={profile} title={supplier.name}><div className="supplier-archive"><p><DirectPageLink className="supplier-back" href="/documents/suppliers">← Company folders</DirectPageLink></p><nav className="supplier-tabs" aria-label="Company document folders"><DirectPageLink className={!folder?"is-active":""} href={`/documents/suppliers/${company}`}>Emails</DirectPageLink>{folders.map(f=><DirectPageLink className={folder===f?"is-active":""} key={f} href={`?folder=${encodeURIComponent(f)}`}>{f}</DirectPageLink>)}</nav>
+    <section className="supplier-records"><header className="supplier-records-toolbar"><h2>{folder || 'Emails'}</h2><form className="supplier-search"><input type="hidden" name="folder" value={folder || ''}/><label><span className="supplier-sr-only">Search {folder?'filename':'email subject'}</span><input placeholder={folder?'Search item, description or number…':'Search emails…'} name="q" defaultValue={q} type="search" maxLength={200}/></label><button className="supplier-small-action" type="submit">Search</button></form></header>
+    {q&&<Suspense key={q} fallback={null}><SupplierPriceHistory company={company} query={q}/></Suspense>}
+    <Suspense key={JSON.stringify([company, folder, q, page])} fallback={<p role="status">Loading archive…</p>}>
+      <ArchiveResults db={db} company={company} folder={folder} q={q} page={page} isAdmin={profile.role==='admin'}/>
+    </Suspense>
+    </section></div></AppShell>;
+}
+
+async function ArchiveResults({ db, company, folder, q, page, isAdmin }: {
+  db: Awaited<ReturnType<typeof createClient>>; company: string; folder?: Folder; q: string; page: number; isAdmin: boolean;
+}) {
+  const offset=(page-1)*50;
   let query=folder?db.from('supplier_mail_documents').select('id,file_name,folder,size_bytes,created_at,supplier_mail_attachments(message_id,supplier_emails(subject,received_at))',{count:'exact'}).eq('company',company).eq('folder',folder):db.from('supplier_emails').select('id,subject,sender,received_at',{count:'exact'}).eq('company',company);
   let searchError=false;
   if(q && folder) {
@@ -30,30 +44,26 @@ export default async function CompanyArchive({params,searchParams}:{params:Promi
     for(const term of q.split(/\s+/).filter(Boolean)) query=query.ilike('subject',`%${term}%`);
   }
   const result=await query.order(folder?'created_at':'received_at',{ascending:false}).order('id').range(offset,offset+49);
-  const links=await supplierComplianceLinks(db,(result.data??[]).flatMap(row=>'file_name' in row?[row.id]:[]));
+  const links=supplierComplianceLinks(db,(result.data??[]).flatMap(row=>'file_name' in row?[row.id]:[]));
   function url(next:number){return `?${new URLSearchParams({...folder?{folder}:{},...q?{q}:{},page:String(next)})}`;}
-  return <AppShell profile={profile} title={supplier.name}><div className="supplier-archive"><p><Link className="supplier-back" href="/documents/suppliers">← Company folders</Link></p><nav className="supplier-tabs" aria-label="Company document folders"><Link className={!folder?"is-active":""} href={`/documents/suppliers/${company}`}>Emails</Link>{folders.map(f=><Link className={folder===f?"is-active":""} key={f} href={`?folder=${encodeURIComponent(f)}`}>{f}</Link>)}</nav>
-    <section className="supplier-records"><header className="supplier-records-toolbar"><h2>{folder || 'Emails'}</h2><form className="supplier-search"><input type="hidden" name="folder" value={folder || ''}/><label><span className="supplier-sr-only">Search {folder?'filename':'email subject'}</span><input placeholder={folder?'Search item, description or number…':'Search emails…'} name="q" defaultValue={q} type="search" maxLength={200}/></label><button className="supplier-small-action" type="submit">Search</button></form></header>
-    {q&&<SupplierPriceHistory company={company} query={q}/>}
-    {result.error||searchError?<p role="alert">Unable to load archive. Please retry.</p>:<>
+  return result.error||searchError?<p role="alert">Unable to load archive. Please retry.</p>:<>
       {!result.data?.length&&<p>No {folder?'documents':'emails'} found. Historical import may still be running.</p>}
       {(result.data || []).map(row=>('file_name' in row)?<article className="supplier-file-row" key={row.id}>
         <div className="supplier-file-copy"><span className="supplier-file-type">PDF</span><div>
           <strong>{row.file_name}</strong><small>{(row.size_bytes/1024/1024).toFixed(2)} MB</small>
           {row.supplier_mail_attachments.map((link,i)=>{
             const email=Array.isArray(link.supplier_emails)?link.supplier_emails[0]:link.supplier_emails;
-            return <p key={i}><Link href={`/documents/suppliers/${company}/emails/${link.message_id}`}>
+            return <p key={i}><DirectPageLink href={`/documents/suppliers/${company}/emails/${link.message_id}`}>
               {email?.subject || 'Source email'}{email?.received_at?` · ${new Date(email.received_at).toLocaleDateString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})}`:""}
-            </Link></p>;
+            </DirectPageLink></p>;
           })}
         </div></div>
         <div className="supplier-file-actions">
           <SupplierDocumentFolder id={row.id} folder={row.folder}/>
           <SupplierDocumentButton id={row.id}/>
-          <SupplierComplianceLinks id={row.id} sourceMessageId={row.supplier_mail_attachments.length===1?row.supplier_mail_attachments[0].message_id:undefined} isAdmin={profile.role==='admin'} linked={links.get(row.id)}/>
+          <SupplierComplianceLinks id={row.id} sourceMessageId={row.supplier_mail_attachments.length===1?row.supplier_mail_attachments[0].message_id:undefined} isAdmin={isAdmin} links={links}/>
         </div>
-      </article>:<p className="supplier-email-row" key={row.id}><Link href={`/documents/suppliers/${company}/emails/${row.id}`}>{row.subject || '(No subject)'}</Link><br/><small>{new Date(row.received_at).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur'})}</small></p>)}
-      <footer className="supplier-pagination"><span>{result.count || 0} total · Page {page}</span><div>{page>1&&<Link href={url(page-1)}>← Previous</Link>}{(result.count || 0)>offset+50&&<Link href={url(page+1)}>Next →</Link>}</div></footer>
-    </>}
-    </section></div></AppShell>;
+      </article>:<p className="supplier-email-row" key={row.id}><DirectPageLink href={`/documents/suppliers/${company}/emails/${row.id}`}>{row.subject || '(No subject)'}</DirectPageLink><br/><small>{new Date(row.received_at).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur'})}</small></p>)}
+      <footer className="supplier-pagination"><span>{result.count || 0} total · Page {page}</span><div>{page>1&&<DirectPageLink href={url(page-1)}>← Previous</DirectPageLink>}{(result.count || 0)>offset+50&&<DirectPageLink href={url(page+1)}>Next →</DirectPageLink>}</div></footer>
+    </>;
 }

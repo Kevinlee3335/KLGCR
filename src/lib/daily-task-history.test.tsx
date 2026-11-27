@@ -2,7 +2,7 @@
 
 import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderToPipeableStream, renderToStaticMarkup } from "react-dom/server";
+import { renderToPipeableStream } from "react-dom/server";
 const mocks = vi.hoisted(() => ({
   calls: [] as Array<{ table: string; method: string; args: unknown[] }>,
   role: "admin",
@@ -41,6 +41,9 @@ function task(id: number, title: string, extra: Record<string, unknown> = {}) {
 
 async function renderAdmin(filters: Record<string, string> = {}, onChunk?: (html: string) => void) {
   const page = await AdminTasks({ searchParams: Promise.resolve(filters) });
+  return renderPage(page, onChunk);
+}
+function renderPage(page: React.ReactNode, onChunk?: (html: string) => void) {
   return new Promise<string>((resolve, reject) => {
     let html = "";
     const output = new PassThrough();
@@ -212,7 +215,7 @@ describe("Daily Task history visibility", () => {
 
   it("keeps staff history restricted to the assignee without a default date filter", async () => {
     mocks.role = "cleaner";
-    renderToStaticMarkup(await StaffTasks({ searchParams: Promise.resolve({}) }));
+    await renderPage(await StaffTasks({ searchParams: Promise.resolve({}) }));
     expect(dateCalls()).toHaveLength(0);
     expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["assigned_to", "staff-id"] });
   });
@@ -228,15 +231,40 @@ describe("Daily Task history visibility", () => {
   });
   it("keeps cleaner searches restricted to their own tasks", async () => {
     mocks.role = "cleaner";
-    renderToStaticMarkup(await StaffTasks({ searchParams: Promise.resolve({ q: "clean", status: "completed", assignedTo: "other-user" }) }));
+    await renderPage(await StaffTasks({ searchParams: Promise.resolve({ q: "clean", status: "completed", assignedTo: "other-user" }) }));
     expect(mocks.calls.filter(c => c.table === "admin_daily_tasks" && c.method === "eq" && c.args[0] === "assigned_to").map(c => c.args[1])).toEqual(["staff-id"]);
     expect(mocks.calls).toContainEqual({ table: "admin_daily_tasks", method: "eq", args: ["status", "completed"] });
+  });
+  it("opens the cleaner dashboard reports and assigned rooms while recurring tasks are still being prepared", async () => {
+    mocks.role = "cleaner";
+    const materialize = pending<{error:null}>();
+    mocks.materialization = materialize.promise;
+    mocks.rows.set("checkout_rooms", [{id:"room", reference_no:"Cleaning fixture",room_no:"100",status:"cleaning"}]);
+    let emitted = "";
+    const page = renderPage(await StaffDashboard(), html => { emitted = html; });
+    try {
+      await vi.waitFor(() => expect(emitted).toContain("Cleaning fixture"));
+      expect(emitted).toContain("/staff/complaints/new");
+      expect(emitted).toContain("/staff/daily-tasks");
+      expect(mocks.calls).toContainEqual({table:"checkout_rooms",method:"eq",args:["cleaner_id","staff-id"]});
+      expect(mocks.calls.some(call => call.table === "admin_daily_tasks" && call.method === "execute")).toBe(false);
+      expect(mocks.calls.some(call => call.table === "complaints")).toBe(false);
+    } finally { materialize.resolve({error:null}); await page; }
+  });
+  it("keeps work-date searches and personal assignment when paging across older staff task records", async () => {
+    mocks.role = "cleaner";
+    mocks.rows.set("admin_daily_tasks",Array.from({length:51},(_,i)=>task(i+1,`task record ${i+1}`)));
+    const html = await renderPage(await StaffTasks({searchParams:Promise.resolve({q:"pump",status:"completed",page:"2"})}));
+    expect(mocks.calls).toContainEqual({table:"admin_daily_tasks",method:"range",args:[50,100]});
+    expect(mocks.calls).toContainEqual({table:"admin_daily_tasks",method:"eq",args:["assigned_to","staff-id"]});
+    expect(html).toContain("q=pump&amp;status=completed&amp;page=3");
+    expect(html).toContain("task record 50");
+    expect(html).not.toContain("task record 51");
   });
   it("includes overdue unfinished work on the cleaner dashboard", async () => {
     mocks.role = "cleaner";
     const dashboard = await StaffDashboard();
-    const renderDashboard = dashboard.type as unknown as (props: typeof dashboard.props) => Promise<React.ReactNode>;
-    renderToStaticMarkup(await renderDashboard(dashboard.props));
+    await renderPage(dashboard);
     const filter = mocks.calls.find(c => c.table === "admin_daily_tasks" && c.method === "or");
     expect(filter?.args[0]).toMatch(/^task_date.eq.\d{4}-\d{2}-\d{2},and\(task_date.lt.\d{4}-\d{2}-\d{2},status.neq.completed\)$/);
   });

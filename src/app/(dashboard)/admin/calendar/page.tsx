@@ -1,10 +1,11 @@
+import { Suspense } from "react";
 import { companyHolidayItems } from "@/lib/company-holidays";
 import { sendMeetingReminders } from "@/lib/send-meeting-reminders";
 import { groupCalendarEvents, calendarRecipients, type GroupableCalendarEvent } from "@/lib/calendar-event-groups";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { AppointmentCalendar, type CalendarItem } from "@/components/appointment-calendar";
+import { CalendarBody, CalendarHeading, type CalendarItem } from "@/components/appointment-calendar";
 import { CalendarEventForm } from "@/components/calendar-event-form";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -18,8 +19,10 @@ type DailyTask = { id: number; title: string; notes: string | null; task_date: s
 
 function currentMonth() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit" }).format(new Date()); }
 function monthRange(month: string) { const [year, value] = month.split("-").map(Number); const lastDay = new Date(year, value, 0).getDate(); return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}`, next: `${value === 12 ? year + 1 : year}-${String(value === 12 ? 1 : value + 1).padStart(2, "0")}-01` }; }
-function malaysiaDate(value: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)); }
-function malaysiaTime(value: string) { return new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }
+const dateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" });
+function malaysiaDate(value: string) { return dateFormatter.format(new Date(value)); }
+const timeFormatter = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false });
+function malaysiaTime(value: string) { return timeFormatter.format(new Date(value)); }
 function eventDates(event: CalendarEvent) { const first = malaysiaDate(event.starts_at); const last = malaysiaDate(event.ends_at || event.starts_at); const dates: string[] = []; const cursor = new Date(`${first}T00:00:00Z`); const endDate = new Date(`${last}T00:00:00Z`); while (cursor <= endDate) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
 function recurringDates(task: RecurringTask,start:string,end:string){const dates:string[]=[];const cursor=new Date(`${start}T00:00:00Z`),finish=new Date(`${end}T00:00:00Z`),begins=new Date(`${task.starts_on}T00:00:00Z`);while(cursor<=finish){const day=cursor.toISOString().slice(0,10),dow=cursor.getUTCDay(),monthDay=cursor.getUTCDate(),offset=Math.floor((cursor.getTime()-begins.getTime())/86400000);if(day>=task.starts_on&&((task.frequency==="monthly"&&monthDay===Math.min(task.day_number,new Date(Date.UTC(cursor.getUTCFullYear(),cursor.getUTCMonth()+1,0)).getUTCDate()))||((task.frequency==="weekly"||task.frequency==="biweekly")&&dow===task.day_number&&(task.frequency!=="biweekly"||offset%14===0))))dates.push(day);cursor.setUTCDate(cursor.getUTCDate()+1);}return dates;}
 const eventLabels = { work: "Work", leave: "Leave", no_leave: "No leave", meeting: "Meeting", other: "Other" } as const;
@@ -28,17 +31,7 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month || "") ? query.month! : currentMonth();
-  const { start, end, next } = monthRange(month);
   const supabase = await createClient();
-  const [appointmentResult, jobResult, eventResult, staffResult, allEventsResult, recurrenceResult, dailyTaskResult] = await Promise.all([
-    supabase.from("appointments").select("id,job_id,appointment_date,appointment_time,status,job:maintenance_jobs!appointments_job_id_fkey(job_no),staff:profiles!appointments_assigned_staff_fkey(full_name),complaint:complaints!appointment_complaint_id_fkey(room_no,category,block:blocks!complaints_block_id_fkey(code))").gte("appointment_date", start).lte("appointment_date", end).not("status", "in", '("cancelled","no_show")').order("appointment_date").order("appointment_time"),
-    supabase.from("maintenance_jobs").select("id,job_no,room_no,category,scheduled_for,status,block:blocks!maintenance_jobs_block_id_fkey(code),assignee:profiles!maintenance_jobs_assigned_to_fkey(full_name)").gte("scheduled_for", start).lte("scheduled_for", end).not("status", "in", '("completed","cancelled")').order("scheduled_for"),
-    supabase.from("calendar_events").select("id,assigned_to,created_by,subject_staff_id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").gte("starts_at", `${start}T00:00:00+08:00`).lt("starts_at", `${next}T00:00:00+08:00`).order("starts_at"),
-    supabase.from("profiles").select("id,full_name,role").eq("is_active", true).is("deleted_at", null).order("full_name"),
-    supabase.from("calendar_events").select("id,assigned_to,created_by,subject_staff_id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").order("starts_at", { ascending: false }),
-    supabase.from("recurring_daily_tasks").select("id,title,notes,frequency,day_number,starts_on,assignee:profiles!assigned_to(full_name)").eq("is_active",true).lte("starts_on",end),
-    supabase.from("admin_daily_tasks").select("id,title,notes,task_date,status,recurrence_id,calendar_event_id,assignee:profiles!assigned_to(full_name)").gte("task_date",start).lte("task_date",end),
-  ]);
 
   async function createCalendarEvent(formData: FormData) {
     "use server";
@@ -99,13 +92,60 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
     revalidatePath("/admin/calendar"); redirect(`/admin/calendar?month=${month}`);
   }
 
+  return <AppShell profile={profile} title="Calendar">
+    <p className="subtle">KLG company holidays: 12 days per year. Sunday holidays are replaced on the next available working day. {Number(month.slice(0,4)) > 2027 ? "Future dates are provisional; some festival dates await publication." : "Festival dates are subject to official changes."}</p>
+    {profile.role === "admin" && <details className="calendar-tools"><summary>Add calendar item</summary><section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><Suspense fallback={<p className="subtle" role="status">Loading recipients…</p>}><AddEventForm db={supabase} action={createCalendarEvent}/></Suspense></section></details>}
+    {profile.role === "admin" && malaysiaDate(new Date().toISOString()) === "2026-10-16" && <form action={sendTodayMeetingReminder} className="calendar-event-card"><div><strong>Today&apos;s meeting reminder</strong><p className="subtle">Send once to participants of today&apos;s upcoming meetings. Already notified participants are skipped.</p></div><button type="submit" className="button">Send today&apos;s meeting reminders</button></form>}
+    {query.reminders !== undefined && <p role="status">Meeting reminders processed: {query.reminders}. Previously notified participants and meetings already started were skipped.</p>}
+    {query.error && <p className="error">{query.error}</p>}
+    {profile.role === "admin" && <Suspense fallback={<p className="subtle" role="status">Loading calendar settings…</p>}>
+      <CalendarSettings db={supabase} remove={deleteCalendarEvent}/>
+    </Suspense>}
+    <section className="calendar-panel calendar-compact" key={month}>
+      <CalendarHeading month={month}/>
+      <Suspense fallback={<p className="subtle" role="status">Loading this month’s schedule…</p>}>
+        <CalendarMonth db={supabase} month={month}/>
+      </Suspense>
+    </section>
+  </AppShell>;
+}
+
+type CalendarDb = Awaited<ReturnType<typeof createClient>>;
+type CalendarAction = (form: FormData) => Promise<void>;
+
+async function AddEventForm({ db, action }: { db: CalendarDb; action: CalendarAction }) {
+  const { data, error } = await db.from("profiles").select("id,full_name").eq("is_active", true).is("deleted_at", null).order("full_name");
+  if (error) return <p className="error">Unable to load calendar recipients. Please refresh.</p>;
+  return <CalendarEventForm staff={data ?? []} action={action}/>;
+}
+
+async function CalendarSettings({ db, remove }: { db: CalendarDb; remove: CalendarAction }) {
+  const { data, error } = await db.from("calendar_events").select("id,assigned_to,created_by,subject_staff_id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").order("starts_at", { ascending: false });
+  if (error) return <p className="error">Unable to load saved calendar settings.</p>;
+  const savedEventGroups = groupCalendarEvents((data ?? []) as unknown as CalendarEvent[]);
+  return <details className="calendar-tools"><summary>Calendar Settings ({savedEventGroups.length})</summary><section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{savedEventGroups.length} items</span></header>{savedEventGroups.length ? <div className="calendar-settings-list">{savedEventGroups.map(group => {
+      const event=group.event;
+      const deleteForm=(member: CalendarEvent)=><form action={remove}><input type="hidden" name="event_id" value={member.id}/><button className="delete-calendar-event" type="submit">Delete</button></form>;
+      return <article key={group.key} className="calendar-setting-row"><div><strong>{event.title}</strong><span>{eventLabels[event.event_type]} · {malaysiaDate(event.starts_at)}{event.ends_at && malaysiaDate(event.ends_at) !== malaysiaDate(event.starts_at) ? ` to ${malaysiaDate(event.ends_at)}` : ""}</span><small>Publish: {group.members.length>1 ? `${group.members.length} employees` : calendarRecipients(group.members)}{event.subject ? ` · On leave: ${event.subject.full_name}` : ""}{event.notes ? ` · ${event.notes}` : ""}</small>
+        {group.members.length>1 && <details><summary>View employees ({group.members.length})</summary>{group.members.map(member=><div className="list-row" key={member.id}><span>{member.staff?.full_name || "Selected staff"}</span>{deleteForm(member)}</div>)}</details>}
+      </div>{group.members.length===1 && deleteForm(event)}</article>;
+    })}</div> : <p className="subtle">No calendar settings yet.</p>}</section></details>;
+}
+
+async function CalendarMonth({ db, month }: { db: CalendarDb; month: string }) {
+  const { start, end, next } = monthRange(month);
+  const [appointmentResult, jobResult, eventResult, recurrenceResult, dailyTaskResult] = await Promise.all([
+    db.from("appointments").select("id,job_id,appointment_date,appointment_time,status,job:maintenance_jobs!appointments_job_id_fkey(job_no),staff:profiles!appointments_assigned_staff_fkey(full_name),complaint:complaints!appointment_complaint_id_fkey(room_no,category,block:blocks!complaints_block_id_fkey(code))").gte("appointment_date", start).lte("appointment_date", end).not("status", "in", '("cancelled","no_show")').order("appointment_date").order("appointment_time"),
+    db.from("maintenance_jobs").select("id,job_no,room_no,category,scheduled_for,status,block:blocks!maintenance_jobs_block_id_fkey(code),assignee:profiles!maintenance_jobs_assigned_to_fkey(full_name)").gte("scheduled_for", start).lte("scheduled_for", end).not("status", "in", '("completed","cancelled")').order("scheduled_for"),
+    db.from("calendar_events").select("id,assigned_to,created_by,subject_staff_id,title,notes,starts_at,ends_at,event_type,audience,staff:profiles!calendar_events_assigned_to_fkey(full_name),subject:profiles!calendar_events_subject_staff_id_fkey(full_name)").gte("starts_at", `${start}T00:00:00+08:00`).lt("starts_at", `${next}T00:00:00+08:00`).order("starts_at"),
+    db.from("recurring_daily_tasks").select("id,title,notes,frequency,day_number,starts_on,assignee:profiles!assigned_to(full_name)").eq("is_active",true).lte("starts_on",end),
+    db.from("admin_daily_tasks").select("id,title,notes,task_date,status,recurrence_id,calendar_event_id,assignee:profiles!assigned_to(full_name)").gte("task_date",start).lte("task_date",end),
+  ]);
   const appointments = (appointmentResult.data || []) as unknown as AppointmentRow[];
   const appointmentJobIds = new Set(appointments.map((row) => row.job_id).filter((id): id is string => Boolean(id)));
   const jobs = ((jobResult.data || []) as unknown as JobRow[]).filter((job) => !appointmentJobIds.has(job.id));
   const events = (eventResult.data || []) as unknown as CalendarEvent[];
-  const allEvents = (allEventsResult.data || []) as unknown as CalendarEvent[];
   const eventGroups = groupCalendarEvents(events);
-  const savedEventGroups = groupCalendarEvents(allEvents);
   const recurringTasks = (recurrenceResult.data || []) as unknown as RecurringTask[];
   const dailyTasks = (dailyTaskResult.data || []) as unknown as DailyTask[];
   const items: CalendarItem[] = [
@@ -129,19 +169,5 @@ export default async function AdminCalendar({ searchParams }: { searchParams: Pr
   ];
   const loadError = appointmentResult.error || jobResult.error || eventResult.error || recurrenceResult.error || dailyTaskResult.error;
 
-  return <AppShell profile={profile} title="Calendar">
-    <p className="subtle">KLG company holidays: 12 days per year. Sunday holidays are replaced on the next available working day. {Number(month.slice(0,4)) > 2027 ? "Future dates are provisional; some festival dates await publication." : "Festival dates are subject to official changes."}</p>
-    {profile.role === "admin" && <details className="calendar-tools"><summary>Add calendar item</summary><section className="calendar-event-card"><div><p className="eyebrow">Add to calendar</p><h2>Leave, Meeting or Other</h2><p className="subtle">All staff arrangements are shown together with maintenance work.</p></div><CalendarEventForm staff={(staffResult.data || []).map((staff) => ({ id: staff.id, full_name: staff.full_name }))} action={createCalendarEvent}/></section></details>}
-    {profile.role === "admin" && malaysiaDate(new Date().toISOString()) === "2026-10-16" && <form action={sendTodayMeetingReminder} className="calendar-event-card"><div><strong>Today&apos;s meeting reminder</strong><p className="subtle">Send once to participants of today&apos;s upcoming meetings. Already notified participants are skipped.</p></div><button type="submit" className="button">Send today&apos;s meeting reminders</button></form>}
-    {query.reminders !== undefined && <p role="status">Meeting reminders processed: {query.reminders}. Previously notified participants and meetings already started were skipped.</p>}
-    {query.error && <p className="error">{query.error}</p>}
-    {profile.role === "admin" && <details className="calendar-tools"><summary>Calendar Settings ({savedEventGroups.length})</summary><section className="calendar-settings"><header><div><p className="eyebrow">Saved calendar settings</p><h2>My Calendar Settings</h2></div><span>{savedEventGroups.length} items</span></header>{savedEventGroups.length ? <div className="calendar-settings-list">{savedEventGroups.map(group => {
-      const event=group.event;
-      const deleteForm=(member: CalendarEvent)=><form action={deleteCalendarEvent}><input type="hidden" name="event_id" value={member.id}/><button className="delete-calendar-event" type="submit">Delete</button></form>;
-      return <article key={group.key} className="calendar-setting-row"><div><strong>{event.title}</strong><span>{eventLabels[event.event_type]} · {malaysiaDate(event.starts_at)}{event.ends_at && malaysiaDate(event.ends_at) !== malaysiaDate(event.starts_at) ? ` to ${malaysiaDate(event.ends_at)}` : ""}</span><small>Publish: {group.members.length>1 ? `${group.members.length} employees` : calendarRecipients(group.members)}{event.subject ? ` · On leave: ${event.subject.full_name}` : ""}{event.notes ? ` · ${event.notes}` : ""}</small>
-        {group.members.length>1 && <details><summary>View employees ({group.members.length})</summary>{group.members.map(member=><div className="list-row" key={member.id}><span>{member.staff?.full_name || "Selected staff"}</span>{deleteForm(member)}</div>)}</details>}
-      </div>{group.members.length===1 && deleteForm(event)}</article>;
-    })}</div> : <p className="subtle">No calendar settings yet.</p>}</section></details>}
-    {loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <AppointmentCalendar month={month} items={items} compact/>}
-  </AppShell>;
+  return loadError ? <p className="error">Calendar could not load: {loadError.message}</p> : <CalendarBody month={month} items={items} compact/>;
 }

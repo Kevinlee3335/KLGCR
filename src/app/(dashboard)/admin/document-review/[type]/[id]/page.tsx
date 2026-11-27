@@ -1,5 +1,5 @@
 import {signaturePhotoBounds} from '@/lib/signature-image-layout';
-import Link from 'next/link';
+import { DirectPageLink } from "@/components/direct-page-link";
 import {redirect} from 'next/navigation';
 import {requireRole} from '@/lib/auth';
 import {loadBillingReviewEntries} from '@/lib/billing-document-queries';
@@ -48,7 +48,7 @@ export default async function Page({params}:{params:Promise<{type:string;id:stri
  const pending=pendingDocumentReviewers(entries);
  const signatures=documentVerificationSlots(entries);
  const approving=user.id===documentReviewers[2].id;
- return <AppShell profile={user} title="Document review"><style>{`.report-entries-grid th,.report-entries-grid td{border:1px solid #b8ae96}.report-entries-grid{border-collapse:collapse}`}</style><div className="section-head"><div><p className="eyebrow">{period} · DOCUMENT REVIEW</p><h2>{title}</h2><p className="subtle">Fikri and Kevin verify in either order. James approves after both.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="button secondary" href={'/api/document-review/'+type+'/'+id+'/preview'} target="_blank" rel="noopener noreferrer">{type==='billing'?'Preview Invoice':'Preview Report'}</a><Link className="button secondary" href="/admin">Back to Dashboard</Link></div></div>
+ return <AppShell profile={user} title="Document review"><style>{`.report-entries-grid th,.report-entries-grid td{border:1px solid #b8ae96}.report-entries-grid{border-collapse:collapse}`}</style><div className="section-head"><div><p className="eyebrow">{period} · DOCUMENT REVIEW</p><h2>{title}</h2><p className="subtle">Fikri and Kevin verify in either order. James approves after both.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="button secondary" href={'/api/document-review/'+type+'/'+id+'/preview'} target="_blank" rel="noopener noreferrer">{type==='billing'?'Preview Invoice':'Preview Report'}</a><DirectPageLink className="button secondary" href="/admin">Back to Dashboard</DirectPageLink></div></div>
  <section className="panel"><h3>{documentReviewStatus(entries.length,Boolean(approved),entries.map(entry=>entry.user_id))}</h3>
  <div className="table-wrap"><table className="table report-entries-grid">
   <thead><tr><th>Verified by Fikri</th><th>Verified by Kevin</th><th>Approved by James</th></tr></thead>
@@ -74,6 +74,6 @@ export default async function Page({params}:{params:Promise<{type:string;id:stri
    ))}
   </tbody>
  </> : doc.kind==='committee'?<><thead><tr><th>Member</th><th>Collection</th></tr></thead><tbody>{gymSnapshot.entries.map((r:{member_id:string;full_name:string;amount:number})=><tr key={r.member_id}><td>{r.full_name}</td><td>{money(r.amount)}</td></tr>)}</tbody></>:<><thead><tr><th>Date</th><th>Receipt</th><th>Member</th><th>Room / Member No.</th><th>Amount</th></tr></thead><tbody>{gymSnapshot.map((r:{id:string;collected_on:string;receipt_no:string;full_name:string;member_reference:string;amount:number|null})=><tr key={r.id}><td>{r.collected_on}</td><td>{r.receipt_no}</td><td>{r.full_name}</td><td>{r.member_reference}</td><td>{money(r.amount)}</td></tr>)}<tr><td colSpan={4}><strong>TOTAL AMOUNT</strong></td><td><strong>{money(gymSnapshot.reduce((n:number,r:{amount:number|null})=>n+Number(r.amount||0),0))}</strong></td></tr></tbody></>}
- </table></div>{type==='billing'&&<Link className="button secondary" prefetch={false} href={'/admin/billing#invoice-'+id}>Open full invoice pack</Link>}
+ </table></div>{type==='billing'&&<DirectPageLink className="button secondary" href={'/admin/billing#invoice-'+id}>Open full invoice pack</DirectPageLink>}
  {'total' in doc?<p>Total {money(doc.total)}</p>:doc.kind==='committee'?<p>Total collection {money(gymSnapshot.total_amount)} · Committee payable {money(gymSnapshot.remuneration)}</p>:<p>Total {money(gymSnapshot.reduce((n:number,r:{amount:number|null})=>n+Number(r.amount||0),0))}</p>}</section></AppShell>;
 }
