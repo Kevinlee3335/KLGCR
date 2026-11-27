@@ -169,7 +169,7 @@ body{background:radial-gradient(circle at 80% -10%,#ead9aa42,transparent 32%),li
 .admin-nav-group[open] > .admin-nav-group-links { display: grid; gap: 2px; }
 .admin-nav .admin-nav-group-links a { margin: 0; padding: 10px 11px; font-size: .8rem; }
 .admin-nav .admin-nav-group-links a[aria-current="page"],
-.admin-nav .admin-nav-group-links .work-management-link:active { background: #302d25; color: #e7bd62; }
+.admin-nav .admin-nav-group-links .native-menu-link:active { background: #302d25; color: #e7bd62; }
 @media (min-width: 851px) and (hover: hover) { .admin-nav-group:hover > .admin-nav-group-links, .admin-nav-group:focus-within > .admin-nav-group-links { display: grid; gap: 2px; } }
 @media (max-width: 850px) {
   .mobile-drawer-nav .admin-nav-group { margin: 3px 6px; }

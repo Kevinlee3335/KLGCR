@@ -44,7 +44,7 @@ type AdminNavGroup = {
 
 const adminNavGroups: AdminNavGroup[] = [
     { label: "Work Management", Icon: Wrench, nativeLinks: true, links: adminNav.filter(([label]) => ["New Complaints", "Maintenance Jobs", "Check-out Rooms", FLEX_INSPECTION_TITLE, "Waste Collection"].includes(label)) },
-    { label: "Daily Tasks", Icon: ClipboardCheck, links: [
+    { label: "Daily Tasks", Icon: ClipboardCheck, nativeLinks: true, links: [
       ["Daily Tasks", "/admin/daily-tasks", ClipboardCheck, "All Daily Tasks"],
       ["Admin Task", "/admin/daily-tasks?category=admin", ClipboardCheck],
       ["Operation Task", "/admin/daily-tasks?category=operation", ClipboardCheck],
@@ -73,10 +73,9 @@ function AdminNavigation({ mobile = false, currentTitle, superAdmin = false, isA
     const visibleLinks = links.filter(([item]) => isAdmin || (item !== "TM Unifi Invoices" && item !== FLEX_INSPECTION_TITLE));
     const groupClass = `admin-nav-group${visibleLinks.some(([item]) => active(item)) ? " is-active" : ""}`;
     const heading = <><Icon size={18}/><span>{label}</span><ChevronRight className="admin-nav-chevron" size={16}/></>;
-    // These five destinations stream the new document directly on desktop and mobile.
     const MenuLink = nativeLinks ? "a" : ShellLink;
     const submenu = <div className="admin-nav-group-links">{visibleLinks.map(([item, href, LinkIcon, linkLabel]) =>
-      <MenuLink key={item} href={href} className={nativeLinks ? "work-management-link" : undefined} aria-current={active(item) ? "page" : undefined}>
+      <MenuLink key={item} href={href} className={nativeLinks ? "native-menu-link" : undefined} aria-current={active(item) ? "page" : undefined}>
         <LinkIcon size={16}/><span>{linkLabel ?? item}</span>
       </MenuLink>
     )}</div>;

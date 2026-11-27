@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Suspense, type ComponentProps } from "react";
 import { DailyTaskFilters } from "@/components/daily-task-filters";
 import { DailyTaskDetails } from "@/components/daily-task-details";
-import { taskSearchFilter, taskFilterDate, showDailyTaskInDefaultList } from "@/lib/daily-task-filters";
+import { taskSearchFilter, taskFilterDate, taskFilterStatuses } from "@/lib/daily-task-filters";
 import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
@@ -10,13 +11,11 @@ import { AdminDailyTaskControls } from "@/components/admin-daily-task-controls";
 import { DailyTaskForm } from "@/components/daily-task-form";
 import { StatusColumnFilter } from "@/components/status-column-filter";
 import { dailyTaskCategories, dailyTaskCategoryLabel, type DailyTaskCategory } from "@/lib/daily-tasks";
+import { malaysiaDate } from "@/lib/monitoring-follow-up";
 
-function myDate() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-
+const PAGE_SIZE = 50;
 const workStates = [["standard", "Normal"], ["partially_completed", "Partially Completed"], ["appointment", "Appointment"], ["kiv", "KIV"]] as const;
-const dailyTaskStatuses = ["pending", "accepted", "in_progress", "completed", "kiv"] as const;
+const dailyTaskStatuses = taskFilterStatuses;
 const dailyTaskSortOptions = [
   ["work_date:asc", "Work date · Ascending"],
   ["work_date:desc", "Work date · Descending"],
@@ -40,18 +39,26 @@ function selectedDailyTaskSort(filters: Record<string, string | undefined>) {
 
 function selectedDailyTaskStatuses(filters: Record<string, string | undefined>) {
   if (dailyTaskStatuses.includes(filters.status as typeof dailyTaskStatuses[number])) return [filters.status!];
-  const checkedStatuses = dailyTaskStatuses.filter((status) => filters[`status_${status}`] === status);
-  if (checkedStatuses.length) return checkedStatuses as string[];
-  return dailyTaskStatuses.includes(filters.status as typeof dailyTaskStatuses[number]) ? [filters.status!] : [];
+  return dailyTaskStatuses.filter((status) => filters[`status_${status}`] === status);
 }
 
-export default async function DailyTasksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+type Database = Awaited<ReturnType<typeof createClient>>;
+type Filters = Record<string, string | undefined>;
+type Staff = Awaited<ComponentProps<typeof DailyTaskForm>["staff"]>;
+type Materialization = Promise<{ error: { message: string } | null }>;
+
+async function getEmployees(db: Database): Promise<Staff> {
+  const { data } = await db.from("profiles").select("id,full_name,role,daily_task_category")
+    .eq("is_active", true).is("deleted_at", null).order("full_name");
+  return data ?? [];
+}
+
+export default async function DailyTasksPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
-  const filters = await searchParams;
+  const [filters, db] = await Promise.all([searchParams, createClient()]);
   const filterDate = taskFilterDate(filters.date);
-  const todayDate = myDate();
+  const todayDate = malaysiaDate();
   const date = filterDate || todayDate;
-  const db: any = await createClient();
   const isAdmin = profile.role === "admin";
   const materialization = Promise.resolve(isAdmin
     ? db.rpc("materialize_recurring_tasks", { p_date: date })
@@ -61,52 +68,9 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
   const selectedStatuses = selectedDailyTaskStatuses(filters);
   const statusesShownInMenu = selectedStatuses.length ? selectedStatuses : [...dailyTaskStatuses];
   const sort = selectedDailyTaskSort(filters);
-  const { sortBy, ascending } = sort;
-
   const allRecords = !filterDate;
-  let taskQuery = db.from("admin_daily_tasks")
-    .select("id,task_category,task_date,title,notes,status,created_at,accepted_at,started_at,completed_at,assignee:profiles!assigned_to(full_name),photos:daily_task_photos(id)")
-    .limit(1, { referencedTable: "photos" });
-  if (!allRecords) taskQuery = taskQuery.eq("task_date", date);
-  const search = taskSearchFilter(filters.q);
-  if (search) taskQuery = taskQuery.or(search);
-  if (taskFilterDate(filters.from)) taskQuery = taskQuery.gte("task_date", filters.from);
-  if (taskFilterDate(filters.to)) taskQuery = taskQuery.lte("task_date", filters.to);
-  if (/^[0-9a-f-]{36}$/i.test(filters.assignedTo || "")) taskQuery = taskQuery.eq("assigned_to", filters.assignedTo);
-  let recurrenceQuery = db.from("recurring_daily_tasks")
-    .select("id,task_category,title,frequency,day_number,assignee:profiles!assigned_to(full_name)").eq("is_active", true);
-  if (category) {
-    taskQuery = taskQuery.eq("task_category", category);
-    recurrenceQuery = recurrenceQuery.eq("task_category", category);
-  }
-  if (selectedStatuses.length) taskQuery = taskQuery.in("status", selectedStatuses);
-  taskQuery = taskQuery.order(category ? (sortBy === "work_date" ? "task_date" : sortBy) : "created_at", { ascending: category ? ascending : true });
-
-  // Recurring tasks must be materialized before the task list reads them.
-  const tasks = materialization.then(async ({ error: materializeError }) => ({ materializeError, result: await taskQuery }));
-  const emptyRows = { data: [], error: null };
-  const [{ materializeError, result: { data: adminTasks, error: taskQueryError } }, { data: jobs, error }, { data: appointments }, { data: employees }, { data: recurrences }] = await Promise.all([
-    tasks,
-    category ? emptyRows : db.from("maintenance_jobs")
-      .select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)")
-      .not("status", "in", '("completed","cancelled")')
-      .or(`scheduled_for.is.null,scheduled_for.eq.${date}`)
-      .order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true }),
-    category ? emptyRows : db.from("appointments").select("id,appointment_date,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,availability_date,availability_time,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)").eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time"),
-    db.from("profiles").select("id,full_name,role,daily_task_category").eq("is_active", true).is("deleted_at", null).order("full_name"),
-    recurrenceQuery,
-  ]);
-
-  const taskError = materializeError || taskQueryError;
   const includeCompletedHistory = selectedStatuses.includes("completed");
-  const dailyTaskRows = ((adminTasks ?? []) as any[]).filter((task) =>
-    includeCompletedHistory || showDailyTaskInDefaultList(task, todayDate)
-  );
-  const rows = ((jobs ?? []) as any[]).filter((row) => row.complaint?.room_access_permission !== "no");
-  const appointmentRows = (appointments ?? []) as any[];
-  const today = rows.filter((row) => row.scheduled_for === date);
-  const unscheduled = rows.filter((row) => !row.scheduled_for);
-  const categoryField = category && <input type="hidden" name="taskCategory" value={category} />;
+  const employees = getEmployees(db);
   const statusFilter = category ? <StatusColumnFilter
     action="/admin/daily-tasks"
     statusOptions={dailyTaskStatusOptions}
@@ -115,38 +79,141 @@ export default async function DailyTasksPage({ searchParams }: { searchParams: P
     selectedSort={sort.value}
     preserved={[{ name: "category", value: category }, { name: "date", value: allRecords ? undefined : date }, ...["q", "from", "to", "assignedTo"].map(name => ({ name, value: filters[name] }))]}
   /> : null;
-  const stateForm = (job: any) => isAdmin
-    ? <form action="/admin/daily-tasks/action" method="post" className="daily-table-control"><input type="hidden" name="action" value="work_state" /><input type="hidden" name="jobId" value={job.id} /><input type="hidden" name="date" value={date} /><select name="workState" aria-label="Progress label" defaultValue={job.work_state ?? "standard"}>{workStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button className="button secondary button-compact">Save</button></form>
-    : String(job.work_state ?? "standard").replaceAll("_", " ");
 
   return <AppShell profile={profile} title={categoryLabel}>
     <div className="section-head">
       <div><h2>{categoryLabel}</h2><p className="subtle">{category ? "Create, assign and follow up tasks. Previous records remain available." : "Schedule approved jobs for a working day. The 9:30AM report uses this list."}</p></div>
       <div className="actions"><Link className="button secondary" href="/admin/daily-tasks/photos">View Completion Photos</Link><Link className="button secondary" href={`/admin/daily-tasks?${category ? `category=${category}&` : ""}status=completed`}>Completed</Link></div>
     </div>
-    <DailyTaskFilters filters={filters} category={category} staff={employees || []} sort={sort.value} />
-    {filters.error && <p className="error">{filters.error}</p>}{error && <p className="error">{error.message}</p>}{taskError && <p className="error">Unable to load task records: {taskError.message}</p>}
+    <DailyTaskFilters filters={filters} category={category} staff={employees} sort={sort.value} />
+    {filters.error && <p className="error">{filters.error}</p>}
     <section className="panel">
       <div className="section-head"><div><h3>{categoryLabel} · {selectedStatuses.length === 1 && includeCompletedHistory ? "Completed" : allRecords ? "Current Tasks" : date}</h3><p className="subtle">Tasks shown here are linked to the employee they are assigned to.</p></div>{statusFilter}</div>
-      {isAdmin && <DailyTaskForm date={date} staff={employees || []} />}
-      <div className="daily-task-list">
-        {taskError ? null : !dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => (
-          <article className="panel daily-task-card" key={task.id}>
-            <div className="section-head"><div><h3>{task.title}</h3><p className="subtle">Work date · {task.task_date}</p><p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p><p className="subtle">{task.notes || "-"}</p></div>
-              {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
-            </div>
-            <DailyTaskDetails taskId={Number(task.id)} hasPhotos={Boolean(task.photos?.length)}/>
-          </article>
-        ))}
-      </div>
+      {isAdmin && <DailyTaskForm date={date} staff={employees} />}
+      <Suspense key={JSON.stringify(filters)} fallback={<p className="subtle" role="status">Loading tasks…</p>}>
+        <TaskList db={db} filters={filters} category={category} categoryLabel={categoryLabel}
+          date={date} todayDate={todayDate} allRecords={allRecords} isAdmin={isAdmin}
+          selectedStatuses={selectedStatuses} sort={sort} materialization={materialization} />
+      </Suspense>
     </section>
 
     {!category && <>
-      <section className="panel" style={{ marginTop: 18 }}><h3>{date} · Scheduled Appointments ({appointmentRows.length})</h3>{!appointmentRows.length ? <p className="subtle">No appointments scheduled for this date.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Time</th><th>Room</th><th>Category</th><th>Staff</th><th>Room Access Permission</th><th>Appointment Status</th><th>Remarks</th></tr></thead><tbody>{appointmentRows.map((appointment: any) => <tr key={appointment.id}><td>{appointment.appointment_time.slice(0, 5)}</td><td>Block {appointment.complaint?.block?.code} {appointment.complaint?.room_no}</td><td>{appointment.complaint?.category}</td><td>{appointment.staff?.full_name}</td><td>{String(appointment.complaint?.room_access_permission || "Not set").replaceAll("_", " ")}</td><td>{String(appointment.status).replaceAll("_", " ")}</td><td>{appointment.remarks || "—"}</td></tr>)}</tbody></table></div>}</section>
+      <Suspense key={`appointments-${date}`} fallback={<p className="subtle" role="status">Loading scheduled appointments…</p>}>
+        <ScheduledAppointments db={db} date={date} />
+      </Suspense>
+      <Suspense key={`jobs-${date}`} fallback={<p className="subtle" role="status">Loading maintenance jobs…</p>}>
+        <MaintenanceSchedule db={db} date={date} isAdmin={isAdmin} />
+      </Suspense>
+    </>}
+    <Suspense key={category ?? "all"} fallback={<p className="subtle" role="status">Loading recurring tasks…</p>}>
+      <RecurringTasks db={db} category={category} categoryLabel={categoryLabel} date={date} isAdmin={isAdmin} />
+    </Suspense>
+  </AppShell>;
+}
+
+async function TaskList({ db, filters, category, categoryLabel, date, todayDate, allRecords, isAdmin, selectedStatuses, sort, materialization }: {
+  db: Database; filters: Filters; category?: DailyTaskCategory; categoryLabel: string; date: string;
+  todayDate: string; allRecords: boolean; isAdmin: boolean; selectedStatuses: string[];
+  sort: ReturnType<typeof selectedDailyTaskSort>; materialization: Materialization;
+}) {
+  // A freshly generated occurrence must be visible on the same request.
+  const { error: materializeError } = await materialization;
+  if (materializeError) return <p className="error">Unable to load task records: {materializeError.message}</p>;
+  let taskQuery = db.from("admin_daily_tasks")
+    .select("id,task_date,title,notes,status,assignee:profiles!assigned_to(full_name),photos:daily_task_photos(id)")
+    .limit(1, { referencedTable: "photos" });
+  if (!allRecords) taskQuery = taskQuery.eq("task_date", date);
+  const search = taskSearchFilter(filters.q);
+  if (search) taskQuery = taskQuery.or(search);
+  if (taskFilterDate(filters.from)) taskQuery = taskQuery.gte("task_date", filters.from);
+  if (taskFilterDate(filters.to)) taskQuery = taskQuery.lte("task_date", filters.to);
+  if (/^[0-9a-f-]{36}$/i.test(filters.assignedTo || "")) taskQuery = taskQuery.eq("assigned_to", filters.assignedTo);
+  if (category) taskQuery = taskQuery.eq("task_category", category);
+  if (selectedStatuses.length) {
+    taskQuery = taskQuery.in("status", selectedStatuses);
+  } else {
+    const start = new Date(`${todayDate}T00:00:00+08:00`);
+    const end = new Date(start.getTime() + 86_400_000);
+    taskQuery = taskQuery.or(`status.neq.completed,and(completed_at.gte.${start.toISOString()},completed_at.lt.${end.toISOString()})`);
+  }
+  const { sortBy, ascending } = sort;
+  const sortColumn = category && sortBy === "work_date" ? "task_date" : category ? sortBy : "created_at";
+  const pageNumber = Number(filters.page);
+  const page = Number.isInteger(pageNumber) && pageNumber > 0 && Number.isSafeInteger(pageNumber * PAGE_SIZE) ? pageNumber : 1;
+  const offset = (page - 1) * PAGE_SIZE;
+  const { data, error: taskError } = await taskQuery
+    .order(sortColumn, { ascending: category ? ascending : true })
+    .order("id", { ascending: true })
+    .range(offset, offset + PAGE_SIZE);
+  if (taskError) return <p className="error">Unable to load task records: {taskError.message}</p>;
+  const dailyTaskRows = (data ?? []).slice(0, PAGE_SIZE) as any[];
+  const hasNext = (data?.length ?? 0) > PAGE_SIZE;
+  const pageHref = (target: number) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value && key !== "page" && key !== "error") params.set(key, value);
+    }
+    if (target > 1) params.set("page", String(target));
+    return params.size ? `/admin/daily-tasks?${params}` : "/admin/daily-tasks";
+  };
+  return <div className="daily-task-list">
+    {!dailyTaskRows.length ? <p className="subtle">No {category ? categoryLabel.toLowerCase() : "daily tasks"} {page > 1 ? "on this page" : allRecords ? "in the records" : "for this date"}.</p> : dailyTaskRows.map((task) => (
+      <article className="panel daily-task-card" key={task.id}>
+        <div className="section-head">
+          <div>
+            <h3>{task.title}</h3><p className="subtle">Work date · {task.task_date}</p>
+            <p>{task.assignee?.full_name || "Unassigned"} · {String(task.status).replaceAll("_", " ")}</p>
+            <p className="subtle">{task.notes || "-"}</p>
+          </div>
+          {isAdmin && <AdminDailyTaskControls taskId={Number(task.id)} title={task.title} status={task.status} date={date} category={category} />}
+        </div>
+        <DailyTaskDetails taskId={Number(task.id)} hasPhotos={Boolean(task.photos?.length)} />
+      </article>
+    ))}
+    {(page > 1 || hasNext) && <nav className="pagination" aria-label="Daily task pages">
+      {page > 1 && <Link className="button secondary" href={pageHref(page - 1)}>Previous</Link>}
+      <span>Page {page}</span>
+      {hasNext && <Link className="button secondary" href={pageHref(page + 1)}>Next</Link>}
+    </nav>}
+  </div>;
+}
+
+async function ScheduledAppointments({ db, date }: { db: Database; date: string }) {
+  const { data, error } = await db.from("appointments")
+    .select("id,appointment_time,status,remarks,complaint:complaints!complaint_id(room_no,category,room_access_permission,block:blocks!block_id(code)),staff:profiles!assigned_staff(full_name)")
+    .eq("appointment_date", date).not("status", "in", '("cancelled","no_show")').order("appointment_time");
+  if (error) return <p className="error">Unable to load scheduled appointments: {error.message}</p>;
+  const appointmentRows = data ?? [];
+  return <section className="panel" style={{ marginTop: 18 }}><h3>{date} · Scheduled Appointments ({appointmentRows.length})</h3>{!appointmentRows.length ? <p className="subtle">No appointments scheduled for this date.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Time</th><th>Room</th><th>Category</th><th>Staff</th><th>Room Access Permission</th><th>Appointment Status</th><th>Remarks</th></tr></thead><tbody>{appointmentRows.map((appointment: any) => <tr key={appointment.id}><td>{appointment.appointment_time.slice(0, 5)}</td><td>Block {appointment.complaint?.block?.code} {appointment.complaint?.room_no}</td><td>{appointment.complaint?.category}</td><td>{appointment.staff?.full_name}</td><td>{String(appointment.complaint?.room_access_permission || "Not set").replaceAll("_", " ")}</td><td>{String(appointment.status).replaceAll("_", " ")}</td><td>{appointment.remarks || "—"}</td></tr>)}</tbody></table></div>}</section>;
+}
+
+async function MaintenanceSchedule({ db, date, isAdmin }: { db: Database; date: string; isAdmin: boolean }) {
+  const { data: jobs, error } = await db.from("maintenance_jobs")
+    .select("id,job_no,room_no,category,status,work_state,scheduled_for,complaint:complaints!complaint_id(room_access_permission),block:blocks!block_id(code),assignee:profiles!assigned_to(full_name)")
+    .not("status", "in", '("completed","cancelled")')
+    .or(`scheduled_for.is.null,scheduled_for.eq.${date}`)
+    .order("scheduled_for", { ascending: true, nullsFirst: false }).order("assigned_at", { ascending: true });
+  if (error) return <p className="error">{error.message}</p>;
+  const rows = ((jobs ?? []) as any[]).filter((row) => row.complaint?.room_access_permission !== "no");
+  const today = rows.filter((row) => row.scheduled_for === date);
+  const unscheduled = rows.filter((row) => !row.scheduled_for);
+  const stateForm = (job: any) => isAdmin
+    ? <form action="/admin/daily-tasks/action" method="post" className="daily-table-control"><input type="hidden" name="action" value="work_state" /><input type="hidden" name="jobId" value={job.id} /><input type="hidden" name="date" value={date} /><select name="workState" aria-label="Progress label" defaultValue={job.work_state ?? "standard"}>{workStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button className="button secondary button-compact">Save</button></form>
+    : String(job.work_state ?? "standard").replaceAll("_", " ");
+  return <>
       <section className="panel" style={{ marginTop: 18 }}><h3>{date} · Scheduled Maintenance Tasks ({today.length})</h3>{!today.length ? <p className="subtle">No jobs scheduled for this date.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Job</th><th>Room</th><th>Category</th><th>Staff</th><th>Core Status</th><th>Progress Label</th><th>Schedule</th></tr></thead><tbody>{today.map((job) => <tr key={job.id}><td>{job.job_no}</td><td>Block {job.block?.code} {job.room_no}</td><td>{job.category}</td><td>{job.assignee?.full_name}</td><td>{job.status.replaceAll("_", " ")}</td><td>{stateForm(job)}</td><td>{isAdmin ? <form action="/admin/daily-tasks/action" method="post" className="daily-table-control"><input type="hidden" name="action" value="schedule" /><input type="hidden" name="jobId" value={job.id} /><input type="date" name="date" defaultValue={job.scheduled_for ?? date} /><button className="button secondary button-compact">Change</button></form> : job.scheduled_for}</td></tr>)}</tbody></table></div>}</section>
       <section className="panel" style={{ marginTop: 18 }}><h3>Unscheduled Active Jobs ({unscheduled.length})</h3>{!unscheduled.length ? <p className="subtle">All active jobs have a schedule.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Job</th><th>Room</th><th>Category</th><th>Staff</th><th>Core Status</th><th>Progress Label</th><th>Add to Day</th></tr></thead><tbody>{unscheduled.map((job) => <tr key={job.id}><td>{job.job_no}</td><td>Block {job.block?.code} {job.room_no}</td><td>{job.category}</td><td>{job.assignee?.full_name}</td><td>{job.status.replaceAll("_", " ")}</td><td>{stateForm(job)}</td><td>{isAdmin ? <form action="/admin/daily-tasks/action" method="post" className="daily-table-control"><input type="hidden" name="action" value="schedule" /><input type="hidden" name="jobId" value={job.id} /><input type="date" name="date" defaultValue={date} /><button className="button button-compact">Schedule</button></form> : "Admin only"}</td></tr>)}</tbody></table></div>}</section>
-    </>}
+  </>;
+}
 
-    <section className="panel"><h3>{category ? `${categoryLabel} · Recurring tasks` : "Recurring tasks"}</h3>{recurrences?.map((task: any) => <div className="list-row" key={task.id}><div><strong>{task.title}</strong><p>{task.assignee?.full_name} · {task.frequency === "monthly" ? `Day ${task.day_number} of every month` : `${task.frequency === "biweekly" ? "Every 2 Weeks" : "Every week"} · ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][task.day_number]}`}</p></div>{isAdmin && <form action="/admin/daily-tasks/action" method="post"><input type="hidden" name="action" value="recurrence_stop" /><input type="hidden" name="date" value={date} />{categoryField}<input type="hidden" name="recurrenceId" value={task.id} /><button className="button secondary">Stop repeating</button></form>}</div>)}{!recurrences?.length && <p>No recurring tasks.</p>}</section>
-  </AppShell>;
+async function RecurringTasks({ db, category, categoryLabel, date, isAdmin }: {
+  db: Database; category?: DailyTaskCategory; categoryLabel: string; date: string; isAdmin: boolean;
+}) {
+  let recurrenceQuery = db.from("recurring_daily_tasks")
+    .select("id,title,frequency,day_number,assignee:profiles!assigned_to(full_name)").eq("is_active", true);
+  if (category) recurrenceQuery = recurrenceQuery.eq("task_category", category);
+  const { data: recurrences, error } = await recurrenceQuery;
+  if (error) return <p className="error">Unable to load recurring tasks: {error.message}</p>;
+  const categoryField = category && <input type="hidden" name="taskCategory" value={category} />;
+  return <section className="panel"><h3>{category ? `${categoryLabel} · Recurring tasks` : "Recurring tasks"}</h3>{recurrences?.map((task: any) => <div className="list-row" key={task.id}><div><strong>{task.title}</strong><p>{task.assignee?.full_name} · {task.frequency === "monthly" ? `Day ${task.day_number} of every month` : `${task.frequency === "biweekly" ? "Every 2 Weeks" : "Every week"} · ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][task.day_number]}`}</p></div>{isAdmin && <form action="/admin/daily-tasks/action" method="post"><input type="hidden" name="action" value="recurrence_stop" /><input type="hidden" name="date" value={date} />{categoryField}<input type="hidden" name="recurrenceId" value={task.id} /><button className="button secondary">Stop repeating</button></form>}</div>)}{!recurrences?.length && <p>No recurring tasks.</p>}</section>;
 }

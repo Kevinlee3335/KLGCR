@@ -1,17 +1,34 @@
 "use client";
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import { dailyTaskCategoryLabel, resolveDailyTaskCategory } from "@/lib/daily-tasks";
 
-export function DailyTaskForm({date,staff}:{date:string;staff:{id:string;full_name:string;role?:string;daily_task_category?:string|null}[]}) {
+type Employee = { id: string; full_name: string; role?: string; daily_task_category?: string | null };
+type Staff = Employee[] | Promise<Employee[]>;
+
+function AssigneeField({ staff }: { staff: Staff }) {
+  const employees = Array.isArray(staff) ? staff : use(staff);
+  const [assignedTo, setAssignedTo] = useState("");
+  const employee = employees.find(person => person.id === assignedTo);
+  const category = employee ? resolveDailyTaskCategory(employee) : null;
+  return <label className="field">Assign to
+    <select name="assignedTo" required value={assignedTo} onChange={event => setAssignedTo(event.target.value)}>
+      <option value="">Choose employee</option>
+      {employees.map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}
+    </select>
+    <small>{category ? `Department: ${dailyTaskCategoryLabel[category]}` : "The task category is set automatically from the selected employee."}</small>
+  </label>;
+}
+
+export function DailyTaskForm({date,staff}:{date:string;staff:Staff}) {
   const [frequency,setFrequency]=useState("once");
   const [workDate,setWorkDate]=useState(date);
-  const [assignedTo,setAssignedTo]=useState("");
-  const employee=staff.find(person=>person.id===assignedTo);
-  const category=employee ? resolveDailyTaskCategory(employee) : null;
   return <form action="/admin/daily-tasks/action" method="post" className="form-grid daily-task-create-form">
     <input type="hidden" name="action" value="admin_task_create"/>{frequency!=="once" && <input type="hidden" name="date" value={date}/>}
     <label className="field">Task<input name="title" required maxLength={300}/></label>
-    <label className="field">Assign to<select name="assignedTo" required value={assignedTo} onChange={event=>setAssignedTo(event.target.value)}><option value="">Choose employee</option>{staff.map(person=><option key={person.id} value={person.id}>{person.full_name}</option>)}</select><small>{category ? `Department: ${dailyTaskCategoryLabel[category]}` : "The task category is set automatically from the selected employee."}</small></label>
+    <Suspense fallback={<label className="field">Assign to<select name="assignedTo" required aria-busy="true">
+      <option value="">Loading employees…</option></select></label>}>
+      <AssigneeField staff={staff} />
+    </Suspense>
     <label className="field">Repeat<select name="frequency" value={frequency} onChange={event=>setFrequency(event.target.value)}><option value="once">Once</option><option value="weekly">Every week</option><option value="biweekly">Every 2 Weeks</option><option value="monthly">Every month</option></select></label>
     {frequency==="once" && <label className="field">Work date<input type="date" name="date" value={workDate} onChange={event=>setWorkDate(event.target.value)} required/><button className="button secondary button-compact" type="button" onClick={()=>setWorkDate(new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Kuala_Lumpur",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()))}>Today</button></label>}
     {(frequency==="weekly"||frequency==="biweekly")&&<label className="field">Weekday<select name="dayNumber">{["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((day,index)=><option key={day} value={index}>{day}</option>)}</select></label>}
