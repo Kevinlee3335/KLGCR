@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Writable } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import InventoryPage from "./page";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), requireRole: vi.fn() }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), requireRole: vi.fn(), readBatch: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireRole: mocks.requireRole }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: mocks.from }) }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: ReactNode }) => <>{children}</> }));
@@ -36,7 +36,9 @@ async function renderPage(params: { store: string; view?: string; q?: string }) 
 afterEach(() => { document.body.replaceChildren(); });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   inventoryReads.length = 0;
+  mocks.readBatch.mockResolvedValue({ data: { id: "batch-1", batch_no: "COB-2026-0001", state: "active" }, error: null });
   mocks.requireRole.mockResolvedValue({ id: "admin", role: "admin", full_name: "Admin" });
   mocks.from.mockImplementation((table: string) => {
     const request = { columns: "", store: "", search: "", from: 0, to: 0 };
@@ -46,7 +48,7 @@ beforeEach(() => {
       or(search: string) { request.search = search; return query; },
       order() { return query; },
       in() { return query; },
-      async maybeSingle() { return {data:table === "checkout_batches" ? {id:"batch-1",batch_no:"COB-2026-0001",state:"active"} : null,error:null}; },
+      async maybeSingle() { return table === "checkout_batches" ? mocks.readBatch() : { data: null, error: null }; },
       async range(from: number, to: number) {
         if (table !== "inventory_items") return { data: [], count: 0, error: null };
         inventoryReads.push({ ...request, from, to });
@@ -92,4 +94,32 @@ it("keeps the full purchase and withdrawal catalog when the stock list is filter
   expect(detail).toMatchObject({ store: "office", search: 'item_code.ilike."%Paper%",description.ilike."%Paper%"' });
   expect(screen.getByText("Total Items").parentElement).toHaveTextContent("1");
   expect(within(document.getElementById("inventory-stock-list")!).queryByText("Old folders")).toBeNull();
+});
+
+it("starts stock and movement reads while the admin stock-out batch is still loading", async () => {
+  const batch = Promise.withResolvers<{ data: { id: string; batch_no: string; state: string }; error: null }>();
+  mocks.readBatch.mockReturnValueOnce(batch.promise);
+  const rendering = renderPage({ store: "building" });
+  try {
+    await waitFor(() => {
+      expect(mocks.readBatch).toHaveBeenCalledOnce();
+      expect(inventoryReads).toHaveLength(1);
+      expect(mocks.from).toHaveBeenCalledWith("inventory_issue_history");
+      expect(mocks.from).toHaveBeenCalledWith("inventory_adjustment_history");
+    });
+  } finally {
+    batch.resolve({ data: { id: "current-batch", batch_no: "COB-2026-0002", state: "active" }, error: null });
+    await rendering;
+  }
+  expect(screen.getByRole("option", { name: "Check-out rooms · COB-2026-0002" })).toHaveValue("current-batch");
+});
+
+it("shows management viewers the stock totals and history without a stock-out batch read", async () => {
+  mocks.requireRole.mockResolvedValue({ id: "viewer", role: "management_viewer", full_name: "Viewer" });
+  await renderPage({ store: "building" });
+
+  expect(mocks.from).not.toHaveBeenCalledWith("checkout_batches");
+  expect(screen.getByText("Total Items").parentElement).toHaveTextContent("3");
+  expect(screen.getByText("No material issues yet.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Record Stock Out" })).toBeNull();
 });

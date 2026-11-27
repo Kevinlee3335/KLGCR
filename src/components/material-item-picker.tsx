@@ -1,31 +1,53 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-type MaterialItem = { id: string; item_code: string; description: string; balance_qty: number | string; unit: string | null };
+import type { MaterialItem } from "@/lib/staff-material-catalog";
 
-export function MaterialItemPicker({ items, name, required }: { items: MaterialItem[]; name: string; required?: boolean }) {
+type PickerProps = {
+  items: MaterialItem[];
+  name: string;
+  required?: boolean;
+  status?: "loading" | "ready" | "error";
+  retryCatalog?: () => void;
+};
+
+const normalize = (value: string) => value.toLowerCase().replace(/·/g, " ").replace(/\s+/g, " ").trim();
+
+export function MaterialItemPicker({ items, name, required, status = "ready", retryCatalog }: PickerProps) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<MaterialItem | null>(null);
+  const [chosen, setChosen] = useState<MaterialItem | null>(null);
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState(false);
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const normalize = (value: string) => value.toLowerCase().replace(/·/g, " ").replace(/\s+/g, " ").trim();
+  const term = normalize(query);
+  const selected = useMemo(() => chosen || (term ? items.find(item =>
+    normalize(item.item_code) === term || normalize(item.item_code + " " + item.description) === term
+  ) : null), [chosen, items, term]);
   const matches = useMemo(() => {
-    const term = normalize(query);
-    return term ? items.filter((item) => normalize(item.item_code + " " + item.description).includes(term)).slice(0, 12) : [];
-  }, [items, query]);
+    if (!term || selected || !open) return [];
+    const found: MaterialItem[] = [];
+    for (const item of items) {
+      if (normalize(item.item_code + " " + item.description).includes(term)) found.push(item);
+      if (found.length === 12) break;
+    }
+    return found;
+  }, [items, term, selected, open]);
+
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(query.trim() && !selected ? "Choose a material from the search results." : "");
+  }, [query, selected]);
 
   const choose = (item: MaterialItem) => {
     inputRef.current?.setCustomValidity("");
-    setSelected(item);
+    setChosen(item);
     setQuery(item.item_code + " · " + item.description);
     setOpen(false);
   };
 
   return <div className="material-autocomplete">
-    <div className="material-picker-options"><button type="button" className={`button secondary ${!other ? "is-selected" : ""}`} onClick={() => {setOther(false);setSelected(null);setQuery("");}}>Inventory item</button><button type="button" className={`button secondary ${other ? "is-selected" : ""}`} onClick={() => {setOther(true);setSelected(null);setQuery("");}}>Other Item</button></div>
+    <div className="material-picker-options"><button type="button" className={`button secondary ${!other ? "is-selected" : ""}`} onClick={() => {setOther(false);setChosen(null);setQuery("");}}>Inventory item</button><button type="button" className={`button secondary ${other ? "is-selected" : ""}`} onClick={() => {setOther(true);setChosen(null);setQuery("");}}>Other Item</button></div>
     <input type="hidden" name={name} value={other ? "other" : selected?.id || ""} />
     <input type={other ? "text" : "hidden"} name="otherItemName" required={other} maxLength={200} placeholder="Enter the material name" aria-label="Other material name"/>
     {!other && <>
@@ -34,14 +56,10 @@ export function MaterialItemPicker({ items, name, required }: { items: MaterialI
       type="search"
       value={query}
       onFocus={() => setOpen(!selected)}
-      onBlur={() => {
-        if (!selected && query.trim()) inputRef.current?.setCustomValidity("Choose a material from the search results.");
-      }}
       onChange={(event) => {
-        const value = event.target.value;
-        const exact = items.find(item => normalize(item.item_code) === normalize(value) || normalize(item.item_code + " " + item.description) === normalize(value));
-        setSelected(exact || null); setQuery(value); setOpen(!exact);
-        event.target.setCustomValidity(value.trim() && !exact ? "Choose a material from the search results." : "");
+        setChosen(null);
+        setQuery(event.target.value);
+        setOpen(true);
       }}
       placeholder="Type item name or code (e.g. window, P00003)"
       aria-label="Search inventory item"
@@ -56,7 +74,12 @@ export function MaterialItemPicker({ items, name, required }: { items: MaterialI
         <strong>{item.item_code}</strong><span>{item.description}</span><small>Balance {item.balance_qty} {item.unit || ""}</small>
       </button>)}
     </div>}
-    {open && !selected && query.trim() && matches.length === 0 && <small className="subtle">No active inventory item matches this search.</small>}
+    {open && status === "loading" && <small role="status" className="subtle">Loading inventory…</small>}
+    {open && status === "error" && <div>
+      <small role="alert">Unable to load inventory.</small>
+      <button type="button" className="button secondary" onClick={retryCatalog}>Retry</button>
+    </div>}
+    {open && status === "ready" && !selected && query.trim() && matches.length === 0 && <small className="subtle">No active inventory item matches this search.</small>}
     {selected && <small className="subtle">Selected · Balance {selected.balance_qty} {selected.unit || ""}</small>}
     </>}
   </div>;

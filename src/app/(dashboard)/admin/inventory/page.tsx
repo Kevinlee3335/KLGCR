@@ -12,6 +12,8 @@ import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { procurementRows } from "@/lib/inventory-procurement";
+import type { InventoryStore } from "@/lib/inventory-new-item";
+import type { Profile } from "@/lib/types";
 
 const inventoryCatalogColumns = "id,item_code,description,category,balance_qty,reorder_level,unit,quantity_unverified,is_active,stock_group,procurement_mode";
 
@@ -36,13 +38,45 @@ function qtyToOrder(balance: number, reorder: number) {
   return Math.max(0, reorder - balance);
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; warning?: string; q?: string; category?: string; view?: string; store?: string; usagePage?: string; usageQ?: string; purchaseView?: string }> }) {
+type InventoryQuery = {
+  error?: string;
+  success?: string;
+  warning?: string;
+  q?: string;
+  category?: string;
+  view?: string;
+  store?: string;
+  usagePage?: string;
+  usageQ?: string;
+  purchaseView?: string;
+};
+
+type InventoryClient = Awaited<ReturnType<typeof createClient>>;
+
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<InventoryQuery> }) {
   const profile = await requireRole(["admin", "management_viewer"]);
   const query = await searchParams;
   const supabase = await createClient();
-  const checkoutBatch = await activeCheckoutBatch(supabase);
   const store = query.store === "office" ? "office" : query.store === "cleaner" ? "cleaner" : "building";
   const storeTitle = {building:"Building Material",office:"Office Inventory",cleaner:"Cleaner Supplies"}[store];
+
+  return <AppShell profile={profile} title={storeTitle}>
+    <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
+    <Suspense key={store} fallback={<p className="subtle" role="status">Loading inventory…</p>}>
+      <InventoryContent profile={profile} supabase={supabase} store={store} query={query}/>
+    </Suspense>
+    <Suspense key={`history-${store}`} fallback={<p className="subtle" role="status">Loading stock movement history…</p>}>
+      <InventoryHistory supabase={supabase} store={store}/>
+    </Suspense>
+  </AppShell>;
+}
+
+async function InventoryContent({ profile, supabase, store, query }: {
+  profile: Profile;
+  supabase: InventoryClient;
+  store: InventoryStore;
+  query: InventoryQuery;
+}) {
   const base = `/admin/inventory?store=${store}`;
   const search = (query.q || "").trim();
   const category = ["Building", "Electrical", "Chemical", "Piping", "Painting", "Office Inventory", "Cleaner Supplies"].includes(query.category || "") ? query.category! : "";
@@ -57,7 +91,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   }
   if (category) stockQuery = stockQuery.eq("category", category);
   const readCatalog = () => readInventoryRows((from, to) => catalogQuery.range(from, to));
-  const [separateCatalog, stock] = await Promise.all([
+  const [checkoutBatch, separateCatalog, stock] = await Promise.all([
+    profile.role === "admin" ? activeCheckoutBatch(supabase) : null,
     showUnfilteredStock ? null : readCatalog(),
     hasStockFilter ? readInventoryRows((from, to) => stockQuery.range(from, to)) : null,
   ]);
@@ -80,8 +115,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const out = rows.filter((x) => Number(x.balance_qty) <= 0 && x.is_active && !x.quantity_unverified).length;
   const near = rows.filter((x) => Number(x.balance_qty) > 0 && Number(x.balance_qty) <= Number(x.reorder_level) && x.is_active && !x.quantity_unverified).length;
 
-  return <AppShell profile={profile} title={storeTitle}>
-    <div className="section-head inventory-heading"><div><p className="eyebrow">Inventory Control</p><h2>{storeTitle}</h2><p className="subtle">Monitor stock levels, reorder requirements and material movement.</p></div></div>
+  return <>
     {query.warning && <p className="error">{query.warning}</p>}{query.error && <p className="error">{query.error}</p>}{query.success && <p className="success">{query.success === "buy_when_needed" ? "Selected materials saved as Buy When Needed and hidden from Items to Order." : query.success === "maintain_stock" ? "Stock alerts restored. Materials appear when stock reaches the reorder point." : query.success === "stock_out" ? "Stock Out saved successfully. Stock balance and history updated." : "Inventory saved successfully."}</p>}{error && <p className="error">{error.message}</p>}{catalogError && <p className="error">Purchase list could not be loaded: {catalogError.message}</p>}
 
     {store === "office" && <Suspense fallback={<p className="subtle" role="status">Loading office usage…</p>}>
@@ -118,14 +152,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       </form>
     </section>}
 
-    <Suspense fallback={<p className="subtle" role="status">Loading stock movement history…</p>}>
-      <InventoryHistory supabase={supabase} store={store}/>
-    </Suspense>
-  </AppShell>;
+  </>;
 }
 
 
-async function InventoryHistory({ supabase, store }: { supabase: Awaited<ReturnType<typeof createClient>>; store: string }) {
+async function InventoryHistory({ supabase, store }: { supabase: InventoryClient; store: InventoryStore }) {
   const [issues, adjustments] = await Promise.all([
     supabase.from("inventory_issue_history").select("id,qty,balance_before,balance_after,issued_at,item:inventory_items!inner(item_code,description,inventory_group),job:maintenance_jobs(job_no,room_no),checkout:checkout_rooms!checkout_room_id(reference_no,room_no,block:blocks!block_id(code)),staff:profiles!staff_id(full_name)").eq("item.inventory_group",store).order("issued_at", { ascending: false }).limit(30),
     supabase.from("inventory_adjustment_history").select("id,adjustment_type,qty,balance_before,balance_after,note,adjusted_at,item:inventory_items!inner(item_code,description,inventory_group),user:profiles!adjusted_by(full_name)").eq("item.inventory_group",store).order("adjusted_at", { ascending: false }).limit(30),
