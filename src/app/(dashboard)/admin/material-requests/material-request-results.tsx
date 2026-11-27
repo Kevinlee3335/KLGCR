@@ -4,7 +4,7 @@ import { MaterialLineActions } from "@/components/material-line-actions";
 import { MaterialRequestHistory } from "@/components/material-request-history";
 import { MatchMaterialItem } from "@/components/match-material-item";
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
+import { Suspense } from "react";
 
 const PAGE_SIZE = 25;
 const requestDateTime = new Intl.DateTimeFormat("en-MY", {
@@ -19,53 +19,90 @@ const filters = [
 
 export type RequestFilters = { status?: string; page?: string };
 
-export async function MaterialRequestResults({ isAdmin, query }: { isAdmin: boolean; query: RequestFilters }) {
-  const supabase = await createClient();
-  const status = query.status === "pending" || query.status === "approved" ? query.status : "all";
-  const pageCountFor = (count: number | null) => Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  function countRequests(filter: typeof status) {
-    const query = supabase.from("material_requests").select("id", { count: "exact", head: true });
-    return filter === "all" ? query : query.eq("status", filter);
-  }
-  function readPage(page: number, includeTotal: boolean) {
-    let query = supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,checkout:checkout_rooms!checkout_room_id(reference_no,room_no,block:blocks!block_id(code)),job:maintenance_jobs!job_id(job_no,room_no,block:blocks!block_id(code)),staff:profiles!requested_by(full_name),history:material_request_item_history(id,action,old_values,new_values,reason,created_at,actor:profiles!actor_id(full_name)),items:material_request_items(id,inventory_item_id,other_item_name,requested_qty,approved_qty,issued_qty,line_status,decision_reason,item:inventory_items(item_code,description,balance_qty,unit))", includeTotal ? { count: "exact" } : {});
+type Status = typeof filters[number]["status"];
+type Database = Awaited<ReturnType<typeof createClient>>;
+type Total = { count: number | null; error: { message: string } | null };
+
+function pageCountFor(count: number | null) {
+  return Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+}
+
+function countRequests(supabase: Database, status: Status) {
+  const query = supabase.from("material_requests").select("id", { count: "exact", head: true });
+  return status === "all" ? query : query.eq("status", status);
+}
+
+async function loadSelection(supabase: Database, status: Status, rawPage?: string) {
+  function readPage(page: number) {
+    let query = supabase.from("material_requests").select("id,request_no,status,note,rejection_reason,created_at,checkout:checkout_rooms!checkout_room_id(reference_no,room_no,block:blocks!block_id(code)),job:maintenance_jobs!job_id(job_no,room_no,block:blocks!block_id(code)),staff:profiles!requested_by(full_name),history:material_request_item_history(id,action,old_values,new_values,reason,created_at,actor:profiles!actor_id(full_name)),items:material_request_items(id,inventory_item_id,other_item_name,requested_qty,approved_qty,issued_qty,line_status,decision_reason,item:inventory_items(item_code,description,balance_qty,unit))", { count: "exact" });
     if (status !== "all") query = query.eq("status", status);
     return query.order("created_at", { ascending: false }).order("id", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   }
-  async function readSelection() {
-    const requestedPage = Number(query.page);
-    if (!Number.isSafeInteger(requestedPage) || requestedPage <= 1) {
-      const result = await readPage(1, true);
-      // A failed detail join must not suppress an otherwise readable summary.
-      const total = result.error ? await countRequests(status) : result;
-      return { page: 1, result, total };
+  const number = Number(rawPage);
+  const requested = Number.isSafeInteger(number) && number > 1 ? number : 1;
+  let knownTotal: Total | undefined;
+  if (Number.isSafeInteger(requested * PAGE_SIZE)) {
+    const result = await readPage(requested);
+    // PostgREST returns PGRST103 when the requested offset is beyond the last row.
+    const outOfRange = requested > 1 && (result.error?.code === "PGRST103" || (!result.error && !result.data?.length));
+    if (!outOfRange) {
+      const total = result.error ? await countRequests(supabase, status) : result;
+      return { page: requested, result, total };
     }
-    const total = await countRequests(status);
-    const page = Math.min(requestedPage, pageCountFor(total.count));
-    return { page, result: await readPage(page, false), total };
+    if (result.count !== null) knownTotal = result;
   }
-  const [selection, otherTotals] = await Promise.all([
-    readSelection(),
-    Promise.all(filters.map(filter => filter.status === status ? null : countRequests(filter.status))),
-  ]);
-  const { page, result: { data: requests, error }, total } = selection;
-  const countResults = otherTotals.map(result => result ?? total);
+  const total = knownTotal ?? await countRequests(supabase, status);
+  const page = Math.min(requested, pageCountFor(total.count));
+  return { page, result: await readPage(page), total };
+}
+
+export function MaterialRequestResults({ isAdmin, query }: { isAdmin: boolean; query: RequestFilters }) {
+  const status = query.status === "pending" || query.status === "approved" ? query.status : "all";
+  const client = createClient();
+  const selection = client.then(db => loadSelection(db, status, query.page));
+  const totals = filters.map(filter => filter.status === status
+    ? selection.then(({ total }) => total)
+    : client.then(db => countRequests(db, filter.status)));
+  return <>
+    <Suspense fallback={null}><TotalsError totals={totals}/></Suspense>
+    <nav className="material-request-kpis" aria-label="Filter material requests">
+      {filters.map((filter, index) => <article key={filter.status}>
+        <a href={`/admin/material-requests?status=${filter.status}`} aria-current={status === filter.status ? "page" : undefined}>
+          <span>{filter.label}</span><strong><Suspense fallback={<span aria-busy="true">—</span>}>
+            <RequestCount total={totals[index]}/>
+          </Suspense></strong><small>{filter.hint}</small>
+        </a>
+      </article>)}
+    </nav>
+    <Suspense fallback={<div className="panel" role="status" aria-busy="true"><p className="subtle">Loading material requests…</p></div>}>
+      <RequestList selection={selection} isAdmin={isAdmin} status={status}/>
+    </Suspense>
+  </>;
+}
+
+async function RequestCount({ total }: { total: Promise<Total> }) {
+  const { count, error } = await total;
+  return error ? "—" : count ?? "—";
+}
+
+async function TotalsError({ totals }: { totals: Promise<Total>[] }) {
+  const counts = await Promise.all(totals);
+  return counts.some(result => result.error) ? <p className="error">Unable to load request totals. Please refresh.</p> : null;
+}
+
+async function RequestList({ selection, status, isAdmin }: {
+  selection: ReturnType<typeof loadSelection>; status: Status; isAdmin: boolean;
+}) {
+  const { page, result: { data: requests, error }, total } = await selection;
   const selectedCount = total.count;
   const pageCount = pageCountFor(selectedCount);
   const rows = requests || [];
-  const countError = countResults.find(result => result.error)?.error;
   const activeLabel = status === "all" ? "All Requests" : filters.find(filter => filter.status === status)!.label;
   const pageHref = (nextPage: number) => `/admin/material-requests?status=${status}&page=${nextPage}`;
 
   return <>
     {error && <p className="error">{error.message}</p>}
-    {countError && <p className="error">Unable to load request totals. Please refresh.</p>}
-    <nav className="material-request-kpis" aria-label="Filter material requests">{filters.map((filter, index) => <article key={filter.status}>
-      <Link href={`/admin/material-requests?status=${filter.status}`} aria-current={status === filter.status ? "page" : undefined}>
-        <span>{filter.label}</span><strong>{countResults[index].error ? "—" : countResults[index].count ?? "—"}</strong><small>{filter.hint}</small>
-      </Link>
-    </article>)}</nav>
-    <div className="material-request-results"><h3>{activeLabel}</h3><p className="subtle">{selectedCount != null && !countError ? `${selectedCount} request${selectedCount === 1 ? "" : "s"} · ` : ""}Showing {rows.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + rows.length}</p>{status !== "all" && <Link className="text-link" href="/admin/material-requests?status=all">Clear filter</Link>}</div>
+    <div className="material-request-results"><h3>{activeLabel}</h3><p className="subtle">{selectedCount != null && !total.error ? `${selectedCount} request${selectedCount === 1 ? "" : "s"} · ` : ""}Showing {rows.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + rows.length}</p>{status !== "all" && <a className="text-link" href="/admin/material-requests?status=all">Clear filter</a>}</div>
 
     <section className="material-request-list" aria-label={activeLabel}>{error ? null : rows.length === 0 ? <div className="panel"><p className="dashboard-empty">{status === "pending" ? "No requests waiting for approval." : status === "approved" ? "No approved requests waiting to be issued." : "No material requests yet."}</p></div> : rows.map((request: any) => <article className={`panel request-card request-${request.status}`} key={request.id}>
       <div className="request-card-head"><div><div className="request-title-row"><strong>{request.request_no}</strong><span className={`status-badge status-${request.status}`}>{materialRequestLabel(request.status,request.items||[])}</span></div><p>{request.checkout?.reference_no || request.job?.job_no || "No job"} · Block {request.checkout?.block?.code || request.job?.block?.code || "–"} · Room {request.checkout?.room_no || request.job?.room_no || "–"}</p></div><div className="request-staff"><span>Requested by</span><strong>{request.staff?.full_name || "—"}</strong><small>{requestDateTime.format(new Date(request.created_at))}</small></div></div>
@@ -79,9 +116,9 @@ export async function MaterialRequestResults({ isAdmin, query }: { isAdmin: bool
 
     </article>)}</section>
     {!error && pageCount > 1 && <nav className="material-request-pagination" aria-label="Material request pages">
-      {page > 1 && <Link className="button secondary" href={pageHref(page - 1)}>Previous</Link>}
+      {page > 1 && <a className="button secondary" href={pageHref(page - 1)}>Previous</a>}
       <span>Page {page} of {pageCount}</span>
-      {page < pageCount && <Link className="button secondary" href={pageHref(page + 1)}>Next</Link>}
+      {page < pageCount && <a className="button secondary" href={pageHref(page + 1)}>Next</a>}
     </nav>}
   </>;
 }

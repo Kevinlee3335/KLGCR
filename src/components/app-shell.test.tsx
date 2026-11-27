@@ -27,20 +27,28 @@ const dailyLinks = [
   ["Housekeeping Task", "/admin/daily-tasks?category=housekeeping"],
 ];
 
-it("uses direct same-tab links for the Work Management and Daily Tasks entries in both menus", () => {
+const inventoryLinks = [
+  ["Building Material", "/admin/inventory?store=building"],
+  ["Office Inventory", "/admin/inventory?store=office"],
+  ["Cleaner Supplies", "/admin/inventory?store=cleaner"],
+  ["Material Requests", "/admin/material-requests"],
+];
+const directLinks = [...workLinks, ...dailyLinks, ...inventoryLinks];
+
+it("uses direct same-tab links for Work Management, Daily Tasks and Inventory in both menus", () => {
   render(<AppShell profile={profile} title="New Complaints">Page</AppShell>);
   const menus = screen.getAllByRole("navigation", { name: "Main navigation", hidden: true });
   expect(menus).toHaveLength(2);
   for (const menu of menus) {
     const links = within(menu).getAllByRole("link", { hidden: true });
     const nativeLinks = links.filter(link => !link.hasAttribute("data-client-navigation"));
-    expect(nativeLinks.map(link => [link.textContent, link.getAttribute("href")])).toEqual([...workLinks, ...dailyLinks]);
+    expect(nativeLinks.map(link => [link.textContent, link.getAttribute("href")])).toEqual(directLinks);
     for (const link of nativeLinks) {
       expect(link).not.toHaveAttribute("target");
       expect(link).not.toHaveAttribute("download");
     }
     expect(nativeLinks[0]).toHaveAttribute("aria-current", "page");
-    expect(links.find(link => link.textContent === "Material Requests")).toHaveAttribute("data-client-navigation");
+    expect(links.find(link => link.textContent === "Purchase Orders")).toHaveAttribute("data-client-navigation");
   }
 });
 
@@ -51,13 +59,13 @@ it("keeps Flex hidden in both Work Management menus for management viewers", () 
   for (const menu of menus) {
     expect(menu.querySelector('a[href="/flex-inspections"]')).toBeNull();
     const links = menu.querySelectorAll("a.native-menu-link");
-    expect(Array.from(links, link => link.textContent)).toEqual(
-      [...workLinks, ...dailyLinks].map(([label]) => label).filter(label => label !== "Flex Fire Safety Inspection")
+    expect(Array.from(links, link => [link.textContent, link.getAttribute("href")])).toEqual(
+      directLinks.filter(([label]) => label !== "Flex Fire Safety Inspection")
     );
   }
 });
 
-it.each(dailyLinks)("marks only %s as current in both Daily Tasks menus", (label, href) => {
+it.each([...dailyLinks, ...inventoryLinks])("marks only %s as current in both menus", (label, href) => {
   const title = label === "All Daily Tasks" ? "Daily Tasks" : label;
   render(<AppShell profile={profile} title={title}>Page</AppShell>);
 
@@ -68,4 +76,12 @@ it.each(dailyLinks)("marks only %s as current in both Daily Tasks menus", (label
     expect(active[0]).toHaveAttribute("href", href);
     expect(active[0].closest(".admin-nav-group")).toHaveClass("is-active");
   }
+});
+
+it("keeps the maintenance staff Material Request links on their existing navigation", () => {
+  const { container } = render(<AppShell profile={{ ...profile, role: "maintenance_staff" }} title="Material Request">Page</AppShell>);
+  const materialLinks = container.querySelectorAll('a[href="/staff/material-request"]');
+  expect(materialLinks).toHaveLength(3);
+  for (const link of materialLinks) expect(link).toHaveAttribute("data-client-navigation");
+  expect(container.querySelector('a[href="/admin/material-requests"]')).toBeNull();
 });

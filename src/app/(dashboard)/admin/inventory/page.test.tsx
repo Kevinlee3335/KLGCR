@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Writable } from "node:stream";
+import { PassThrough } from "node:stream";
+import { text } from "node:stream/consumers";
+import { prerenderToNodeStream } from "react-dom/static.node";
 import { renderToPipeableStream } from "react-dom/server";
 import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -18,19 +20,44 @@ const items = [
   { id: "2", item_code: "OFF-0002", description: "Old folders", category: "Office Inventory", balance_qty: 0, reorder_level: 1, unit: "pcs", is_active: false, stock_group: null, procurement_mode: "maintain_stock", movement_category: "slow", source_details: null, cost: null },
   { id: "3", item_code: "OFF-0003", description: "Envelopes", category: "Office Inventory", balance_qty: 1, reorder_level: 2, unit: "pcs", is_active: true, stock_group: null, procurement_mode: "maintain_stock", movement_category: "slow", source_details: null, cost: 1 },
 ];
+const stores = [
+  { store: "building", title: "Building Material", prefix: "BLD", category: "Building" },
+  { store: "office", title: "Office Inventory", prefix: "OFF", category: "Office Inventory" },
+  { store: "cleaner", title: "Cleaner Supplies", prefix: "CLN", category: "Cleaner Supplies" },
+];
+const stock = stores.flatMap(({ store, prefix, category }) => items.map(item => ({
+  ...item, inventory_group: store, category, item_code: item.item_code.replace("OFF", prefix), id: `${store}-${item.id}`,
+})));
 const inventoryReads: { columns: string; store: string; search: string; from: number; to: number }[] = [];
+const historyReads: { table: string; store: string; limit: number }[] = [];
+const gates = new Map<string, Promise<void>>();
+let withHistory = false;
 
-async function renderPage(params: { store: string; view?: string; q?: string }) {
+type Params = Awaited<Parameters<typeof InventoryPage>[0]["searchParams"]>;
+async function renderHTML(params: Params, onChunk: (html: string) => void) {
   const page = await InventoryPage({ searchParams: Promise.resolve(params) });
-  document.body.innerHTML = await new Promise<string>((resolve, reject) => {
-    const buffers: Buffer[] = [];
-    const output = new Writable({
-      write(chunk: Buffer, _encoding, callback) { buffers.push(chunk); callback(); },
+  return new Promise<string>((resolve, reject) => {
+    const output = new PassThrough();
+    let html = "";
+    output.setEncoding("utf8").on("data", chunk => { html += chunk; onChunk(html); });
+    output.on("end", () => resolve(html)).on("error", reject);
+    const stream = renderToPipeableStream(<html><body>{page}</body></html>, {
+      onShellReady: () => stream.pipe(output), onError: reject,
     });
-    output.on("finish", () => resolve(Buffer.concat(buffers).toString("utf8")));
-    output.on("error", reject);
-    const stream = renderToPipeableStream(page, { onAllReady: () => stream.pipe(output), onError: reject });
   });
+}
+
+async function renderPage(params: Params) {
+  const page = await InventoryPage({ searchParams: Promise.resolve(params) });
+  // Keep completed panels inline so DOM queries see the same subtree as a browser after streaming.
+  const { prelude } = await prerenderToNodeStream(page, { progressiveChunkSize: Number.MAX_SAFE_INTEGER });
+  document.body.innerHTML = await text(prelude);
+}
+
+function pauseLookup(name: string) {
+  const gate = Promise.withResolvers<void>();
+  gates.set(name, gate.promise);
+  return gate.resolve;
 }
 
 afterEach(() => { document.body.replaceChildren(); });
@@ -38,23 +65,50 @@ afterEach(() => { document.body.replaceChildren(); });
 beforeEach(() => {
   vi.clearAllMocks();
   inventoryReads.length = 0;
+  historyReads.length = 0;
+  gates.clear();
+  withHistory = false;
   mocks.readBatch.mockResolvedValue({ data: { id: "batch-1", batch_no: "COB-2026-0001", state: "active" }, error: null });
   mocks.requireRole.mockResolvedValue({ id: "admin", role: "admin", full_name: "Admin" });
   mocks.from.mockImplementation((table: string) => {
-    const request = { columns: "", store: "", search: "", from: 0, to: 0 };
+    const request = { columns: "", store: "", search: "", category: "", from: 0, to: 0 };
     const query = {
       select(columns: string) { request.columns = columns; return query; },
-      eq(column: string, value: string) { if (column === "inventory_group") request.store = value; return query; },
+      eq(column: string, value: string) {
+        if (column === "inventory_group" || column === "item.inventory_group") request.store = value;
+        if (column === "category") request.category = value;
+        return query;
+      },
       or(search: string) { request.search = search; return query; },
       order() { return query; },
       in() { return query; },
       async maybeSingle() { return table === "checkout_batches" ? mocks.readBatch() : { data: null, error: null }; },
       async range(from: number, to: number) {
-        if (table !== "inventory_items") return { data: [], count: 0, error: null };
+        if (table !== "inventory_items") {
+          await gates.get(table);
+          return { data: [], count: 0, error: null };
+        }
         inventoryReads.push({ ...request, from, to });
-        return { data: (request.search ? items.filter((item) => item.description === "Paper") : items).slice(from, to + 1), error: null };
+        await gates.get(request.columns.includes("source_details") ? "details" : "catalog");
+        const rows = stock.filter(item =>
+          (!request.store || item.inventory_group === request.store) &&
+          (!request.category || item.category === request.category) &&
+          (!request.search || request.search.includes(item.description))
+        );
+        return { data: rows.slice(from, to + 1), error: null };
       },
-      async limit() { return { data: [], error: null }; },
+      async limit(limit: number) {
+        historyReads.push({ table, store: request.store, limit });
+        await gates.get(table);
+        if (!withHistory) return { data: [], error: null };
+        const data = stock.filter(item => item.id.endsWith("-1") && (!request.store || item.inventory_group === request.store))
+          .map(item => ({
+            id: item.id, item, qty: 1, balance_before: 5, balance_after: 4, issued_at: "2026-11-27T01:00:00Z",
+            adjusted_at: "2026-11-27T02:00:00Z", adjustment_type: "correction_remove",
+            job: { job_no: `Job-${item.inventory_group}` }, note: `Correction-${item.inventory_group}`,
+          }));
+        return { data, error: null };
+      },
     };
     return query;
   });
@@ -114,12 +168,96 @@ it("starts stock and movement reads while the admin stock-out batch is still loa
   expect(screen.getByRole("option", { name: "Check-out rooms · COB-2026-0002" })).toHaveValue("current-batch");
 });
 
-it("shows management viewers the stock totals and history without a stock-out batch read", async () => {
+it.each(stores)("shows a read-only inventory and history in $store without a stock-out batch read", async ({ store }) => {
   mocks.requireRole.mockResolvedValue({ id: "viewer", role: "management_viewer", full_name: "Viewer" });
-  await renderPage({ store: "building" });
+  await renderPage({ store, view: "all" });
 
   expect(mocks.from).not.toHaveBeenCalledWith("checkout_batches");
   expect(screen.getByText("Total Items").parentElement).toHaveTextContent("3");
   expect(screen.getByText("No material issues yet.")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Record Stock Out" })).toBeNull();
+  expect(screen.queryByText("Edit / Adjust")).toBeNull();
+  expect(screen.queryByText("Add Inventory Item")).toBeNull();
+  expect(screen.queryByText("Take Office Supplies")).toBeNull();
+  expect(screen.queryByText("Add Selected to PO")).toBeNull();
+  expect(mocks.requireRole).toHaveBeenCalledWith(["admin", "management_viewer"]);
+});
+
+it.each(stores)("keeps stock, order lists and movement history scoped to $store when descriptions match", async ({ store, title, prefix, category }) => {
+  withHistory = true;
+  await renderPage({ store, q: "Paper", category });
+  expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+  const list = within(document.getElementById("inventory-stock-list")!);
+  expect(list.getByLabelText("Search Item Code or Description")).toHaveValue("Paper");
+  expect(list.getByLabelText("Inventory Group")).toHaveValue(category);
+  expect(list.getByText(`${prefix}-0001`)).toBeInTheDocument();
+  expect(list.queryByText("Envelopes")).toBeNull();
+  expect(within(document.getElementById("items-to-order")!).getByText("Envelopes")).toBeInTheDocument();
+  expect(screen.getByText("Total Items").parentElement).toHaveTextContent("1");
+  expect(screen.getByText("Need to Order").parentElement).toHaveTextContent("2");
+  expect(screen.getByText(`Job-${store}`)).toBeInTheDocument();
+  expect(screen.getByText(`Correction-${store}`)).toBeInTheDocument();
+  expect(historyReads).toEqual(expect.arrayContaining([
+    { table: "inventory_issue_history", store, limit: 30 },
+    { table: "inventory_adjustment_history", store, limit: 30 },
+  ]));
+  for (const other of stores.filter(other => other.store !== store)) {
+    expect(document.body.textContent).not.toContain(`${other.prefix}-0001`);
+    expect(document.body.textContent).not.toContain(`Job-${other.store}`);
+    expect(document.body.textContent).not.toContain(`Correction-${other.store}`);
+  }
+});
+
+it("shows the navigation, search and stock-out fields while the catalog loads; filtered stock can arrive first", async () => {
+  const releaseCatalog = pauseLookup("catalog");
+  const releaseDetails = pauseLookup("details");
+  let received = "";
+  const rendering = renderHTML({ store: "cleaner", q: "Paper" }, html => { received = html; });
+  try {
+    await vi.waitFor(() => {
+      for (const text of ["Cleaner Supplies", 'href="/admin/inventory/purchase-orders"', 'name="q"', "Hide List", 'name="takenBy"', 'name="qty"']) {
+        expect(received).toContain(text);
+      }
+    });
+    expect(received).not.toContain("CLN-0001");
+    expect(inventoryReads).toHaveLength(2);
+    releaseDetails();
+    await vi.waitFor(() => expect(received).toContain("CLN-0001"));
+    expect(received).not.toContain("Envelopes");
+  } finally {
+    releaseDetails();
+    releaseCatalog();
+  }
+  const completed = await rendering;
+  expect(completed).toContain("Envelopes");
+  expect(completed).toContain("Paper");
+});
+
+it("lets admins use the office catalog and historical issues while adjustments, office usage and check-out batch are pending", async () => {
+  withHistory = true;
+  const releaseAdjustments = pauseLookup("inventory_adjustment_history");
+  const releaseOfficeUsage = pauseLookup("office_inventory_usage");
+  const batch = Promise.withResolvers<{ data: { id: string; batch_no: string; state: string }; error: null }>();
+  mocks.readBatch.mockReturnValueOnce(batch.promise);
+  let received = "";
+  const rendering = renderHTML({ store: "office" }, html => { received = html; });
+  try {
+    await vi.waitFor(() => {
+      expect(received).toContain("Paper, Envelopes");
+      expect(received).toContain("Job-office");
+      expect(received).toContain("Add Selected to PO");
+      expect(received).toContain("OFF-0001");
+    });
+    expect(received).not.toContain("Correction-office");
+    expect(received).not.toContain("COB-2026-0042");
+    expect(received).not.toContain("No office supplies have been recorded yet.");
+  } finally {
+    releaseAdjustments();
+    releaseOfficeUsage();
+    batch.resolve({ data: { id: "batch-42", batch_no: "COB-2026-0042", state: "active" }, error: null });
+  }
+  const html = await rendering;
+  expect(html).toContain("Correction-office");
+  expect(html).toContain("COB-2026-0042");
+  expect(html).toContain("No office supplies have been recorded yet.");
 });

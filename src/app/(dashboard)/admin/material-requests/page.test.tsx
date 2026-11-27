@@ -1,4 +1,6 @@
 import { Children, isValidElement, Suspense, type ReactNode } from "react";
+import { prerender } from "react-dom/static";
+import { renderToReadableStream } from "react-dom/server";
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import Page from "./page";
@@ -28,7 +30,13 @@ beforeEach(() => {
   mockRequests(requests);
 });
 
-function mockRequests(data: typeof requests, { waitForTotals = Promise.resolve(), listError = "" } = {}) {
+async function renderResults(props: Parameters<typeof MaterialRequestResults>[0]) {
+  const { prelude } = await prerender(<MaterialRequestResults {...props}/>);
+  const html = await new Response(prelude).text();
+  render(<div dangerouslySetInnerHTML={{ __html: html }}/>);
+}
+
+function mockRequests(data: typeof requests, { waitForTotals = Promise.resolve(), waitForRows = Promise.resolve(), listError = "" } = {}) {
   mocks.from.mockImplementation(() => ({ select: mocks.select }));
   mocks.select.mockImplementation((_columns, options) => {
     let selected = data;
@@ -41,6 +49,8 @@ function mockRequests(data: typeof requests, { waitForTotals = Promise.resolve()
       order: () => builder,
       range: async (from: number, to: number) => {
         mocks.range(from, to);
+        await waitForRows;
+        if (from > 0 && from >= selected.length) return { data: null, count: null, error: { code: "PGRST103", message: "Requested range not satisfiable" } };
         if (listError) return { data: null, count: null, error: { message: listError } };
         return { data: selected.slice(from, to + 1), count: options?.count === "exact" ? selected.length : null, error: null };
       },
@@ -52,7 +62,7 @@ function mockRequests(data: typeof requests, { waitForTotals = Promise.resolve()
 
 it("renders matching only for open unmatched lines without an initial inventory catalog", async () => {
   const isAdmin = true;
-  render(await MaterialRequestResults({ isAdmin, query: {} }));
+  await renderResults({ isAdmin, query: {} });
 
   expect(mocks.from.mock.calls).toEqual(Array(3).fill(["material_requests"]));
   expect(mocks.select).toHaveBeenCalledWith(expect.stringContaining("inventory_item_id"), { count: "exact" });
@@ -65,7 +75,7 @@ it("renders matching only for open unmatched lines without an initial inventory 
 
 it("lets management viewers read requests without displaying matching or loading inventory options", async () => {
   const isAdmin = false;
-  render(await MaterialRequestResults({ isAdmin, query: {} }));
+  await renderResults({ isAdmin, query: {} });
 
   expect(screen.getByText("MR-001")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Match Item/ })).toBeNull();
@@ -74,7 +84,7 @@ it("lets management viewers read requests without displaying matching or loading
 
 it("makes every summary card a filter with an active state and global counts", async () => {
   const isAdmin = true;
-  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
+  await renderResults({ isAdmin, query: { status: "pending" } });
   const filters = screen.getByRole("navigation", { name: "Filter material requests" });
   expect(within(filters).getByRole("link", { name: /Pending Review 1/ })).toHaveAttribute("href", "/admin/material-requests?status=pending");
   expect(within(filters).getByRole("link", { name: /Pending Review/ })).toHaveAttribute("aria-current", "page");
@@ -92,19 +102,20 @@ it("retrieves pending requests older than the latest 100 records and paginates w
     ...Array.from({ length: 120 }, (_, index) => ({ ...requests[2], id: `issued-${index}`, request_no: `ISSUED-${index}`, status: "issued" })),
     ...Array.from({ length: 26 }, (_, index) => ({ ...requests[0], id: `pending-${index}`, request_no: `PENDING-${index}` })),
   ]);
-  render(await MaterialRequestResults({ isAdmin, query: { status: "pending", page: "2" } }));
+  await renderResults({ isAdmin, query: { status: "pending", page: "2" } });
   expect(screen.getByText("PENDING-25")).toBeInTheDocument();
   expect(screen.queryByText("ISSUED-0")).toBeNull();
   expect(screen.queryByText("PENDING-0")).toBeNull();
   expect(screen.getByText("26 requests · Showing 26–26")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/admin/material-requests?status=pending&page=1");
   expect(screen.queryByRole("link", { name: "Next" })).toBeNull();
-  expect(mocks.range).toHaveBeenCalledWith(25, 49);
+  expect(mocks.range.mock.calls).toEqual([[25, 49]]);
+  expect(mocks.select.mock.calls.filter(([columns]) => columns === "id")).toHaveLength(2);
 });
 
 it("shows only approved requests and keeps the total card available", async () => {
   const isAdmin = false;
-  render(await MaterialRequestResults({ isAdmin, query: { status: "approved", page: "9999" } }));
+  await renderResults({ isAdmin, query: { status: "approved", page: "9999" } });
   expect(screen.getByText("MR-002")).toBeInTheDocument();
   expect(screen.queryByText("MR-001")).toBeNull();
   expect(screen.getByRole("link", { name: "Clear filter" })).toHaveAttribute("href", "/admin/material-requests?status=all");
@@ -114,37 +125,58 @@ it("shows only approved requests and keeps the total card available", async () =
 it("shows a clear empty state for pending review", async () => {
   const isAdmin = true;
   mockRequests([requests[1]]);
-  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
+  await renderResults({ isAdmin, query: { status: "pending" } });
   expect(screen.getByText("No requests waiting for approval.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Pending Review 0/ })).toBeInTheDocument();
 });
 
 it("handles invalid filters and page numbers as the first page of all requests", async () => {
   const isAdmin = false;
-  render(await MaterialRequestResults({ isAdmin, query: { status: "invalid", page: "-5" } }));
+  await renderResults({ isAdmin, query: { status: "invalid", page: "-5" } });
   expect(screen.getByText("MR-001")).toBeInTheDocument();
   expect(screen.getByText("MR-003")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Total Records/ })).toHaveAttribute("aria-current", "page");
   expect(mocks.range).toHaveBeenCalledWith(0, 24);
 });
 
-it("starts the first page while the other filter counts are still pending", async () => {
-  const isAdmin = true;
+it("streams usable filter links, then request actions, while the two remaining counts are pending", async () => {
   let releaseTotals!: () => void;
-  mockRequests(requests, { waitForTotals: new Promise<void>(resolve => { releaseTotals = resolve; }) });
-  const loading = MaterialRequestResults({ isAdmin, query: {} });
+  let releaseRows!: () => void;
+  mockRequests(requests, {
+    waitForTotals: new Promise<void>(resolve => { releaseTotals = resolve; }),
+    waitForRows: new Promise<void>(resolve => { releaseRows = resolve; }),
+  });
+  const stream = await renderToReadableStream(<html><body><MaterialRequestResults isAdmin query={{}}/></body></html>);
+  const reader = stream.getReader();
+  let html = "";
+  const readOutput = (async () => {
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+    }
+  })();
   try {
-    await vi.waitFor(() => expect(mocks.range).toHaveBeenCalledWith(0, 24));
-  } finally {
+    await vi.waitFor(() => expect(html).toContain("/admin/material-requests?status=pending"));
+    expect(html).toContain("Loading material requests");
+    expect(html).not.toContain("MR-001");
+    releaseRows();
+    await vi.waitFor(() => expect(html).toContain("MR-001"));
+    expect(html).toContain("Issue Item");
     releaseTotals();
-    await loading;
+    await readOutput;
+  } finally {
+    releaseRows();
+    releaseTotals();
+    await readOutput;
   }
 });
 
 it("still shows the global totals when the detail query fails", async () => {
   const isAdmin = true;
   mockRequests(requests, { listError: "Unable to load material details" });
-  render(await MaterialRequestResults({ isAdmin, query: { status: "pending" } }));
+  await renderResults({ isAdmin, query: { status: "pending" } });
   expect(screen.getByText("Unable to load material details")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Pending Review 1/ })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Total Records 3/ })).toBeInTheDocument();
