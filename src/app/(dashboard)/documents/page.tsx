@@ -37,19 +37,19 @@ function Folder({ name, href, count }: { name: string; href: string; count?: Rea
 
 async function Count({ result }: { result: PromiseLike<{ count: number | null; error: unknown }> }) {
   const { count, error } = await result;
-  return error ? "—" : count ?? 0;
+  return error ? "—" : count ?? "—";
 }
 
 async function QuotationCount({ db }: { db: Database }) {
   const { data, error } = await db.from("quotation_registry").select("quotes:value->quotes").eq("id", 1).maybeSingle();
-  return error ? "—" : Array.isArray(data?.quotes) ? data.quotes.length : 0;
+  return !error && Array.isArray(data?.quotes) ? data.quotes.length : "—";
 }
 
 async function SupplierFolders({ db }: { db: Database }) {
   const { data, error } = await db.from("supplier_mail_suppliers")
     .select("id,name,documents:supplier_mail_documents!supplier_mail_documents_company_fkey(count)").order("name").order("id");
   if (!error) return data?.map(company => <Folder key={company.id} name={company.name}
-    href={`/documents/suppliers/${company.id}`} count={company.documents[0]?.count ?? 0} />);
+    href={`/documents/suppliers/${company.id}`} count={company.documents?.[0]?.count} />);
   // The legacy supplier registry has no relationship for an embedded count.
   const companies = await listSupplierCompanies(db);
   return companies.map(company => <Folder key={company.id} name={company.name} href={`/documents/suppliers/${company.id}`}

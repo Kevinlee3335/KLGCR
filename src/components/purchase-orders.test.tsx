@@ -61,3 +61,28 @@ it('retains the PO saved while its historical list is still in flight', async ()
   expect(screen.getByText('2026-0002')).toBeInTheDocument();
   expect(screen.getByText('2026-0003')).toBeInTheDocument();
 });
+
+it.each([
+  { failed: false, message: 'Delivery: sent' },
+  { failed: true, message: 'Delivery: Status unavailable' },
+])('resolves approved-order badges when the streamed dispatch thenable returns void ($message)', async ({ failed, message }) => {
+  const currentRevision = { order_id: previous.id, revision: 2, status: 'sent' };
+  const result = { failed, rows: failed ? [] : [{ ...currentRevision, revision: 1, status: 'obsolete' }, currentRevision] };
+  const pending = Promise.withResolvers<typeof result>();
+  // React Flight chunks notify subscribers but their .then() does not return a chainable promise.
+  const then = vi.fn((resolve: (value: typeof result) => void, reject?: (reason: unknown) => void) => {
+    void pending.promise.then(resolve, reject);
+  });
+  const streamed = { then } as unknown as Promise<typeof result>;
+  const other = { ...previous, id: 'second', po_no: '2026-0003' };
+  const approved = [previous, other].map(order => ({ ...order, approved_at: '2026-10-01T10:00:00Z' }));
+  await act(async () => {
+    render(<PurchaseOrders items={[]} orders={approved} dispatches={streamed} requester="Mary" canCreate={false} />);
+  });
+  expect(screen.getAllByText('Delivery: Loading…')).toHaveLength(2);
+  expect(screen.getAllByRole('link', { name: 'Review PO' })).toHaveLength(2);
+  await act(async () => pending.resolve(result));
+  expect(screen.getAllByText(message)).toHaveLength(failed ? 2 : 1);
+  if (!failed) expect(screen.getByText('Delivery: Not queued (historical PO)')).toBeInTheDocument();
+  expect(then).toHaveBeenCalledTimes(1);
+});

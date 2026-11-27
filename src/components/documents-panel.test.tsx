@@ -45,9 +45,15 @@ describe("Documents",()=>{
  it("offers management upload and delete, previews supported files only",()=>{render(<DocumentsPanel documents={documents} canManage/>);expect(screen.getByText("Upload")).toBeInTheDocument();expect(screen.getAllByText("Delete")).toHaveLength(2);expect(screen.getAllByText("Preview")).toHaveLength(1);expect(screen.getAllByText("Download")).toHaveLength(2);});
 });
 
-it("keeps the first search and filter usable while document metadata is pending", async () => {
+it("keeps the first search and filter usable while a server-streamed document catalog is pending", async () => {
   const source = Promise.withResolvers<{ documents: typeof documents; error: null }>();
-  await act(async () => { render(<DocumentsPanel documents={source.promise} canManage/>); });
+  // React Flight chunks inherit Promise.prototype, but their subscription method returns void.
+  const chunk: typeof source.promise = Object.assign(Object.create(Promise.prototype), {
+    then(resolve: (data: Awaited<typeof source.promise>) => void, reject: (error: unknown) => void) {
+      void source.promise.then(resolve, reject);
+    },
+  });
+  await act(async () => { render(<DocumentsPanel documents={chunk} canManage/>); });
   const search = screen.getByLabelText("Search Documents");
   await act(async () => {
     fireEvent.change(search, { target: { value: "floor" } });

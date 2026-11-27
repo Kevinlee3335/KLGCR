@@ -58,7 +58,7 @@ export function PurchaseOrders({ items, orders, requester, canCreate, canApprove
       byRevision: Object.fromEntries(rows.map(row => [`${row.order_id}:${row.revision}`, row])),
       failed: failed || dispatchUnavailable,
     });
-    return Array.isArray(dispatches) ? index({ rows: dispatches, failed: false }) : dispatches.then(index);
+    return Array.isArray(dispatches) ? index({ rows: dispatches, failed: false }) : Promise.resolve(dispatches).then(index);
   }, [dispatches, dispatchUnavailable]);
 
   function updateOrder(order: PurchaseOrder) {

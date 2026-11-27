@@ -45,7 +45,7 @@ export function DocumentsPanel({ documents, canManage, companyFolders }: {
   const router = useRouter();
   const index = useMemo(() => Array.isArray(documents)
     ? indexLibrary({ documents, error: null }, overrides)
-    : documents.then(library => indexLibrary(library, overrides)), [documents, overrides]);
+    : Promise.resolve(documents).then(library => indexLibrary(library, overrides)), [documents, overrides]);
   const markedIds = new Set(marked);
   const matching = useMemo(() => {
     const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);

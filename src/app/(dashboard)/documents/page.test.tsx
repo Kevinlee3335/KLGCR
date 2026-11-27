@@ -119,6 +119,19 @@ it("keeps all business and supplier folders in order, loading all supplier count
   expect(mocks.listSupplierCompanies).not.toHaveBeenCalled();
 });
 
+it("shows unavailable counts separately from a confirmed empty folder", async () => {
+  mocks.supplierResult.mockResolvedValueOnce({
+    data: [{ ...companies[0], documents: [{ count: 0 }] }, companies[1], { ...companies[2], documents: [] }],
+    error: null,
+  });
+  mocks.quotationSelect.mockReturnValueOnce({ eq: () => ({ maybeSingle: async () => ({ data: {}, error: null }) }) });
+  await renderPage();
+  for (const name of ["MFE", "Lab Testing", "Quotations"]) {
+    expect(screen.getByRole("link", { name: new RegExp(name) })).toHaveTextContent("—");
+  }
+  expect(screen.getByRole("link", { name: /Sigma/ })).toHaveTextContent("0");
+});
+
 it("preserves legacy supplier folders and distinguishes failed counts from zero", async () => {
   mocks.supplierResult.mockResolvedValueOnce({ data: null, error: { message: "Unknown relationship" } });
   await renderPage();
