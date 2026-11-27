@@ -129,7 +129,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
 
   return <AppShell profile={profile} title="Check-out Rooms">
     <div className="checkout-overview">
-      <CheckoutBatchBanner canManage={isAdmin}/>
+      <Suspense fallback={<p className="subtle" role="status">Loading current check-out batch…</p>}>
+        <CheckoutBatchBanner canManage={isAdmin}/>
+      </Suspense>
       <div className="checkout-overview-header">
         <h2>Check-out room readiness</h2>
         <div className="checkout-overview-actions">

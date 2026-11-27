@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Download, X } from "lucide-react";
 import {
   FLEX_REMARK_MAX_LENGTH,
@@ -11,9 +11,6 @@ import {
   type FlexSaveInput,
 } from "@/lib/flex-inspection";
 import { downloadFlexPreviewReport, saveFlexInspection } from "@/lib/flex-inspection-actions";
-import type { FlexInspectionMailRecipients } from "@/lib/flex-inspection-mail-settings";
-import type { FlexReview, FlexReviewer } from "@/lib/flex-inspection-review";
-import { FlexReviewPanel } from "./flex-review-panel";
 import styles from "./flex-inspection-form.module.css";
 
 type Block = FlexGroup["block"];
@@ -56,15 +53,12 @@ function formatLevel(level: number | null) {
   return level === null ? "Common areas" : "Level " + level;
 }
 
-export function FlexInspectionForm({ inspection, groups, today, preview = false, review, reviewer = null, recipients, scheduledDate }: {
+export function FlexInspectionForm({ inspection, groups, today, preview = false, verification }: {
   inspection: FlexInspectionSnapshot;
   groups: FlexGroup[];
   today: string;
   preview?: boolean;
-  review?: FlexReview | null;
-  reviewer?: FlexReviewer | null;
-  recipients?: FlexInspectionMailRecipients | null;
-  scheduledDate?: string;
+  verification?: ReactNode;
 }) {
   const { inspectionLocations, levelOptions, unitCount } = useMemo(() => organizeInspection(groups), [groups]);
   const [saved, setSaved] = useState(inspection);
@@ -232,9 +226,7 @@ export function FlexInspectionForm({ inspection, groups, today, preview = false,
               ))}
             </div>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
-            {review ? <FlexReviewPanel period={saved.period} initial={review} reviewer={reviewer}
-              preview={preview} recipients={recipients} scheduledDate={scheduledDate} /> : null}
-            {review === null ? <p className={styles.error} role="alert">Verification status could not be loaded. Refresh this page.</p> : null}
+            {verification}
           </>
         ) : (
           <p className={styles.instructions}>All items start with ✓. Tap X for a fault and add a remark. Complete once you have checked both blocks.</p>
