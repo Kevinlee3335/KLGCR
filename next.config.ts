@@ -3,6 +3,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ['pdfjs-dist', 'imapflow', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
+    "/api/checkout-pdf-worker": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs"],
     "/api/gym-deposits": ["./public/billing/receipt-letterhead.png", "./src/lib/finance-fonts/*"],
     "/api/gym-deposits/*/*/pdf": ["./public/billing/receipt-letterhead.png", "./src/lib/finance-fonts/*"],
     // PDF.js loads its graphics bindings and worker dynamically. Keep these
