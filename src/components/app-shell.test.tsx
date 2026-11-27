@@ -33,9 +33,19 @@ const inventoryLinks = [
   ["Cleaner Supplies", "/admin/inventory?store=cleaner"],
   ["Material Requests", "/admin/material-requests"],
 ];
-const directLinks = [...workLinks, ...dailyLinks, ...inventoryLinks];
+const quotationLinks = [
+  ["Quotations", "/admin/quotations"],
+  ["Purchase Orders", "/admin/inventory/purchase-orders"],
+];
+const documentLinks = [
+  ["Documents", "/documents"],
+  ["Reports", "/admin/reports"],
+  ["Cert & Servicing", "/admin/cert-servicing/certificates"],
+  ["TM Unifi Invoices", "/admin/unifi-invoices"],
+];
+const directLinks = [...workLinks, ...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks];
 
-it("uses direct same-tab links for Work Management, Daily Tasks and Inventory in both menus", () => {
+it("uses direct same-tab links for the configured desktop and mobile submenu destinations", () => {
   render(<AppShell profile={profile} title="New Complaints">Page</AppShell>);
   const menus = screen.getAllByRole("navigation", { name: "Main navigation", hidden: true });
   expect(menus).toHaveLength(2);
@@ -48,24 +58,25 @@ it("uses direct same-tab links for Work Management, Daily Tasks and Inventory in
       expect(link).not.toHaveAttribute("download");
     }
     expect(nativeLinks[0]).toHaveAttribute("aria-current", "page");
-    expect(links.find(link => link.textContent === "Purchase Orders")).toHaveAttribute("data-client-navigation");
+    expect(links.find(link => link.textContent === "Notifications")).toHaveAttribute("data-client-navigation");
   }
 });
 
-it("keeps Flex hidden in both Work Management menus for management viewers", () => {
+it("keeps Flex inspections and TM Unifi invoices hidden in both menus for management viewers", () => {
   render(<AppShell profile={{ ...profile, role: "management_viewer" }} title="Dashboard">Page</AppShell>);
   const menus = screen.getAllByRole("navigation", { name: "Main navigation", hidden: true });
   expect(menus).toHaveLength(2);
   for (const menu of menus) {
     expect(menu.querySelector('a[href="/flex-inspections"]')).toBeNull();
+    expect(menu.querySelector('a[href="/admin/unifi-invoices"]')).toBeNull();
     const links = menu.querySelectorAll("a.native-menu-link");
     expect(Array.from(links, link => [link.textContent, link.getAttribute("href")])).toEqual(
-      directLinks.filter(([label]) => label !== "Flex Fire Safety Inspection")
+      directLinks.filter(([label]) => label !== "Flex Fire Safety Inspection" && label !== "TM Unifi Invoices")
     );
   }
 });
 
-it.each([...dailyLinks, ...inventoryLinks])("marks only %s as current in both menus", (label, href) => {
+it.each([...dailyLinks, ...inventoryLinks, ...quotationLinks, ...documentLinks])("marks only %s as current in both menus", (label, href) => {
   const title = label === "All Daily Tasks" ? "Daily Tasks" : label;
   render(<AppShell profile={profile} title={title}>Page</AppShell>);
 
@@ -75,6 +86,16 @@ it.each([...dailyLinks, ...inventoryLinks])("marks only %s as current in both me
     expect(active[0]).toHaveTextContent(label);
     expect(active[0]).toHaveAttribute("href", href);
     expect(active[0].closest(".admin-nav-group")).toHaveClass("is-active");
+  }
+});
+
+it.each(["maintenance_staff", "cleaner"] as const)("keeps Documents on the existing %s navigation", role => {
+  render(<AppShell profile={{ ...profile, role }} title="Documents">Page</AppShell>);
+  for (const menu of screen.getAllByRole("navigation", { name: "Main navigation", hidden: true })) {
+    const documents = menu.querySelector('a[href="/documents"]');
+    expect(documents).toHaveAttribute("data-client-navigation");
+    expect(documents).toHaveAttribute("aria-current", "page");
+    expect(menu.querySelector('a[href^="/admin/"]')).toBeNull();
   }
 });
 

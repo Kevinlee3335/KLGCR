@@ -21,6 +21,19 @@ export async function listUnifiReceipts(): Promise<UnifiReceipt[]> {
     if (result.data.length < 1000) return rows;
   }
 }
+// The invoice register needs only the existence of a matched receipt for each invoice.
+export async function listMatchedUnifiInvoiceIds(): Promise<Set<string>> {
+  const db = createAdminClient();
+  const ids = new Set<string>();
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await db.from('unifi_payment_receipts').select('invoice_id')
+      .not('invoice_id', 'is', null).order('id').range(offset, offset + 999);
+    if (error) throw Error('Unable to check matched Unifi receipts.');
+    for (const row of data) ids.add(row.invoice_id);
+    if (data.length < 1000) return ids;
+  }
+}
+
 export async function getUnifiReceipt(id: string): Promise<UnifiReceipt | null> {
   const result = await createAdminClient().from('unifi_payment_receipts').select('*').eq('id',id).maybeSingle();
   if (result.error) throw Error('Unable to load the receipt.');
