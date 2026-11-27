@@ -57,6 +57,7 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
   const readSequence = useRef(0);
   const [parsed, setParsed] = useState<CheckoutPdfBrowserResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [checkedEnglish, setCheckedEnglish] = useState<Set<string>>(new Set());
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [reading, setReading] = useState(false);
@@ -77,6 +78,9 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
   const created = Object.values(outcomes).filter(outcome => outcome.created).length;
   const skipped = Object.values(outcomes).filter(outcome => !outcome.created).length;
   const busy = reading || saving;
+  const blockingErrors = parsed
+    ? Array.isArray(parsed.blockingErrors) ? parsed.blockingErrors : ["The PDF check could not be confirmed. Read the report again."]
+    : [];
 
   function cancelRead() {
     readSequence.current++;
@@ -91,7 +95,7 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
     const sequence = ++readSequence.current;
     const controller = new AbortController();
     readController.current = controller;
-    setParsed(null); setSelected(new Set()); setCheckedEnglish(new Set()); setOutcomes({}); setError(""); setZoom(null);
+    setParsed(null); setSelected(new Set()); setExpandedRooms(new Set()); setCheckedEnglish(new Set()); setOutcomes({}); setError(""); setZoom(null);
     if (!/\.pdf$/i.test(file.name) || file.size === 0 || file.size > MAX_PDF_BYTES) {
       setError("Choose a PDF report up to 50 MB.");
       return;
@@ -103,9 +107,10 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
         if (sequence === readSequence.current) setProgress(status.message || `Reading PDF page ${status.page} of ${status.totalPages}…`);
       }, controller.signal);
       if (sequence !== readSequence.current) return;
-      if (!result.rooms.length) throw new Error("No Block A or B rooms with defect details were found. Upload the original UTMSPACE PDF report.");
+      if (!result.rooms.length && !result.blockingErrors?.length) throw new Error("No Block A or B rooms with defect details were found. Upload the original UTMSPACE PDF report.");
       setParsed(result);
       setSelected(new Set(result.rooms.map(roomKey)));
+      setExpandedRooms(new Set(result.rooms.length ? [roomKey(result.rooms[0])] : []));
       setProgress("");
     } catch (cause) {
       if (sequence === readSequence.current && !controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to read this PDF. Please try the original UTMSPACE report.");
@@ -116,6 +121,17 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
 
   function updateEnglish(key: string, sourceId: string, field: "title" | "description", value: string) {
     setParsed(current => current ? { ...current, rooms: current.rooms.map(room => roomKey(room) === key ? { ...room, defects: room.defects.map(defect => defect.sourceId === sourceId ? { ...defect, [field]: value } : defect) } : room) } : current);
+  }
+
+  function toggleRoom(room: Room, open: boolean) {
+    const key = roomKey(room);
+    setExpandedRooms(current => {
+      if (current.has(key) === open) return current;
+      const next = new Set(current);
+      if (open) next.add(key); else next.delete(key);
+      return next;
+    });
+    if (!open) setZoom(current => current && room.defects.some(defect => defect.photos.includes(current.photo)) ? null : current);
   }
 
   function makeInput(room: Room): CheckoutPdfRoomInput {
@@ -141,15 +157,27 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
   }
 
   async function saveRooms() {
-    if (!parsed || busy || !pending.length || reviewNeeded || invalidEnglish || oversizedRooms.length) return;
+    if (!parsed || busy || !pending.length || reviewNeeded || invalidEnglish || oversizedRooms.length || blockingErrors.length) return;
     setSaving(true); setError("");
     let changed = false;
+    let totalCreated = created;
     try {
       // Validate every selected room before saving the first one.
-      const inputs = pending.map(room => ({ room, input: makeInput(room) }));
+      const { checkoutPdfRoomSchema } = await import("@/lib/checkout-pdf-import");
+      const inputs = pending.map(room => {
+        const result = checkoutPdfRoomSchema.safeParse(makeInput(room));
+        if (!result.success) {
+          const issue = result.error.issues[0];
+          const defectIndex = issue?.path[0] === "defects" && typeof issue.path[1] === "number" ? issue.path[1] : null;
+          const source = defectIndex === null ? "" : `${room.defects[defectIndex]?.sourceId || "Source defect"}: `;
+          throw new Error(`${room.roomNo}: ${source}${issue?.message || "Check the PDF room details."}`);
+        }
+        return { room, input: result.data };
+      });
       for (let index = 0; index < inputs.length; index++) {
         const { room, input } = inputs[index];
-        setProgress(`Preparing ${room.roomNo} (${index + 1} of ${inputs.length})…`);
+        const roomProgress = `room ${index + 1} of ${inputs.length} remaining`;
+        setProgress(`Preparing ${room.roomNo} · ${roomProgress}…`);
         const prepared = await prepareCheckoutPdfRoom(input);
         if ("error" in prepared) throw new Error(`${room.roomNo}: ${prepared.error}`);
         if ("skipped" in prepared) {
@@ -167,16 +195,17 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
           const transfer = await storage.uploadToSignedUrl(upload.path, upload.token, photo.file, { contentType: photo.file.type });
           if (transfer.error) throw new Error(`${room.roomNo}: a photo could not upload. ${transfer.error.message} Please retry.`);
           uploaded++;
-          setProgress(`Uploading ${room.roomNo} photos: ${uploaded} of ${expectedPhotos}…`);
+          setProgress(`Uploading ${room.roomNo} photos: ${uploaded} of ${expectedPhotos} · ${roomProgress}…`);
           return { path: upload.path, sourceId: upload.sourceId, photoIndex: upload.photoIndex };
         });
-        setProgress(`Saving ${room.roomNo} with its defect photos…`);
+        setProgress(`Saving ${room.roomNo} with its defect photos · ${roomProgress}…`);
         const result = await finishCheckoutPdfRoom(input, prepared.importId, paths);
         if ("error" in result) throw new Error(`${room.roomNo}: ${result.error}`);
         changed ||= result.created;
+        if (result.created) totalCreated++;
         setOutcomes(current => ({ ...current, [roomKey(room)]: result }));
       }
-      setProgress("Selected rooms have been checked. Created forms are ready for maintenance assignment below.");
+      setProgress(totalCreated ? "Selected rooms have been checked. Created forms are ready for maintenance assignment below." : "All selected rooms already have saved records. No new Defect Forms were created.");
     } catch (cause) {
       setProgress("");
       setError(cause instanceof Error ? cause.message : "Unable to finish the import. Retry the remaining rooms.");
@@ -195,16 +224,18 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
     {!parsed && !reading && <p className={styles.hint}><FileText size={18}/>Original UTMSPACE reports · Block A &amp; B · PDF up to 50 MB</p>}
     {reading && <div className={styles.progress} role="status"><LoaderCircle size={20} className={styles.spin}/><span>{progress}</span><button className="button secondary" type="button" onClick={cancelRead}>Cancel reading</button></div>}
     {parsed && <>
-      <div className={styles.reportName}><FileText size={18}/><strong>{parsed.sourceFileName}</strong><span>Preview</span></div>
+      <div className={styles.reportName}><FileText size={18}/><strong>{parsed.sourceFileName}</strong><span>{blockingErrors.length ? "Check required" : "Preview"}</span></div>
+      {blockingErrors.length > 0 && <div className={styles.error} role="alert"><strong>This PDF cannot be imported.</strong><ul>{blockingErrors.map((message, index) => <li key={index}>{message}</li>)}</ul><p>Upload the complete original report after these source details have been checked.</p></div>}
       <div className={styles.metrics} aria-label="Selected report totals"><div><strong>{chosen.length}</strong><span>rooms selected</span></div><div><strong>{defectCount}</strong><span>defect items</span></div><div><strong>{photoCount}</strong><span>source photos</span></div></div>
       <p className={styles.hint}>Original report notes and photos are retained. An After photo does not mark a defect completed.</p>
       {parsed.warnings.length > 0 && <div className={styles.notice}><strong>Report notes</strong><ul>{parsed.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div>}
       <div className={styles.selectionTools}><label><input type="checkbox" checked={selected.size === parsed.rooms.length} disabled={saving} onChange={event => setSelected(new Set(event.target.checked ? parsed.rooms.map(roomKey) : []))}/>Select all rooms</label><span>Review the English wording before creating forms.</span></div>
-      <div className={styles.roomList}>{parsed.rooms.map((room, roomIndex) => {
+      <div className={styles.roomList}>{parsed.rooms.map(room => {
         const key = roomKey(room), outcome = outcomes[key];
-        return <details key={key} className={styles.room} open={roomIndex === 0 || undefined}>
-          <summary><span className={styles.roomName}>Block {room.blockCode} · {room.roomNo}</span><span>{room.defects.length} defect{room.defects.length === 1 ? "" : "s"}</span>{outcome && <span className={styles.outcome}>{outcome.created ? "Created" : "Skipped"}</span>}</summary>
-          <div className={styles.roomBody}>
+        const needsReviewCount = outcome ? 0 : room.defects.filter(defect => defect.needsReview && !checkedEnglish.has(defectKey(room, defect.sourceId))).length;
+        return <details key={key} className={styles.room} open={expandedRooms.has(key)} onToggle={event => { if (event.target === event.currentTarget) toggleRoom(room, event.currentTarget.open); }}>
+          <summary><span className={styles.roomName}>Block {room.blockCode} · {room.roomNo}</span><span>{room.defects.length} defect{room.defects.length === 1 ? "" : "s"}</span>{needsReviewCount > 0 && <span className={styles.outcome} aria-label={`Needs review: ${needsReviewCount} defect${needsReviewCount === 1 ? "" : "s"} in ${room.roomNo}`}>Needs review · {needsReviewCount}</span>}{outcome && <span className={styles.outcome}>{outcome.created ? "Created" : "Skipped"}</span>}</summary>
+          {expandedRooms.has(key) && <div className={styles.roomBody}>
             <label className={styles.roomCheck}><input type="checkbox" checked={selected.has(key)} disabled={saving || Boolean(outcome)} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next; })}/>Include {room.roomNo}</label>
             {outcome && <p className={styles.saved}>{outcome.created ? "Defect Form created. Ready to assign maintenance staff." : outcome.reason || "This room already exists and was skipped."}{outcome.roomId && <> <a href={`/admin/checkouts/${outcome.roomId}`}>Open room</a></>}</p>}
             {room.defects.map(defect => <article key={defect.sourceId} className={styles.defect}>
@@ -215,15 +246,15 @@ export function CheckoutPdfImport({ blocks }: { blocks: { id: number; code: stri
               <details className={styles.original}><summary>Original report details</summary><dl><div><dt>Item</dt><dd>{defect.originalItem}</dd></div><div><dt>Finding</dt><dd>{defect.originalFinding}</dd></div>{defect.originalAction && <div><dt>Source action / note</dt><dd>{defect.originalAction}</dd></div>}<div><dt>Source status</dt><dd>{defect.sourceStatus || "Not specified"}</dd></div>{defect.inspectionId && <div><dt>Inspection reference</dt><dd>{defect.inspectionId}</dd></div>}{defect.reportedDate && <div><dt>Reported date</dt><dd>{defect.reportedDate}</dd></div>}</dl>{defect.conflictingDetails?.map((detail, index) => <div className={styles.conflict} key={`${detail.pageNumber}:${index}`}><strong>Additional conflicting report entry · PDF page {detail.pageNumber}</strong><dl><div><dt>Item</dt><dd>{detail.originalItem}</dd></div><div><dt>Finding</dt><dd>{detail.originalFinding}</dd></div>{detail.originalAction && <div><dt>Source action / note</dt><dd>{detail.originalAction}</dd></div>}<div><dt>Source status</dt><dd>{detail.sourceStatus || "Not specified"}</dd></div></dl></div>)}</details>
               {defect.photos.length ? <div className={styles.photos}>{defect.photos.map((photo, index) => <SourcePhoto key={`${defect.sourceId}:${index}`} photo={photo} title={defect.title} onOpen={() => setZoom({ photo, title: defect.title })}/>)}</div> : <p className={styles.noPhoto}>No photo included for this item in the PDF.</p>}
             </article>)}
-          </div>
+          </div>}
         </details>;
       })}</div>
       <div className={styles.footer}>
-        {(created > 0 || skipped > 0) && <p role="status">{created} room{created === 1 ? "" : "s"} created{skipped ? ` · ${skipped} existing room${skipped === 1 ? "" : "s"} skipped` : ""}. {pending.length ? "Retry saves only the remaining rooms." : "Created forms are ready for maintenance assignment."}</p>}
+        {(created > 0 || skipped > 0) && <p role="status">{created} room{created === 1 ? "" : "s"} created{skipped ? ` · ${skipped} existing room${skipped === 1 ? "" : "s"} skipped` : ""}. {pending.length ? "Retry saves only the remaining rooms." : created ? "Created forms are ready for maintenance assignment." : "Existing records and their progress were retained."}</p>}
         {reviewNeeded && <p className={styles.hint}>Confirm the flagged English descriptions before creating forms.</p>}
         {invalidEnglish && <p className={styles.hint}>Every selected defect needs an English title and description.</p>}
         {oversizedRooms.length > 0 && <p className={styles.hint}>Select a smaller report for {oversizedRooms.map(room => room.roomNo).join(", ")}. Each room supports up to 50 defects and 20 photos.</p>}
-        <button type="button" className="button" disabled={busy || !pending.length || reviewNeeded || invalidEnglish || oversizedRooms.length > 0} onClick={() => void saveRooms()}>{saving ? <><LoaderCircle size={18} className={styles.spin}/>Creating Defect Forms…</> : `Create Defect Forms (${pending.length} room${pending.length === 1 ? "" : "s"})`}</button>
+        <button type="button" className="button" disabled={busy || !pending.length || reviewNeeded || invalidEnglish || oversizedRooms.length > 0 || blockingErrors.length > 0} onClick={() => void saveRooms()}>{saving ? <><LoaderCircle size={18} className={styles.spin}/>Creating Defect Forms…</> : `Create Defect Forms (${pending.length} room${pending.length === 1 ? "" : "s"})`}</button>
       </div>
     </>}
     {saving && <p className={styles.progress} role="status"><LoaderCircle size={20} className={styles.spin}/>{progress}</p>}

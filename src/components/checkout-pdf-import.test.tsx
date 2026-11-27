@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { CheckoutPdfBrowserResult } from "@/lib/checkout-pdf-browser";
 
@@ -19,7 +19,7 @@ function defect(sourceId = "DF-2026-0072", roomNo = "A103", photos = true, needs
 }
 function report(secondRoom = false): CheckoutPdfBrowserResult {
   return {
-    sourceFileName: "UTMSPACE_First_5_Rooms.pdf", sourceSha256: "a".repeat(64), warnings: [], skippedRooms: [],
+    sourceFileName: "UTMSPACE_First_5_Rooms.pdf", sourceSha256: "a".repeat(64), warnings: [], blockingErrors: [], skippedRooms: [],
     rooms: [
       { blockCode: "A" as const, roomNo: "A103", level: "1", defects: [defect()] },
       ...(secondRoom ? [{ blockCode: "A" as const, roomNo: "A104", level: "1", defects: [defect("DF-2026-0792", "A104", false)] }] : []),
@@ -28,6 +28,20 @@ function report(secondRoom = false): CheckoutPdfBrowserResult {
 }
 function choose() {
   fireEvent.change(screen.getByLabelText("UTMSPACE PDF report"), { target: { files: [new File(["PDF report"], "rooms.pdf", { type: "application/pdf" })] } });
+}
+function setRoomExpanded(roomNo: string, open: boolean) {
+  const details = screen.getByText(`Block A · ${roomNo}`).closest("details")!;
+  act(() => { details.open = open; fireEvent(details, new Event("toggle")); });
+}
+function largeReport(count: number): CheckoutPdfBrowserResult {
+  return {
+    ...report(),
+    warnings: ["Source report note stays visible while rooms are collapsed."],
+    rooms: Array.from({ length: count }, (_, index) => {
+      const roomNo = `A${100 + index}`;
+      return { blockCode: "A", roomNo, level: "1", defects: [defect(`DF-2026-${1000 + index}`, roomNo)] };
+    }),
+  };
 }
 async function preview(secondRoom = false) {
   state.read.mockResolvedValue(report(secondRoom));
@@ -178,4 +192,116 @@ it("validates every selected block before saving the first selected room", async
   fireEvent.click(screen.getByRole("button", { name: "Create Defect Forms (2 rooms)" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Block B is not available");
   expect(state.prepare).not.toHaveBeenCalled();
+});
+
+it.each([100, 200])("mounts only the first room's defect cards and source photos in a %i-room report while retaining all counts", async count => {
+  state.read.mockResolvedValue(largeReport(count));
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  await screen.findByText("UTMSPACE_First_5_Rooms.pdf");
+  expect(screen.getAllByText(/^Block A · A\d+$/)).toHaveLength(count);
+  expect(screen.getAllByRole("textbox")).toHaveLength(2);
+  expect(screen.getAllByRole("img")).toHaveLength(1);
+  expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+  expect(within(screen.getByLabelText("Selected report totals")).getAllByText(String(count))).toHaveLength(3);
+  expect(screen.getByText("Source report note stays visible while rooms are collapsed.")).toBeVisible();
+  expect(screen.getByRole("button", { name: `Create Defect Forms (${count} rooms)` })).toBeEnabled();
+  setRoomExpanded("A101", true);
+  await screen.findByRole("textbox", { name: "Defect title DF-2026-1001" });
+  expect(screen.getAllByRole("textbox")).toHaveLength(4);
+  expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+  setRoomExpanded("A101", false);
+  await waitFor(() => expect(screen.queryByRole("textbox", { name: "Defect title DF-2026-1001" })).toBeNull());
+  expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  setRoomExpanded("A100", false);
+  await waitFor(() => expect(screen.queryAllByRole("textbox")).toHaveLength(0));
+  expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+});
+
+it("retains English edits and review confirmation when a room is collapsed, reopened and saved", async () => {
+  const source = largeReport(2);
+  source.rooms[0].defects[0].needsReview = true;
+  source.rooms[1].defects[0].needsReview = true;
+  state.read.mockResolvedValue(source);
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  await screen.findByText("UTMSPACE_First_5_Rooms.pdf");
+  expect(screen.getByLabelText("Needs review: 1 defect in A100")).toBeVisible();
+  expect(screen.getByLabelText("Needs review: 1 defect in A101")).toBeVisible();
+  fireEvent.change(screen.getByRole("textbox", { name: "Defect title DF-2026-1000" }), { target: { value: "Wall moldy A100 - checked" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "English defect description DF-2026-1000" }), { target: { value: "Wall moldy and paint peeling - checked" } });
+  fireEvent.click(screen.getByLabelText("Check and confirm the English wording for this item."));
+  expect(screen.queryByLabelText("Needs review: 1 defect in A100")).toBeNull();
+  setRoomExpanded("A100", false);
+  await waitFor(() => expect(screen.queryAllByRole("textbox")).toHaveLength(0));
+  expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  setRoomExpanded("A101", true);
+  await screen.findByRole("textbox", { name: "Defect title DF-2026-1001" });
+  fireEvent.click(screen.getByLabelText("Check and confirm the English wording for this item."));
+  setRoomExpanded("A100", true);
+  expect(await screen.findByRole("textbox", { name: "Defect title DF-2026-1000" })).toHaveValue("Wall moldy A100 - checked");
+  expect(screen.getByRole("textbox", { name: "English defect description DF-2026-1000" })).toHaveValue("Wall moldy and paint peeling - checked");
+  expect(screen.getAllByLabelText("Check and confirm the English wording for this item.").every(element => (element as HTMLInputElement).checked)).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Create Defect Forms (2 rooms)" }));
+  await waitFor(() => expect(state.finish).toHaveBeenCalledTimes(2));
+  expect(state.prepare.mock.calls[0][0].defects[0]).toMatchObject({ title: "Wall moldy A100 - checked", description: "Wall moldy and paint peeling - checked" });
+  setRoomExpanded("A100", false); setRoomExpanded("A100", true);
+  expect(await screen.findByRole("textbox", { name: "Defect title DF-2026-1000" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create Defect Forms (0 rooms)" })).toBeDisabled();
+});
+
+it("blocks creation for a partial diagnostic result containing source accuracy errors", async () => {
+  const source = report();
+  source.blockingErrors = ["A103 declares 6 defects but only 5 source details were found."];
+  source.warnings = ["Original report note remains visible."];
+  state.read.mockResolvedValue(source);
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  const warning = await screen.findByRole("alert");
+  expect(warning).toHaveTextContent("This PDF cannot be imported.");
+  expect(warning).toHaveTextContent(source.blockingErrors[0]);
+  expect(screen.getByText(source.warnings[0])).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "Defect title DF-2026-0072" })).toBeInTheDocument();
+  const create = screen.getByRole("button", { name: "Create Defect Forms (1 room)" });
+  expect(create).toBeDisabled(); fireEvent.click(create);
+  expect(state.prepare).not.toHaveBeenCalled(); expect(state.upload).not.toHaveBeenCalled(); expect(state.finish).not.toHaveBeenCalled();
+});
+
+it("fails closed when the report result has no source-validation outcome", async () => {
+  const { blockingErrors: _blockingErrors, ...unchecked } = report();
+  state.read.mockResolvedValue(unchecked);
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  expect(await screen.findByRole("alert")).toHaveTextContent("The PDF check could not be confirmed.");
+  expect(screen.getByRole("button", { name: "Create Defect Forms (1 room)" })).toBeDisabled();
+  expect(state.prepare).not.toHaveBeenCalled();
+});
+
+it.each(["sourceId", "reportedDate", "originalFinding"] as const)("validates %s in a later room before preparing any earlier room", async field => {
+  const source = report(true);
+  source.rooms[1].defects[0][field] = field === "originalFinding" ? "" : "invalid source value";
+  state.read.mockResolvedValue(source);
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  await screen.findByText("UTMSPACE_First_5_Rooms.pdf");
+  fireEvent.change(screen.getByRole("textbox", { name: "English defect description DF-2026-0072" }), { target: { value: "Wall moldy - checked" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create Defect Forms (2 rooms)" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("A104");
+  expect(screen.getByRole("textbox", { name: "English defect description DF-2026-0072" })).toHaveValue("Wall moldy - checked");
+  expect(state.prepare).not.toHaveBeenCalled(); expect(state.upload).not.toHaveBeenCalled(); expect(state.finish).not.toHaveBeenCalled();
+});
+
+it("shows completed upload counts and waits for the last upload before the save stage", async () => {
+  const source = report();
+  source.rooms[0].defects[0].photos.push({ file: new File(["after"], "after.jpg", { type: "image/jpeg" }), label: "after", sourcePage: 2 });
+  let finishUpload!: (result: { error: null }) => void;
+  let finishSave!: (result: { created: boolean; roomId: string }) => void;
+  state.read.mockResolvedValue(source);
+  state.upload.mockImplementation((path: string) => path.endsWith("/1.jpg") ? new Promise(resolve => { finishUpload = resolve; }) : Promise.resolve({ error: null }));
+  state.finish.mockImplementation(() => new Promise(resolve => { finishSave = resolve; }));
+  render(<CheckoutPdfImport blocks={[{ id: 1, code: "A" }]} />); choose();
+  await screen.findByText("UTMSPACE_First_5_Rooms.pdf");
+  fireEvent.click(screen.getByRole("button", { name: "Create Defect Forms (1 room)" }));
+  await screen.findByText("Uploading A103 photos: 1 of 2 · room 1 of 1 remaining…");
+  expect(state.finish).not.toHaveBeenCalled();
+  await act(async () => finishUpload({ error: null }));
+  await screen.findByText("Saving A103 with its defect photos · room 1 of 1 remaining…");
+  expect(screen.getByRole("button", { name: "Creating Defect Forms…" })).toBeDisabled();
+  await act(async () => finishSave({ created: true, roomId: "room-A103" }));
+  await screen.findByText(/Defect Form created. Ready to assign/);
 });

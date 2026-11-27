@@ -7,6 +7,17 @@ function page(pageNumber: number, texts: string[]): CheckoutPdfPage {
 function detail(id: string, room: string, item: string, finding: string, rest: string[] = []) {
   return [`${id} — Blok ${room[0]} / Aras ${room[1]} / ${room} — ${item}`, `Penemuan: ${finding}`, ...rest, "Status: Baru", "Log kemaskini:"];
 }
+function completeRoom(room: string, ids: string[], expectedCount = ids.length): string[] {
+  return [
+    "REKOD KEROSAKAN BILIK", "SEKSYEN FASILITI",
+    `Bilik ${room} Blok / Aras Blok ${room[0]} / Aras ${room[1]}`,
+    `Kerosakan ${expectedCount} (${expectedCount} belum selesai) Susunan Bilik 1 daripada 75`,
+    ...ids.flatMap((id, index) => [`${index + 1} ${id} 04/11/2026 Kipas Tinggi K-Hotel 09/11/2026 - Baru`, "PM-2026-0010 Kotor"]),
+    "BUTIRAN & BUKTI PEMBAIKAN",
+    ...ids.flatMap(id => detail(id, room, "Kipas", "Kotor")),
+    "Disediakan oleh Disemak oleh Disahkan oleh (Pengurusan)",
+  ];
+}
 
 describe("UTMSPACE detail-report parsing", () => {
   it("ignores summary tables, preserves all first-five-room source defects and links their coordinates", () => {
@@ -146,6 +157,116 @@ describe("UTMSPACE detail-report parsing", () => {
     const result = parseCheckoutPdfPages([page(1, detail("DF-2026-0001", "A103", "Kipas", "Kotor", ["Tindakan: Sila rujuk pegawai teknikal"]))]);
     expect(result.rooms[0].defects[0]).toMatchObject({ description: "Fan dirty", originalAction: "Sila rujuk pegawai teknikal", needsReview: true });
     expect(result.rooms[0].defects[0].translatedAction).toBeUndefined();
+  });
+});
+
+describe("independent room-report completeness reconciliation", () => {
+  it("accepts five complete rooms extracted from a larger run without requiring its global 75 rooms", () => {
+    const sample = ["A103", "A104", "A107", "A207", "A208"];
+    const counts = [6, 4, 9, 1, 1];
+    let id = 1;
+    const result = parseCheckoutPdfPages([
+      page(1, ["RINGKASAN MENGIKUT BILIK (75 bilik · 212 kerosakan)", "Jumlah 212", "1 Blok A 1 A103 6 6", "75 T06 3 STUDIO 4 2 2"]),
+      ...sample.map((room, index) => page(index + 2, completeRoom(room, Array.from({ length: counts[index] }, () => `DF-2026-${String(id++).padStart(4, "0")}`)))),
+    ]);
+    expect(result.rooms.map(room => room.defects.length)).toEqual(counts);
+    expect(result.rooms.flatMap(room => room.defects)).toHaveLength(21);
+    expect(result.blockingErrors).toEqual([]);
+  });
+
+  it("blocks the entire file when a final room is truncated before its last source status", () => {
+    const secondRoom = completeRoom("A104", ["DF-2026-0002"]);
+    const cutAt = secondRoom.lastIndexOf("Status: Baru");
+    const result = parseCheckoutPdfPages([page(1, completeRoom("A103", ["DF-2026-0001"])), page(2, secondRoom.slice(0, cutAt))]);
+    expect(result.rooms).toHaveLength(2); // Diagnostic output is retained for the error UI.
+    expect(result.blockingErrors.join(" ")).toContain("A104 / DF-2026-0002: the finding or source status is missing or truncated");
+  });
+
+  it("blocks an omitted detailed entry even when all other room fields parse successfully", () => {
+    const full = completeRoom("A103", ["DF-2026-0001", "DF-2026-0002"]);
+    const omitted = full.slice(0, full.findIndex(line => line.startsWith("DF-2026-0002 —")));
+    const result = parseCheckoutPdfPages([page(1, omitted)]);
+    expect(result.rooms[0].defects).toHaveLength(1);
+    expect(result.blockingErrors.join(" ")).toContain("header declares 2 defects but only 1 detailed defect sections");
+    expect(result.blockingErrors.join(" ")).toContain("missing detailed sections for DF-2026-0002");
+  });
+
+  it("compares exact source IDs, so matching counts cannot conceal an omitted/replaced defect", () => {
+    const lines = completeRoom("A103", ["DF-2026-0001"]);
+    lines[lines.findIndex(line => line.startsWith("DF-2026-0001 —"))] = "DF-2026-0099 — Blok A / Aras 1 / A103 — Kipas";
+    const result = parseCheckoutPdfPages([page(1, lines)]);
+    expect(result.rooms[0].defects).toHaveLength(1);
+    expect(result.blockingErrors.join(" ")).toContain("missing detailed sections for DF-2026-0001");
+    expect(result.blockingErrors.join(" ")).toContain("detailed references absent from its room table: DF-2026-0099");
+  });
+
+  it("blocks a foreign room's detail from taking the place of the table's expected detail", () => {
+    const lines = completeRoom("A103", ["DF-2026-0001"]);
+    lines[lines.findIndex(line => line.startsWith("DF-2026-0001 —"))] = "DF-2026-0001 — Blok B / Aras 1 / B103 — Kipas";
+    const result = parseCheckoutPdfPages([page(1, lines)]);
+    expect(result.blockingErrors.join(" ")).toContain("belongs to B103, outside its room section A103");
+    expect(result.blockingErrors.join(" ")).toContain("B103: no room header and DF table were included");
+  });
+
+  it("allows the same upstream DF number in two complete room sections without cross-room count loss", () => {
+    const result = parseCheckoutPdfPages([
+      page(1, completeRoom("B116", ["DF-2026-0599", "DF-2026-0600"])),
+      page(2, completeRoom("B117", ["DF-2026-0599", "DF-2026-0600"])),
+    ]);
+    expect(result.rooms.map(room => room.defects.length)).toEqual([2, 2]);
+    expect(result.rooms.flatMap(room => room.defects).every(defect => defect.needsReview)).toBe(true);
+    expect(result.blockingErrors).toEqual([]);
+  });
+
+  it("blocks inconsistent header counts independently of the detailed-section parser", () => {
+    const result = parseCheckoutPdfPages([page(1, completeRoom("A103", ["DF-2026-0001"], 2))]);
+    expect(result.blockingErrors.join(" ")).toContain("header declares 2 defects but the room table contains 1 unique DF references");
+    const noCount = completeRoom("A103", ["DF-2026-0001"]).filter(line => !line.startsWith("Kerosakan "));
+    expect(parseCheckoutPdfPages([page(1, noCount)]).blockingErrors.join(" ")).toContain("Kerosakan count is missing");
+  });
+
+  it("blocks malformed detail locations instead of accepting the other successfully parsed rooms", () => {
+    const lines = completeRoom("A104", ["DF-2026-0002"]);
+    lines[lines.findIndex(line => line.startsWith("DF-2026-0002 —"))] = "DF-2026-0002 — Blok A / A104 — Kipas";
+    const result = parseCheckoutPdfPages([page(1, completeRoom("A103", ["DF-2026-0001"])), page(2, lines)]);
+    expect(result.rooms.map(room => room.roomNo)).toEqual(["A103"]);
+    expect(result.blockingErrors.join(" ")).toContain("Unrecognised defect detail heading on page 2");
+    expect(result.blockingErrors.join(" ")).toContain("A104: missing detailed sections for DF-2026-0002");
+  });
+
+  it("blocks an AB block/room mismatch even though that invalid entry is excluded from diagnostic rooms", () => {
+    const lines = completeRoom("A103", ["DF-2026-0001"]);
+    lines[lines.findIndex(line => line.startsWith("DF-2026-0001 —"))] = "DF-2026-0001 — Blok A / Aras 1 / B103 — Kipas";
+    const result = parseCheckoutPdfPages([page(1, lines)]);
+    expect(result.rooms).toEqual([]);
+    expect(result.blockingErrors.join(" ")).toContain("Block / room mismatch for DF-2026-0001");
+  });
+
+  it("excludes known T06 sections without false blocking of complete AB rooms", () => {
+    const result = parseCheckoutPdfPages([
+      page(1, completeRoom("A103", ["DF-2026-0001"])),
+      page(2, ["REKOD KEROSAKAN BILIK", "Bilik BK 01-01 Blok / Aras T06 / Aras 1", "Kerosakan 1 (1 belum selesai) Susunan Bilik 62 daripada 75",
+        "1 DF-2026-0002 04/11/2026 Aircond berfungsi", "BUTIRAN & BUKTI PEMBAIKAN",
+        "DF-2026-0002 — T06 / Aras 1 / BK 01-01 — Aircond berfungsi", "Penemuan: 1 unit tidak berfungsi", "Status: Baru"]),
+    ]);
+    expect(result.rooms.map(room => room.roomNo)).toEqual(["A103"]);
+    expect(result.skippedRooms[0]).toMatchObject({ blockCode: "T06", roomNo: "BK 01-01" });
+    expect(result.blockingErrors).toEqual([]);
+  });
+
+  it("requires the room manifest for a PDF starting mid-room and rejects an incomplete room header", () => {
+    const midRoom = parseCheckoutPdfPages([page(1, detail("DF-2026-0001", "A103", "Kipas", "Kotor"))]);
+    expect(midRoom.blockingErrors.join(" ")).toContain("no room header and DF table were included");
+    const noLocation = parseCheckoutPdfPages([page(1, ["REKOD KEROSAKAN BILIK", "Bilik A103 Blok / Aras unreadable", ...detail("DF-2026-0001", "A103", "Kipas", "Kotor")])]);
+    expect(noLocation.blockingErrors.join(" ")).toContain("Unrecognised room location header");
+  });
+
+  it("keeps unfamiliar translations as review work without misclassifying a complete report as structurally incomplete", () => {
+    const lines = completeRoom("A103", ["DF-2026-0001"]);
+    lines[lines.findIndex(line => line.startsWith("Penemuan:"))] = "Penemuan: Masalah perlu disiasat";
+    const result = parseCheckoutPdfPages([page(1, lines)]);
+    expect(result.rooms[0].defects[0].needsReview).toBe(true);
+    expect(result.blockingErrors).toEqual([]);
   });
 });
 
