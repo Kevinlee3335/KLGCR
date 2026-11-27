@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { HistoryNavigation, historyPage, historyPageSize } from "../history-navigation";
-import Link from "next/link";
+import { DirectPageLink } from "@/components/direct-page-link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +12,7 @@ function reportStatus(status: string) { return status === "closed" ? "completed"
 export default async function CleanerReports({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
   const profile = await requireRole(["cleaner"]);
   const page = historyPage((await searchParams)?.page);
-  return <AppShell profile={profile} title="My Reports"><div className="section-head"><div><p className="eyebrow">Cleaner reports</p><h2>My Reports</h2><p className="subtle">Only reports you submitted are shown here. Status updates when Maintenance completes the linked work.</p></div><Link className="button" href="/staff/complaints/new">New Complaint</Link></div><Suspense fallback={<p className="subtle" role="status">Loading reports…</p>}><ReportList page={page}/></Suspense></AppShell>;
+  return <AppShell profile={profile} title="My Reports"><div className="section-head"><div><p className="eyebrow">Cleaner reports</p><h2>My Reports</h2><p className="subtle">Only reports you submitted are shown here. Status updates when Maintenance completes the linked work.</p></div><DirectPageLink className="button" href="/staff/complaints/new">New Complaint</DirectPageLink></div><Suspense fallback={<p className="subtle" role="status">Loading reports…</p>}><ReportList page={page}/></Suspense></AppShell>;
 }
 
 async function ReportList({ page }: { page: number }) {

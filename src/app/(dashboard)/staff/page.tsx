@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { CheckoutDefectFollowUp } from "@/components/checkout-defect-follow-up";
 import { DirectPageLink } from "@/components/direct-page-link";
-import Link from "next/link";
 import { ArrowUpRight, DoorOpen } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
@@ -21,7 +20,7 @@ function Loading() { return <p className="subtle" role="status">Loading records�
 async function CleanerDashboard({ profile }: { profile: Awaited<ReturnType<typeof requireRole>> }) {
   const db = await createClient();
   const today = malaysiaDate();
-  return <AppShell profile={profile} title="Dashboard"><div className="section-head"><div><p className="eyebrow">Cleaner workspace</p><h2>Today&apos;s work</h2><p className="subtle">Your assigned cleaning tasks, check-out rooms and reports in one place.</p></div><Link className="button" href="/staff/complaints/new">New Complaint</Link></div><section className="panel"><div className="section-head"><div><h3>Daily Tasks · {today}</h3><p className="subtle">Today’s tasks and earlier unfinished tasks.</p></div><DirectPageLink className="text-link" href="/staff/daily-tasks">All Records</DirectPageLink></div><Suspense fallback={<Loading/>}><CleanerTasks db={db} today={today} staffId={profile.id}/></Suspense></section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>Check-out Rooms</h3><p className="subtle">Rooms handed over to you for housekeeping.</p></div><Link className="text-link" href="/staff/checkouts">Open rooms</Link></div><Suspense fallback={<Loading/>}><CleanerRooms db={db} staffId={profile.id}/></Suspense></section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>My Reports</h3><p className="subtle">Track the status of defects you submitted.</p></div><Link className="text-link" href="/staff/complaints">View report status</Link></div><Link className="button secondary" href="/staff/complaints/new">Report a defect</Link></section></AppShell>;
+  return <AppShell profile={profile} title="Dashboard"><div className="section-head"><div><p className="eyebrow">Cleaner workspace</p><h2>Today&apos;s work</h2><p className="subtle">Your assigned cleaning tasks, check-out rooms and reports in one place.</p></div><DirectPageLink className="button" href="/staff/complaints/new">New Complaint</DirectPageLink></div><section className="panel"><div className="section-head"><div><h3>Daily Tasks · {today}</h3><p className="subtle">Today’s tasks and earlier unfinished tasks.</p></div><DirectPageLink className="text-link" href="/staff/daily-tasks">All Records</DirectPageLink></div><Suspense fallback={<Loading/>}><CleanerTasks db={db} today={today} staffId={profile.id}/></Suspense></section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>Check-out Rooms</h3><p className="subtle">Rooms handed over to you for housekeeping.</p></div><DirectPageLink className="text-link" href="/staff/checkouts">Open rooms</DirectPageLink></div><Suspense fallback={<Loading/>}><CleanerRooms db={db} staffId={profile.id}/></Suspense></section><section className="panel" style={{ marginTop: 18 }}><div className="section-head"><div><h3>My Reports</h3><p className="subtle">Track the status of defects you submitted.</p></div><DirectPageLink className="text-link" href="/staff/complaints">View report status</DirectPageLink></div><DirectPageLink className="button secondary" href="/staff/complaints/new">Report a defect</DirectPageLink></section></AppShell>;
 }
 
 async function CleanerTasks({ db, staffId, today }: { db: Database; staffId: string; today: string }) {
@@ -29,7 +28,7 @@ async function CleanerTasks({ db, staffId, today }: { db: Database; staffId: str
   const {data, error} = await db.from("admin_daily_tasks").select("id,title,notes,status,task_date,recurrence_id").eq("assigned_to", staffId)
     .or(`task_date.eq.${today},and(task_date.lt.${today},status.neq.completed)`).order("task_date").order("created_at");
   const tasks = data ?? [];
-  return <>{(materialized.error || error) && <p className="error">{materialized.error?.message || error?.message}</p>}<div className="daily-task-list cleaner-daily-task-list">{tasks.map((task) => <Link className="panel daily-task-card daily-task-link" key={task.id} href={`/staff/daily-tasks/${task.id}`}><div className="record-head"><strong>{task.title}</strong><span className={`status-badge status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div><p>{task.notes || "No additional instructions."}</p><small>{task.recurrence_id ? "Repeating task" : "One-time task"} · Due {task.task_date}{task.task_date < today ? " · Overdue" : ""}</small></Link>)}</div>{!tasks.length && <p className="subtle">No daily tasks due today.</p>}</>;
+  return <>{(materialized.error || error) && <p className="error">{materialized.error?.message || error?.message}</p>}<div className="daily-task-list cleaner-daily-task-list">{tasks.map((task) => <DirectPageLink className="panel daily-task-card daily-task-link" key={task.id} href={`/staff/daily-tasks/${task.id}`}><div className="record-head"><strong>{task.title}</strong><span className={`status-badge status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div><p>{task.notes || "No additional instructions."}</p><small>{task.recurrence_id ? "Repeating task" : "One-time task"} · Due {task.task_date}{task.task_date < today ? " · Overdue" : ""}</small></DirectPageLink>)}</div>{!tasks.length && <p className="subtle">No daily tasks due today.</p>}</>;
 }
 
 async function CleanerRooms({ db, staffId }: { db: Database; staffId: string }) {
@@ -37,7 +36,7 @@ async function CleanerRooms({ db, staffId }: { db: Database; staffId: string }) 
     .in("status", ["cleaning", "verification"]).order("updated_at", { ascending: false }).limit(5);
   if (error) return <p className="error">{error.message}</p>;
   const checkouts = (data ?? []) as unknown as Array<{ id: string; reference_no: string | null; room_no: string; status: string; block: { code: string } | null }>;
-  return <>{checkouts.length ? <div className="mobile-cards" style={{ display:"grid" }}>{checkouts.map((room) => <Link className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}><div className="record-head"><strong>{room.reference_no || "Check-out room"}</strong><span className={`status-badge status-${room.status}`}>{room.status.replaceAll("_", " ")}</span></div><h3>Block {room.block?.code || "–"} · Room {room.room_no}</h3></Link>)}</div> : <p className="subtle">No check-out rooms are waiting for cleaning.</p>}</>;
+  return <>{checkouts.length ? <div className="mobile-cards" style={{ display:"grid" }}>{checkouts.map((room) => <DirectPageLink className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}><div className="record-head"><strong>{room.reference_no || "Check-out room"}</strong><span className={`status-badge status-${room.status}`}>{room.status.replaceAll("_", " ")}</span></div><h3>Block {room.block?.code || "–"} · Room {room.room_no}</h3></DirectPageLink>)}</div> : <p className="subtle">No check-out rooms are waiting for cleaning.</p>}</>;
 }
 
 export default async function StaffPage() {
@@ -56,10 +55,10 @@ export default async function StaffPage() {
     <Suspense fallback={null}><CheckoutRooms db={supabase} staffId={profile.id}/></Suspense>
     <Suspense fallback={null}><Monitoring db={supabase} staffId={profile.id} today={today}/></Suspense>
     <section className="panel" style={{marginTop:24}}>
-      <div className="section-head"><div><h2>Today&apos;s Appointments</h2><p className="subtle">Scheduled maintenance visits across the maintenance team.</p></div><Link className="text-link" href="/staff/calendar">Open Calendar</Link></div>
+      <div className="section-head"><div><h2>Today&apos;s Appointments</h2><p className="subtle">Scheduled maintenance visits across the maintenance team.</p></div><DirectPageLink className="text-link" href="/staff/calendar">Open Calendar</DirectPageLink></div>
       <Suspense fallback={<Loading/>}><Appointments db={supabase} today={today}/></Suspense>
     </section>
-    <div className="section-head tasks-head"><h2>Maintenance Jobs</h2><Link className="text-link" href="/staff/tasks">View current tasks</Link></div>
+    <div className="section-head tasks-head"><h2>Maintenance Jobs</h2><DirectPageLink className="text-link" href="/staff/tasks">View current tasks</DirectPageLink></div>
     <section className="panel list-panel"><Suspense fallback={<Loading/>}><RecentJobs db={supabase} staffId={profile.id}/></Suspense></section>
   </AppShell>;
 }
@@ -81,7 +80,7 @@ async function Count({counts, status}: {counts: Counts; status: string}) {
 }
 async function WaitingCheckouts({counts}: {counts: Counts}) {
   const waiting = (await counts)?.get("waiting_checkout");
-  return waiting ? <p><Link className="button secondary" href="/staff/tasks?status=waiting_checkout">Waiting for Check-out · {waiting}</Link></p> : null;
+  return waiting ? <p><DirectPageLink className="button secondary" href="/staff/tasks?status=waiting_checkout">Waiting for Check-out · {waiting}</DirectPageLink></p> : null;
 }
 async function RecentJobs({ db, staffId }: { db: Database; staffId: string }) {
   const { rows, appointments, error } = await readStaffJobs(db, staffId, { recent: true });
@@ -105,7 +104,7 @@ async function CheckoutRooms({ db, staffId }: { db: Database; staffId: string })
               : <p>{pendingCheckouts} {pendingCheckouts === 1 ? "room" : "rooms"} assigned to you for rectification.</p>}
           </div>
         </div>
-        <Link className={followUpStyles.action} href="/staff/checkouts">Open assigned rooms <ArrowUpRight size={15} aria-hidden="true"/></Link>
+        <DirectPageLink className={followUpStyles.action} href="/staff/checkouts">Open assigned rooms <ArrowUpRight size={15} aria-hidden="true"/></DirectPageLink>
       </header>
     </section>;
 }
@@ -113,5 +112,5 @@ async function Appointments({ db, today }: { db: Database; today: string }) {
   const {data} = await db.from("appointments").select("id,job_id,appointment_date,appointment_time,status,complaint:complaints!complaint_id(room_no,category,complainant_contact,room_access_permission,block:blocks!block_id(code))").eq("appointment_date",today)
     .not("status", "in", '("completed","cancelled","no_show")').order("appointment_time").limit(10);
   const appointments = (data ?? []) as unknown as Array<{id:string;job_id:string|null;appointment_date:string;appointment_time:string;status:string;complaint:{room_no:string;category:string;complainant_contact:string|null;room_access_permission:string|null;block:{code:string}|null}|null}>;
-  return !appointments.length?<p className="subtle">No upcoming appointments.</p>:<div className="table-wrap"><table className="table"><thead><tr><th>Date</th><th>Time</th><th>Block</th><th>Room</th><th>Category</th><th>Room Access Permission</th><th>Resident Phone</th><th>Appointment Status</th></tr></thead><tbody>{appointments.map(a=><tr key={a.id}><td>{a.job_id?<Link className="text-link" href={`/staff/jobs/${a.job_id}`}>{a.appointment_date}</Link>:a.appointment_date}</td><td>{a.appointment_time.slice(0,5)}</td><td>{a.complaint?.block?.code||"—"}</td><td>{a.complaint?.room_no||"—"}</td><td>{a.complaint?.category||"—"}</td><td>{a.complaint?.room_access_permission?.replaceAll("_"," ")||"Not set"}</td><td>{a.complaint?.complainant_contact||"—"}</td><td><span className={`status-badge status-${a.status}`}>{a.status.replaceAll("_"," ")}</span></td></tr>)}</tbody></table></div>;
+  return !appointments.length?<p className="subtle">No upcoming appointments.</p>:<div className="table-wrap"><table className="table"><thead><tr><th>Date</th><th>Time</th><th>Block</th><th>Room</th><th>Category</th><th>Room Access Permission</th><th>Resident Phone</th><th>Appointment Status</th></tr></thead><tbody>{appointments.map(a=><tr key={a.id}><td>{a.job_id?<DirectPageLink className="text-link" href={`/staff/jobs/${a.job_id}`}>{a.appointment_date}</DirectPageLink>:a.appointment_date}</td><td>{a.appointment_time.slice(0,5)}</td><td>{a.complaint?.block?.code||"—"}</td><td>{a.complaint?.room_no||"—"}</td><td>{a.complaint?.category||"—"}</td><td>{a.complaint?.room_access_permission?.replaceAll("_"," ")||"Not set"}</td><td>{a.complaint?.complainant_contact||"—"}</td><td><span className={`status-badge status-${a.status}`}>{a.status.replaceAll("_"," ")}</span></td></tr>)}</tbody></table></div>;
 }

@@ -1,5 +1,5 @@
 import { ArrowUpRight, Clock3 } from "lucide-react";
-import Link from "next/link";
+import { DirectPageLink } from "@/components/direct-page-link";
 import { StatusBadge } from "@/components/phase2-ui";
 import { formatMalaysiaActivity } from "@/lib/job-activity";
 import { monitoringDueLabel } from "@/lib/monitoring-follow-up";
@@ -37,7 +37,7 @@ export function StaffMonitoringFollowUp({ jobs, error, today }: Awaited<ReturnTy
             <td><p className={styles.defect}>{job.description}</p>{monitoring && job.monitoring_note && <details className={styles.notes}><summary>Monitoring note</summary><p>{job.monitoring_note}</p></details>}{followUp && <AdminFollowUpNotice followUp={followUp}/>}</td>
             <td data-label="Status"><StatusBadge value={job.status}/></td>
             <td data-label="Action needed"><span className={styles.staff}>{monitoring ? monitoringDueLabel(job.monitoring_review_at, today) : "Admin returned job"}</span></td>
-            <td><Link className={styles.action} href={`/staff/jobs/${job.id}?from=%2Fstaff`}>Open Job <ArrowUpRight size={15} aria-hidden="true"/></Link></td>
+            <td><DirectPageLink className={styles.action} href={`/staff/jobs/${job.id}?from=%2Fstaff`}>Open Job <ArrowUpRight size={15} aria-hidden="true"/></DirectPageLink></td>
           </tr>;
         })}</tbody>
       </table>

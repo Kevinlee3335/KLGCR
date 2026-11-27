@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { DailyTaskFilters } from "@/components/daily-task-filters";
 import { taskSearchFilter, taskFilterDate, taskFilterStatuses } from "@/lib/daily-task-filters";
 import { DirectPageLink } from "@/components/direct-page-link";
-import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -39,7 +38,7 @@ async function DailyTaskList({date, staffId, params}: {date: string; staffId: st
     if (number > 1) query.set("page", String(number));
     return "/staff/daily-tasks" + (query.size ? "?" + query : "");
   }
-  return <>{(params.error || materializeError || error) && <p className="error">{params.error || materializeError?.message || error?.message}</p>}<div className="daily-task-list cleaner-daily-task-list">{(tasks || []).map((task) => <Link className="panel daily-task-card daily-task-link" key={task.id} href={`/staff/daily-tasks/${task.id}`}><div className="record-head"><strong>{task.title}</strong><span className={`status-badge status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div><p>{task.notes || "No additional instructions."}</p><small>{task.recurrence_id ? "Repeating task" : "One-time task"} · Due {task.task_date}</small></Link>)}</div>{!error && !tasks?.length && <section className="panel empty"><strong>No assigned daily tasks {allRecords ? "in the records" : "for this date"}.</strong><span>Repeating tasks will appear here automatically on their due date.</span></section>}{!error && (page > 1 || hasNext) && <nav className="actions" aria-label="Daily task pages">
+  return <>{(params.error || materializeError || error) && <p className="error">{params.error || materializeError?.message || error?.message}</p>}<div className="daily-task-list cleaner-daily-task-list">{(tasks || []).map((task) => <DirectPageLink className="panel daily-task-card daily-task-link" key={task.id} href={`/staff/daily-tasks/${task.id}`}><div className="record-head"><strong>{task.title}</strong><span className={`status-badge status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div><p>{task.notes || "No additional instructions."}</p><small>{task.recurrence_id ? "Repeating task" : "One-time task"} · Due {task.task_date}</small></DirectPageLink>)}</div>{!error && !tasks?.length && <section className="panel empty"><strong>No assigned daily tasks {allRecords ? "in the records" : "for this date"}.</strong><span>Repeating tasks will appear here automatically on their due date.</span></section>}{!error && (page > 1 || hasNext) && <nav className="actions" aria-label="Daily task pages">
     {page > 1 && <a className="button secondary" href={href(page - 1)}>Previous</a>}
     <span>Page {page}</span>
     {hasNext && <a className="button secondary" href={href(page + 1)}>Next</a>}

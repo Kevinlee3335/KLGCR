@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Suspense } from "react";
 import { MaterialRequestHistory } from "@/components/material-request-history";
-import Link from "next/link";
+import { DirectPageLink } from "@/components/direct-page-link";
 import {materialLineStatus,materialRequestLabel} from "@/lib/material-request-state";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
@@ -29,7 +29,7 @@ export default async function StaffMaterialRequestPage({ searchParams }: { searc
         <RecentRequests staffId={profile.id}/>
       </Suspense>
     </section>
-    <p className="material-pending-link"><Link className="text-link" href="/staff/tasks?status=pending_material">View Pending Material jobs</Link></p>
+    <p className="material-pending-link"><DirectPageLink className="text-link" href="/staff/tasks?status=pending_material">View Pending Material jobs</DirectPageLink></p>
   </AppShell>;
 }
 
@@ -71,7 +71,7 @@ async function RecentRequests({ staffId }: { staffId: string }) {
           <MaterialRequestHistory history={request.history || []}/>
           {request.note && <div className="staff-request-note"><span>Reason / Note</span><p>{request.note}</p></div>}
           {request.rejection_reason && <p className="error staff-request-error">Rejected: {request.rejection_reason}</p>}
-          {request.status === "issued" && request.job?.status === "pending_material" && <div className="staff-resume-action"><div><strong>Materials issued</strong><span>The job is ready to continue.</span></div><Link className="button button-link" href={`/staff/jobs/${request.job.id}`}>Open Job to Resume</Link></div>}
+          {request.status === "issued" && request.job?.status === "pending_material" && <div className="staff-resume-action"><div><strong>Materials issued</strong><span>The job is ready to continue.</span></div><DirectPageLink className="button button-link" href={`/staff/jobs/${request.job.id}`}>Open Job to Resume</DirectPageLink></div>}
         </article>)}
       </div>;
 }

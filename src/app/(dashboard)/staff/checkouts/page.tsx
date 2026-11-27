@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import Link from "next/link";
+import { DirectPageLink } from "@/components/direct-page-link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { checkoutStatusLabel, type CheckoutRoom } from "@/lib/checkouts";
@@ -10,8 +10,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const profile = await requireRole(["maintenance_staff", "cleaner"]);
   const isCleaner = profile.role === "cleaner";
   return <AppShell profile={profile} title="Check-out Rooms">
-    {["fadhil", "ariffin"].includes(profile.username) && <Link className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</Link>}
-    {profile.username === "abdullah" && <Link className="button secondary" href="/admin/checkouts/painting">Painting List</Link>}
+    {["fadhil", "ariffin"].includes(profile.username) && <DirectPageLink className="button" href="/admin/checkouts/inspection">Room Inspection · Block A &amp; B</DirectPageLink>}
+    {profile.username === "abdullah" && <DirectPageLink className="button secondary" href="/admin/checkouts/painting">Painting List</DirectPageLink>}
     <div className="section-head">
       <div>
         <p className="eyebrow">Room turnover</p>
@@ -41,14 +41,14 @@ async function RoomList({ userId, isCleaner }: { userId: string; isCleaner: bool
   return <section className="panel list-panel">
       {error && <p className="error" role="alert">{error.message}</p>}
       <div className="mobile-cards" style={{ display: "grid" }}>
-        {rows.map((room) => <Link className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}>
+        {rows.map((room) => <DirectPageLink className="panel record-card" href={`/staff/checkouts/${room.id}`} key={room.id}>
           <div className="record-head">
             <strong>{room.reference_no}</strong>
             <span className={`status-badge status-${room.status}`}>{checkoutStatusLabel[room.status]}</span>
           </div>
           <h3>Block {room.block?.code} · Room {room.room_no}</h3>
           <p>{room.utmspace_defects}</p>
-        </Link>)}
+        </DirectPageLink>)}
       </div>
       {!error && !rows.length && <div className="empty"><strong>No rooms assigned</strong><span>New handovers will appear here.</span></div>}
     </section>;

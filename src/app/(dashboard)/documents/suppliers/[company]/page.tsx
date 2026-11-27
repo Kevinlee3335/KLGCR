@@ -1,5 +1,4 @@
 import { DirectPageLink } from "@/components/direct-page-link";
-import Link from 'next/link';
 import { Suspense } from 'react';
 import '../supplier-mail.css';
 import { notFound } from 'next/navigation';
@@ -22,7 +21,7 @@ export default async function CompanyArchive({params,searchParams}:{params:Promi
   const folder=folders.find(f=>f===search.folder);
   const q=(search.q || '').slice(0,200).replace(/[%_,()]/g,' ');
   const page=Math.max(1,Math.min(10000,Number.parseInt(search.page || '1') || 1));
-  return <AppShell profile={profile} title={supplier.name}><div className="supplier-archive"><p><Link className="supplier-back" href="/documents/suppliers">← Company folders</Link></p><nav className="supplier-tabs" aria-label="Company document folders"><Link className={!folder?"is-active":""} href={`/documents/suppliers/${company}`}>Emails</Link>{folders.map(f=><Link className={folder===f?"is-active":""} key={f} href={`?folder=${encodeURIComponent(f)}`}>{f}</Link>)}</nav>
+  return <AppShell profile={profile} title={supplier.name}><div className="supplier-archive"><p><DirectPageLink className="supplier-back" href="/documents/suppliers">← Company folders</DirectPageLink></p><nav className="supplier-tabs" aria-label="Company document folders"><DirectPageLink className={!folder?"is-active":""} href={`/documents/suppliers/${company}`}>Emails</DirectPageLink>{folders.map(f=><DirectPageLink className={folder===f?"is-active":""} key={f} href={`?folder=${encodeURIComponent(f)}`}>{f}</DirectPageLink>)}</nav>
     <section className="supplier-records"><header className="supplier-records-toolbar"><h2>{folder || 'Emails'}</h2><form className="supplier-search"><input type="hidden" name="folder" value={folder || ''}/><label><span className="supplier-sr-only">Search {folder?'filename':'email subject'}</span><input placeholder={folder?'Search item, description or number…':'Search emails…'} name="q" defaultValue={q} type="search" maxLength={200}/></label><button className="supplier-small-action" type="submit">Search</button></form></header>
     {q&&<Suspense key={q} fallback={null}><SupplierPriceHistory company={company} query={q}/></Suspense>}
     <Suspense key={JSON.stringify([company, folder, q, page])} fallback={<p role="status">Loading archive…</p>}>
@@ -65,6 +64,6 @@ async function ArchiveResults({ db, company, folder, q, page, isAdmin }: {
           <SupplierComplianceLinks id={row.id} sourceMessageId={row.supplier_mail_attachments.length===1?row.supplier_mail_attachments[0].message_id:undefined} isAdmin={isAdmin} links={links}/>
         </div>
       </article>:<p className="supplier-email-row" key={row.id}><DirectPageLink href={`/documents/suppliers/${company}/emails/${row.id}`}>{row.subject || '(No subject)'}</DirectPageLink><br/><small>{new Date(row.received_at).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur'})}</small></p>)}
-      <footer className="supplier-pagination"><span>{result.count || 0} total · Page {page}</span><div>{page>1&&<Link href={url(page-1)}>← Previous</Link>}{(result.count || 0)>offset+50&&<Link href={url(page+1)}>Next →</Link>}</div></footer>
+      <footer className="supplier-pagination"><span>{result.count || 0} total · Page {page}</span><div>{page>1&&<DirectPageLink href={url(page-1)}>← Previous</DirectPageLink>}{(result.count || 0)>offset+50&&<DirectPageLink href={url(page+1)}>Next →</DirectPageLink>}</div></footer>
     </>;
 }
