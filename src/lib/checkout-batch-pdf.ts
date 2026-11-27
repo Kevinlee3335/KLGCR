@@ -1,3 +1,4 @@
+import { checkoutPdfDefectTitle } from "./checkout-pdf-import";
 import {PDFDocument,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import {readFile} from 'node:fs/promises';
@@ -80,7 +81,7 @@ export async function checkoutBatchPdf(snapshot:BatchSnapshot,kind:'summary'|'de
     if(checklist.it&&typeof checklist.it==='object')for(const [key,qty]of Object.entries(checklist.it)){const [ci,si]=key.split('.').map(Number),detail=(checklist.dt as Record<string,unknown>|undefined)?.[key];checkRows.push([CD_CATEGORIES[ci]?.[0]+' / '+(CD_CATEGORIES[ci]?.[1]?.[si]?.[0]||key),Number(qty)>0?'Defect':'Checked / normal',qty,s(detail||((checklist.nt as Record<string,unknown>|undefined)?.[ci])||'')]);}
     if(checkRows.length)table(['Checked item','Original result','Qty','Remark / finding'],checkRows,[155,95,40,width-290]);
    }
-   section('Defect register');table(['Defect / source','Status','Rectified by / at'],snapshot.defects.filter(d=>d.checkout_room_id===room.id).map(d=>[s(d.description)+'\n'+s(d.source),s(d.status),s(d.rectified_by_name)+'\n'+batchDate(d.rectified_at)]),[width-220,80,140]);
+   section('Defect register');table(['Defect / source','Status','Rectified by / at'],snapshot.defects.filter(d=>d.checkout_room_id===room.id).map(d=>[checkoutPdfDefectTitle({description:d.description,utmspace_pdf_source:d.utmspace_pdf_source})+'\n'+s(d.source),s(d.status),s(d.rectified_by_name)+'\n'+batchDate(d.rectified_at)]),[width-220,80,140]);
    section('Complete work history');table(['Date / person','Action / status change','Notes / action taken'],snapshot.history.filter(h=>h.checkout_room_id===room.id).map(h=>[batchDate(h.created_at)+'\n'+s(h.actor_name),s(h.action)+'\n'+s(h.from_status||'')+' > '+s(h.to_status||''),s(h.notes||'No note recorded')]),[125,140,width-265]);
    const tasks=snapshot.painting.filter(p=>p.checkout_room_id===room.id);if(tasks.length){section('General worker / painting');table(['Worker / dates','Area / reason','Status / notes'],tasks.map(t=>[s(t.worker_name)+'\n'+s(t.work_date)+'\nCompleted: '+batchDate(t.completed_at),s(t.area)+'\n'+s(t.reasons),s(t.status)+'\n'+s(t.notes||'')]),[150,150,width-300]);}
    section('Materials issued for this room');const rm=moves.filter(m=>m.roomId===room.id);table(['Material','Issued / returned / net','Recipient / date'],rm.map(m=>[m.code+' | '+m.name,batchQuantity(m.quantity)+' / '+batchQuantity(m.returned)+' / '+batchQuantity(m.net)+' '+m.unit,m.recipient+'\n'+batchDate(m.date)]),[200,150,width-350]);

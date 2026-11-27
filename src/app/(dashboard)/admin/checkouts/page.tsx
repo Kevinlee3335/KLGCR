@@ -1,3 +1,4 @@
+import { CheckoutPdfImport } from "@/components/checkout-pdf-import";
 import { CheckoutBatchBanner } from "@/components/checkout-batch-banner";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -52,6 +53,7 @@ async function CheckoutAssignments({ overview, workers, canAssignCleaner }: { ov
 async function CheckoutCreate({ blocks, error }: { blocks: Blocks; error?: string }) {
   const availableBlocks = await blocks;
   return <>
+    <CheckoutPdfImport blocks={availableBlocks} />
     <CheckoutBatchImport blocks={availableBlocks} />
     <section className="panel checkout-create">
       <h3>Create check-out room record</h3>
